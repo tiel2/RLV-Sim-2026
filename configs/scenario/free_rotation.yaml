@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+- freefall_uniform
+- _self_
+scenario:
+  name: free_rotation
+  ic:
+    roll_deg: 10
+    pitch_deg: 20
+    yaw_deg: 30
+    w_body:
+    - 0.1
+    - 0.2
+    - -0.15
+  validation:
+    kind: free_rotation
+    relative_tolerance: 1.0e-07
+environment:
+  atmosphere:
+    g0: 0.0

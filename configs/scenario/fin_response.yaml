@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+- aero_descent
+- _self_
+scenario:
+  name: fin_response
+  inputs:
+  - t: 0.0
+    label: coast
+    throttle: 0.0
+  - t: 1.0
+    label: fin_pulse
+    fin:
+    - 0.01
+    - 0
+    - 0
+    - 0
+  - t: 2.0
+    label: neutral
+    fin: 0.0

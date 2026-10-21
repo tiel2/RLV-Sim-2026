@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+- _prescribed
+- _self_
+- override /environment/atmosphere: vacuum
+- override /environment/gravity: uniform
+scenario:
+  name: freefall_uniform
+  validation:
+    kind: freefall_uniform
+    position_atol_m: 1.0e-05
+    velocity_atol_mps: 1.0e-06

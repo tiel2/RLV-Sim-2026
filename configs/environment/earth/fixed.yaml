@@ -1,0 +1,5 @@
+# Non-rotating, fixed-origin local NED. Gravity is configured independently.
+model: fixed
+latitude_deg: 0.0
+rotation_rate_rad_s: 0.0
+include_differential_centrifugal: false

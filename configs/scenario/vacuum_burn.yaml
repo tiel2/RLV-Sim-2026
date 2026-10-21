@@ -1,0 +1,40 @@
+# @package _global_
+defaults:
+- freefall_uniform
+- _self_
+- override /plant/actuator: ideal
+scenario:
+  name: vacuum_burn
+  ic:
+    throttle0:
+    - 0.7
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+  horizon:
+    t_max: 10.0
+  inputs:
+  - t: 0.0
+    label: center_burn
+    throttle:
+    - 0.7
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+  validation:
+    kind: rocket_equation
+    velocity_atol_mps: 1.0e-05
+    mass_atol_kg: 1.0e-05
+environment:
+  atmosphere:
+    g0: 0.0

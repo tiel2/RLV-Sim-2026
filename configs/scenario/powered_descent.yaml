@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+- _prescribed
+- _self_
+scenario:
+  name: powered_descent
+  ic:
+    r_ned:
+    - 0
+    - 0
+    - -1500
+    v_ned:
+    - 0
+    - 0
+    - 100
+    m: 30000
+  horizon:
+    t_max: 15.0
+  inputs:
+  - t: 0.0
+    label: coast
+    throttle: 0.0
+  - t: 1.0
+    label: center_burn
+    throttle:
+    - 0.55
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+  - t: 7.0
+    label: cutoff
+    throttle: 0.0

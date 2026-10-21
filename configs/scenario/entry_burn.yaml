@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - _prescribed
+  - _self_
+scenario:
+  name: entry_burn
+  description: Assumed post-flip entry segment; not a reconstructed flight.
+  ic:
+    r_ned: [0.0, 0.0, -40000.0]
+    v_ned: [600.0, 0.0, 1200.0]
+    pitch_deg: 63.43494882292201
+    yaw_deg: 180.0
+    m: 45000.0
+  inputs:
+    - {t: 0.0, label: coast, throttle: 0.0}
+    - t: 2.0
+      label: three_engine_burn
+      throttle: [0.65, 0.65, 0, 0, 0, 0.65, 0, 0, 0]
+    - {t: 12.0, label: cutoff, throttle: 0.0}

@@ -1,0 +1,37 @@
+# @package _global_
+# Shared deterministic vehicle experiments. Configuration is resolved before recording.
+defaults:
+  - override /plant/vehicle: falcon9_octaweb
+  - override /plant/aero: table
+  - override /plant/actuator: realistic
+  - override /plant/thrust: backpressure
+  - override /plant/slosh: none
+  - override /environment/gravity: inverse_square
+  - override /environment/atmosphere: ussa_poly
+  - override /environment/wind: none
+  - override /environment/earth: fixed
+  - override /fault: none
+
+scenario:
+  input_mode: prescribed
+  ic:
+    r_ned: [0.0, 0.0, -10000.0]
+    v_ned: [0.0, 0.0, 0.0]
+    roll_deg: 0.0
+    pitch_deg: 90.0
+    yaw_deg: 0.0
+    w_body: [0.0, 0.0, 0.0]
+    m: 40000.0
+    throttle0: 0.0
+    rcs_fuel: 200.0
+  dispersion:
+    enable: false
+    pos_sigma: [0.0, 0.0, 0.0]
+    vel_sigma: [0.0, 0.0, 0.0]
+  horizon:
+    t_max: 20.0
+    input_dt: 0.02
+    log_dt: 0.02
+  inputs:
+    - {t: 0.0, label: coast, throttle: 0.0}
+  validation: {kind: none}

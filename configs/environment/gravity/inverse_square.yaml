@@ -1,0 +1,4 @@
+# Module 4 p.11: spherical gravity, locally vertical in fixed-origin NED.
+model: inverse_square
+mu: 3.986004418e14 # Earth gravitational parameter [m^3/s^2]
+radius: 6371000.0 # spherical Earth radius [m]; local h = -r_ned[2]

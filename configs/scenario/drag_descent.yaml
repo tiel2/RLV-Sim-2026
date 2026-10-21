@@ -1,0 +1,27 @@
+# @package _global_
+# Constant-density anchor approximated by a 1e12 m exponential scale height.
+defaults:
+  - freefall_uniform
+  - _self_
+  - override /environment/atmosphere: exp
+scenario:
+  name: drag_descent
+  ic:
+    v_ned: [0.0, 0.0, 150.0]
+  validation:
+    kind: constant_drag
+    position_atol_m: 0.0001
+    velocity_atol_mps: 0.00001
+environment:
+  atmosphere:
+    scale_height: 1.0e12
+plant:
+  aero:
+    coeffs:
+      cd_base: 1.0
+      cd_transonic: 0.0
+      cd_hyper: 0.0
+      cd_alpha: 0.0
+      cn_alpha: 0.0
+    fins:
+      fin_area: 0.0

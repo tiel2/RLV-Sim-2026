@@ -1,0 +1,7 @@
+# Rotating Earth: Coriolis + origin centrifugal + optional differential centrifugal.
+# Gravity is pure gravitation, configured separately.
+# A site latitude is mandatory; silently assuming the equator would be physically misleading.
+model: rotating
+latitude_deg: ???
+rotation_rate_rad_s: 7.2921150e-5
+include_differential_centrifugal: true

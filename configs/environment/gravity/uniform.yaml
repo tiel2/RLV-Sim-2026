@@ -1,0 +1,5 @@
+# Explicit uniform-field approximation for analytic regression tests.
+# Acceleration is environment.atmosphere.g0; Isp always uses standard 9.80665 m/s^2.
+model: uniform
+mu: 3.986004418e14
+radius: 6371000.0

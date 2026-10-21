@@ -1,0 +1,47 @@
+# @package _global_
+defaults:
+- vacuum_burn
+- _self_
+- override /plant/actuator: realistic
+scenario:
+  name: actuator_response
+  ic:
+    throttle0: 0.0
+  inputs:
+  - t: 0.0
+    label: coast
+    throttle: 0.0
+  - t: 1.0
+    label: throttle_step
+    throttle:
+    - 0.7
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+  - t: 3.0
+    label: tvc_pulse
+    gimbal:
+    - - 0.01
+      - 0.0
+  - t: 3.5
+    label: tvc_neutral
+    gimbal: 0.0
+  - t: 5.0
+    label: cutoff
+    throttle: 0.0
+  - t: 6.0
+    label: rcs_pulse
+    rcs:
+    - 0.5
+    - 0
+    - 0
+  - t: 6.2
+    label: rcs_off
+    rcs: 0.0
+  validation:
+    kind: none

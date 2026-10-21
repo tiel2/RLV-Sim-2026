@@ -1,0 +1,7 @@
+# Three bidirectional pure couples: 12 individual unidirectional nozzles.
+# Geometry is an assumed actuator layout, not Falcon 9 flight hardware data.
+layout: paired_3axis
+mode: pulsed # pulsed (on/off PWM) | averaged (continuous duty approximation)
+pulse_period: 0.02 # [s], integer multiple of plant_dt
+center_x: -30.0 # body-x nozzle station [m]
+thrust_scale: 1.0 # scalar or per-nozzle vector, supports asymmetric failures

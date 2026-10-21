@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+build/
+dist/
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Simulation outputs (implementation.md §2)
+results/
+.tmp_figures/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+docs/reference/*.pdf

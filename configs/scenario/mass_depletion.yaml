@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+- vacuum_burn
+- _self_
+scenario:
+  name: mass_depletion
+  ic:
+    m: 25700.0
+  validation:
+    kind: mass_depletion
+    mass_atol_kg: 1.0e-05

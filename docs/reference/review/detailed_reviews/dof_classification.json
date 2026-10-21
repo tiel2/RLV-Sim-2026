@@ -1,0 +1,1106 @@
+{
+  "papers": [
+    {
+      "title": "Convex Programming Approach to Powered Descent Guidance for Mars Landing",
+      "year": "2007",
+      "authors": "Açıkmeşe·Ploen",
+      "dof": "3-DoF",
+      "model": "point-mass translational r̈=g+T_c/m, ṁ=−α‖T_c‖; states r,v,m",
+      "evidence": "점질량 병진동역학 r̈=g+T_c/m, ṁ=−α‖T_c‖ — translational point mass only, no attitude/torque/inertia.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Lossless Convexification of Nonconvex Control Bound and Pointing Constraints of the Soft Landing Optimal Control Problem",
+      "year": "2013",
+      "authors": "Açıkmeşe·Carson·Blackmore",
+      "dof": "3-DoF",
+      "model": "point-mass translational ẋ=A(ω)x+B(g+T_c/m) with planet rotation",
+      "evidence": "동역학에 행성자전 포함: ẋ=A(ω)x+B(g+T_c/m), A(ω)=[[0,I],[−S(ω)²,−2S(ω)]] — position+velocity only, no attitude state.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Lossless convexification of non-convex optimal control problems for state constrained linear systems",
+      "year": "2014",
+      "authors": "Harris·Açıkmeşe",
+      "dof": "N/A",
+      "model": "generic LTV linear systems with mixed nonconvex control + linear state constraints",
+      "evidence": "LCvx 이론을 혼합 비볼록 제어제약+선형 상태제약으로 일반화; contribution is the general theory (strongly controllable subspace/friend) for linear systems, worked examples (Mars landing 45° plane, CW rendezvous) are illustrative point-mass cases of an abstract linear-system theorem.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Implementation and Experimental Demonstration of Onboard Powered-Descent Guidance",
+      "year": "2017",
+      "authors": "Scharf·Açıkmeşe·Dueri·Benito·Casoliva",
+      "dof": "3-DoF",
+      "model": "point-mass translational PDG (G-FOLD): r̈=g+T_c/m−ω×(ω×r)−2ω×v, ż=−ασ; states r,v,z=ln m",
+      "evidence": "식(1b) 점질량 병진동역학 r̈=g+T_c/m(행성자전 포함), ṁ=−α‖T_c‖ — 위치·속도·질량만, 자세/토크/관성 상태 없음. G-FOLD/LCvx 온보드 비행시연(Masten Xombie)은 실차량 점질량 PDG라 method N/A가 아닌 3-DoF(Ploen·ACB와 동일 클래스). roll-in/out용 시변 θ_T,max(t)·thrust pointing은 제약일 뿐 rigid-body 자세동역학 상태가 아님.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Successive Convexification for 6-DoF Mars Rocket Powered Landing with Free-Final-Time",
+      "year": "2018",
+      "authors": "Szmuk·Açıkmeşe",
+      "dof": "6-DoF",
+      "model": "rigid-body x=[m,r,v,q,ω]∈R¹⁴, quaternion attitude + angular velocity",
+      "evidence": "상태 x=[m,r,v,q,ω]∈R¹⁴, 제어 u=T_B∈R³; 6-DoF 강체, quaternion 자세동역학 — full translation+attitude.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Convex Optimization for Trajectory Generation: A Tutorial on Generating Dynamically Feasible Trajectories Reliably and Efficiently",
+      "year": "2022",
+      "authors": "Malyuta·Reynolds·Szmuk·Lew·Bonalli·Pavone·Açıkmeşe",
+      "dof": "N/A",
+      "model": "method tutorial (LCvx/SCvx/GuSTO); examples span 3-DoF rocket, quadrotor, 6-DoF free-flyer",
+      "evidence": "Method tutorial whose contribution is the algorithms; Part III gives multiple examples (3-DoF rocket landing, quadrotor obstacle avoidance, 6-DoF free-flyer) — not tied to one fixed vehicle dimensionality.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Remarks on \"Successive Convexification: A Superlinearly Convergent Algorithm for Non-convex Optimal Control Problems\"",
+      "year": "2024",
+      "authors": "Luo·Elango·Açıkmeşe",
+      "dof": "N/A",
+      "model": "abstract convergence-proof errata for SCvx; no vehicle model, no numerics",
+      "evidence": "독립 연구논문이 아니라 SCvx 수렴증명 정정노트; 수치예제 없음 — pure convergence theory, not tied to any vehicle.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "SCvx-fast: A Superlinearly Convergent Algorithm for A Class of Non-Convex Optimal Control Problems",
+      "year": "2021",
+      "authors": "Mao·Açıkmeşe",
+      "dof": "N/A",
+      "model": "generic convex-dynamics OCP class (project-and-convexify); example is 3-DoF double-integrator multirotor",
+      "evidence": "Algorithm paper for a class of OCPs (assumptions: f and h componentwise convex); central worked example is a double-integrator multi-rotor (3-DoF point-mass), but the contribution is the abstract method for the convex-dynamics class, not a vehicle.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Successive Convexification with Feasibility Guarantee via Augmented Lagrangian for Non-Convex Optimal Control Problems",
+      "year": "2023",
+      "authors": "Oguri",
+      "dof": "N/A",
+      "model": "generic nonconvex OCP solver (SCvx* via augmented Lagrangian); examples 2-var toy + 3-DoF quadrotor",
+      "evidence": "Solver paper (AL-integrated SCvx); examples are a 2-variable nonconvex toy (Ex1) and a 3-DoF quad-rotor min-time (Ex2) — contribution is the algorithm/feasibility guarantee, not a fixed vehicle.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Real-Time Sequential Conic Optimization for Multi-Phase Rocket Landing Guidance",
+      "year": "2023",
+      "authors": "Kamath·Elango·Yu·Mceowen·Chari·Carson·Açıkmeşe",
+      "dof": "3-DoF",
+      "model": "planar (x,z,pitch) multi-phase rocket with simple aero; states position+velocity in plane",
+      "evidence": "모델은 평면(planar) 단순 aero — 6-DoF·실 aero DB 아님; planar Starship-type landing, the main result is a real vehicle planar descent so prefer 3-DoF (planar).",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "State-dependent trust region for successive convex programming for autonomous spacecraft",
+      "year": "2024",
+      "authors": "Bernardini·Baresi·Armellin",
+      "dof": "N/A",
+      "model": "DA-NLI state-dependent trust-region SCP method; examples pendulum + low-thrust orbit transfers (MEE/CRTBP)",
+      "evidence": "Method (DACX) whose delta is the trust-region rule; examples are pendulum (2D), Earth-Dionysus low-thrust (MEE 6 orbital elements), CRTBP halo/butterfly transfers — orbit-transfer point-mass dynamics, contribution is the algorithm not a vehicle.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Continuous-time successive convexification for constrained trajectory optimization",
+      "year": "2025",
+      "authors": "Elango·Luo·Kamath·Uzun·Kim·Açıkmeşe",
+      "dof": "N/A",
+      "model": "ct-SCvx framework (integral-penalty path constraints); examples obstacle avoidance, 6-DoF rocket, 3-DoF LCvx",
+      "evidence": "SCP framework; contribution is integral-penalty reformulation + prox-linear convergence. Examples: dynamic/static obstacle avoidance, 6-DoF rocket landing, 3-DoF LCvx landing — method paper across multiple dimensionalities, not tied to one vehicle.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Revisiting Lossless Convexification: Theoretical guarantees for discrete-time optimal control problems",
+      "year": "2026",
+      "authors": "Luo·Echigo·Açıkmeşe",
+      "dof": "N/A",
+      "model": "discrete-time LCvx theory for generic linear systems; example Moon landing point-mass",
+      "evidence": "도구는 PMP가 아니라 유한차원 선형대수+볼록해석; DT-LCvx theory for linear systems (violation node bound n_x−1), worked example is a 6-state Moon landing point-mass but the contribution is general DT-LCvx theory.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Discrete-Time Lossless Convexification for Pointing Constraints",
+      "year": "2025",
+      "authors": "Luo·Spada·Açıkmeşe",
+      "dof": "N/A",
+      "model": "DT-LCvx theory extension (pointing/on-off inputs) for linear systems; example quadrotor 2D/3D",
+      "evidence": "DT-LCvx 이론을 pointing constraint와 semi-continuous 입력으로 확장; theory letter with violation-node bounds for linear systems, illustrative quadrotor example — contribution is the LCvx theory not a vehicle.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Indirect optimization of multi-phase Mars entry, descent, and landing trajectory involving arbitrary discrete logic",
+      "year": "2025",
+      "authors": "Saranathan",
+      "dof": "3-DoF",
+      "model": "3-DoF point-mass EDL, states [h,θ,φ,v,γ,ψ,m_F] over rotating spherical planet",
+      "evidence": "3-DoF 모델: 회전구체 행성, 상태 [h,θ,φ,v,γ,ψ,m_F], 제어=받음각/뱅크각/추력 — point-mass translational with angle-of-attack/bank as controls, no rigid-body attitude states.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Parallel-in-Time Nonlinear Optimal Control via GPU-native Sequential Convex Programming",
+      "year": "2026",
+      "authors": "Zou·Zhang·Robic·Jiang",
+      "dof": "N/A",
+      "model": "GPU-native SCP solver (consensus-ADMM); examples 6-DoF quadrotor (13-state) + 6-DoF Mars PDG (14-state)",
+      "evidence": "Systems/implementation contribution (fully GPU-native SCP); examples are quadrotor 6-DoF (13 states) and Mars PDG 6-DoF (14 states), but the contribution is the parallel SCP solver/infrastructure, not a vehicle — generic method paper.",
+      "confidence": "med",
+      "group": "A"
+    },
+    {
+      "title": "Adaptive and Efficient Model Predictive Control for Booster Reentry",
+      "authors": "Chai et al.",
+      "year": "2020",
+      "dof": "N/A",
+      "model": "2-state SISO longitudinal short-period LTV (pitch rate q, AoA α)",
+      "evidence": "'SISO, 종방향 단주기 2상태(q,α), phugoid 무시' — control note on a 2-state LTV; contribution is AMPC+L1 algorithm, not a vehicle dimensionality (no translation states, not full attitude)",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Onboard Guidance for Reusable Rockets: Aerodynamic Descent and Powered Landing",
+      "authors": "Sagliano et al.",
+      "year": "2021",
+      "dof": "3-DoF",
+      "model": "point-mass translational DCA coordinates with Euler-angle-rate control",
+      "evidence": "'공력강하: 3-DoF 점질량, ṙ=v, v̇=a_grav+a_aero−2ω×v−ω×(ω×r), θ̇=u_θ, ψ̇=u_ψ' — position+velocity point mass; Euler angles steered as proxy via rates, 6-DoF only checked post-hoc by trimming",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Adaptive powered descent guidance based on multi-phase pseudospectral convex optimization",
+      "authors": "Song·Miao·Gong",
+      "year": "2021",
+      "dof": "3-DoF",
+      "model": "point-mass [r,v,m]: ṙ=v, v̇=g+T/m, ṁ=−‖T‖/(Isp g0)",
+      "evidence": "'동역학: ṙ=v, v̇=g+T/m, ṁ=−‖T‖/(I_sp g₀)' — translational point-mass states r,v,m only; no atmosphere, constant gravity",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Design, Optimal Guidance and Control of a Low-cost Re-usable Electric Model Rocket",
+      "authors": "Spannagl et al.",
+      "year": "2021",
+      "dof": "3-DoF",
+      "model": "3-DoF point-mass guidance (ṗ=v, v̇=T/m+g) + quaternion tracking MPC",
+      "evidence": "'상위 guidance: ... ṗ=v, v̇=T/m+g(3-DoF)' — primary guidance is 3-DoF point-mass with thrust vector as attitude proxy via tilt constraint; lower MPC uses 6-state quaternion model but guidance (the trajectory-opt result) is 3-DoF",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Integrated Optimal Guidance for Reentry and Landing of a Rocket Using Multi-Phase Pseudo-Spectral Convex Optimization",
+      "authors": "Hwang·Ahn",
+      "year": "2022",
+      "dof": "3-DoF",
+      "model": "planar 2-D point-mass: ṙ,φ̇,v̇,γ̇,ṁ (circular non-rotating Earth)",
+      "evidence": "'무차원 2-D 점질량(원형 비회전 지구): ṙ,φ̇,v̇,γ̇,ṁ' — 5-state planar point-mass; review explicitly calls it '2-D(횡운동 무시)'. Longitudinal-plane point-mass = planar 3-DoF (no attitude states)",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Model predictive control for reusable space launcher guidance improvement",
+      "authors": "Guadagnini·Lavagna·Rosa",
+      "year": "2022",
+      "dof": "6-DoF",
+      "model": "rigid-body translation+rotation with quaternion, exponential atmosphere",
+      "evidence": "'재사용 발사체(VTVL)의 6-DoF powered descent guidance(PDG)를 successive convexification' and '병진/회전 강체 + 쿼터니언 ... 각속도, ‖q‖=1' — full rigid body with attitude quaternion and angular rate",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Powered Atmospheric Landing Guidance for Reusable Rockets: the CALLISTO studies",
+      "authors": "Sagliano et al.",
+      "year": "2024",
+      "dof": "3-DoF",
+      "model": "point-mass DCA: ṙ=v, v̇=a_grav+a_thr+a_aero+a_fict, ṁ",
+      "evidence": "'3-DoF 정식화이되 6-DoF capable(트림 가능) 해를 의도' and '동역학(DCA): ṙ=v, v̇=a_grav+a_thr+a_aero+a_fict, ṁ' — translational point mass; 6-DoF only approximated via trim constraints",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Ignition Point Reachability for Aerodynamically-Controlled Reusable Launch Vehicles",
+      "authors": "Chung·Echigo·Açıkmeşe",
+      "year": "2025",
+      "dof": "6-DoF",
+      "model": "5-DoF axisymmetric (roll-fixed): m,r,v,R_B/I∈R², ω_B∈R²",
+      "evidence": "'5-DoF 모델: 축대칭이라 roll 고정 → 5-DoF. 상태 m,r,v,R_B/I∈R²,ω_B∈R²' — includes attitude (R_B/I) and angular velocity (ω_B); rotational states present (a reduced rigid body, not point-mass), so classified 6-DoF-class rather than 3-DoF",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Fuel-optimal boost-back guidance algorithms for reusable launch vehicles",
+      "authors": "Jo·Han·Ahn",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "point-mass ECI: ṙ=v, v̇=g(r)+a_T, ṁ=−T/v_ex",
+      "evidence": "'차량동역학(ECI): ṙ=v, v̇=g(r)+a_T, ṁ=−T/v_ex' and review: 'point-mass 가정: 자세동역학·공력 전무' — translational only, no attitude",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Autotuned Primal–Dual Successive Convexification for Reentry Guidance",
+      "authors": "Mceowen et al.",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "SCP solver (Auto-SCvx); worked example 3-DoF bank-controlled entry",
+      "evidence": "Contribution is the autotuning SCP solver ('패널티 가중 ... 자동 갱신', 'backbone/solver 논문'); central example is '3-DoF 회전구체 entry, 제어=bank σ(+옵션 α)'. Per rubric, solver papers → N/A; the example is a 3-DoF point-mass entry but the paper's contribution is the algorithm",
+      "confidence": "med",
+      "group": "B",
+      "priorDof": "N/A",
+      "auditNote": "Both worked examples are a single real reentry vehicle's 3-DoF point-mass rotating-sphere entry (control = bank σ, optional AoA, no rigid-body attitude states); per the rule a method paper whose central example is a real translational vehicle entry/descent = 3-DoF (exactly how the structurally identical Kamath SCP-method-on-a-single-real-vehicle paper is labeled 3-DoF), and Auto-SCvx is an SCP penalty-autotuning method, not a pure conic/IPM/codegen solver, so the 'solver→N/A' clause does not apply."
+    },
+    {
+      "title": "Online reentry trajectory planning for reusable rockets based on intelligent phase transition",
+      "authors": "Zhou·Wang·Gan·Wang·Cui",
+      "year": "2026",
+      "dof": "3-DoF",
+      "model": "3-DoF point-mass V,γ,ψ,r,θ,φ,m (J2 + Earth rotation)",
+      "evidence": "'3-DoF 동역학(time-of-flight 기반, J2 + Earth rotation 포함). 상태 V,γ,ψ,r,θ,φ,m' — translational point-mass state vector, no attitude/angular-velocity states",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Explicit Trajectory Dispersion Control for Precision Landing Guidance of Reusable Rockets",
+      "authors": "Chen·Zhang·Li",
+      "year": "2026",
+      "dof": "3-DoF",
+      "model": "simplified 6-DoF w/ rotation neglected, trimmed TVC: x=[r,v,m,φ,ψ]",
+      "evidence": "'동역학: 6-DoF 간소화(rotational 무시, trimmed TVC), 상태 x=[r,v,m,φ,ψ]' — rotational dynamics explicitly neglected; states are position, velocity, mass plus two pointing angles (no angular velocity / inertia tensor) = effectively translational/point-mass",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Reentry trajectory optimization for reusable launch vehicle using marine predator whale optimizer and smoothing technique",
+      "authors": "Su·Liu",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "point-mass entry, ellipsoid rotating Earth, control [bank σ, AoA α]",
+      "evidence": "'동역학: 타원·자전 지구(J2–J4, 측면력 무시) ... 제어 [bank σ, AoA α]' — classic 3-DoF entry point-mass (lateral force neglected), bank/AoA as controls, no rotational rigid-body states; metaheuristic optimizes this 3-DoF trajectory",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Optimal Landing Guidance of Reusable Launch Vehicles With Dual-convex Optimization",
+      "authors": "Jung·Lee·Jung·Lee",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "planning 3-DoF [r,v,m] (T∈R³); tracking adds 5-DoF [θ,ψ,Γ]",
+      "evidence": "'Problem P: X=[r,v,m], u=T∈ℝ³' is the planning trajectory-opt (3-DoF thrust-vector point mass); tracking augments attitude/throttle [θ,ψ,Γ] (5-DoF) but is a tracking-QP. Primary fuel-optimal planning is 3-DoF; verified in a 6-DoF sim",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Biased-Proportional-Navigation-Based Predictor–Corrector Landing Guidance for Reusable Launch Vehicle",
+      "authors": "Yang",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "point-mass [x,y,z,V,γ,ψ,m], spherical rotating Earth",
+      "evidence": "'동역학: 구·자전 지구, 상태 [x,y,z,V,γ,ψ,m]' — translational point-mass 3-D state with flight-path/heading angles; AoA/sideslip are controls via BPN, no attitude/angular-velocity rigid-body states",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Fast Desensitized Optimal Control for Rocket-Powered Descent and Landing",
+      "authors": "Robbiani·Sagliano·Topputo·Seywald",
+      "year": "2025",
+      "dof": "3-DoF",
+      "model": "Mars powered-descent point-mass (3-engine), LQR feedback + sensitivity states",
+      "evidence": "'화성 동력착륙(3엔진, point-mass)' — explicitly point-mass translational PDG; the DOC augments sensitivity matrix states (Λ,Ω) but the underlying vehicle dynamics are point-mass position/velocity/mass",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Covariance Steering with Optimal Risk Allocation",
+      "year": "2021",
+      "authors": "Pilipovsky·Tsiotras",
+      "dof": "3-DoF",
+      "model": "LTV point-mass spacecraft rendezvous via Clohessy-Wiltshire equations",
+      "evidence": "Sec 4: '우주선 rendezvous(CW 방정식, N=15, Δt=4s, 입력 ‖u‖∞≤30N hard)' — CW = translational relative motion, no attitude/inertia states.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Minimum-Fuel Closed-Loop Powered Descent Guidance with Stochastically Derived Throttle Margins",
+      "year": "2021",
+      "authors": "Ridderhof·Tsiotras",
+      "dof": "3-DoF",
+      "model": "point-mass descent SDE, state [r,v,m], planar Mars PDG",
+      "evidence": "Sec 2: '점질량 SDE: d[r;v;m]=[v; u/m+g; −α‖u‖]dt...'; Sec 4: 'surface-fixed frame, 평면운동' — translational point mass with mass, no rotation.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Chance-Constrained Covariance Steering in a Gaussian Random Field via Successive Convex Programming",
+      "year": "2022",
+      "authors": "Ridderhof·Tsiotras",
+      "dof": "3-DoF",
+      "model": "point-mass bank-angle longitudinal Mars aerocapture (plus 1D toy)",
+      "evidence": "Sec 4: '화성 aerocapture(bank-angle 종방향, MarsGRAM 밀도, 5000 MC)' — translational entry dynamics; verification toy is 1D double integrator, but the main aerospace result is point-mass aerocapture.",
+      "confidence": "med",
+      "group": "C"
+    },
+    {
+      "title": "Distributionally Robust Covariance Steering with Optimal Risk Allocation",
+      "year": "2023",
+      "authors": "Renganathan·Pilipovsky·Tsiotras",
+      "dof": "N/A",
+      "model": "abstract LTV CS method; examples 2D double integrator + spacecraft proximity",
+      "evidence": "Sec 4: '(i) 2D double integrator path planning... (ii) 우주선 proximity'; contribution is the Cantelli-quantile DR-IRA algorithm, not a vehicle model.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Discrete-Time Optimal Covariance Steering via Semidefinite Programming",
+      "year": "2023",
+      "authors": "Rapakoulias·Tsiotras",
+      "dof": "N/A",
+      "model": "discrete-time CS SDP solver/substrate; generic LTV with random drss systems",
+      "evidence": "Sec 3: 'substrate(solver) 논문... 외란을 단위공분산 백색·Gaussian으로 고정'; Sec 4 uses generic quadrotor/triple-integrator and 'drss()로 랜덤시스템 생성' for runtime scaling — contribution is the SDP solver.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Computationally Efficient Chance Constrained Covariance Control with Output Feedback",
+      "year": "2024",
+      "authors": "Pilipovsky·Tsiotras",
+      "dof": "N/A",
+      "model": "output-feedback CC-CS method; double-integrator path-planning example",
+      "evidence": "Sec 4: 'double integrator path-planning(N=20, Δt=0.2, 위치3성분 측정, 2 half-space 제약)' — contribution is sequential OFCC-CS + DC/CCP algorithm, abstract integrator.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Optimal Covariance Steering of Linear Stochastic Systems with Hybrid Transitions",
+      "year": "2024",
+      "authors": "Yu·Frias Franco·Johnson·Chen",
+      "dof": "N/A",
+      "model": "linear stochastic CS across hybrid jumps via saltation+SBP; bouncing-ball/SLIP toys",
+      "evidence": "Sec 4: '1D bouncing ball + 탄성충돌... 선형화 SLIP' — generic linear stochastic systems with hybrid resets; contribution is the saltation/SBP H-CS method, '항공 예제 없음'.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Distributionally Robust Density Control with Wasserstein Ambiguity Sets",
+      "year": "2024",
+      "authors": "Pilipovsky·Tsiotras",
+      "dof": "N/A",
+      "model": "DR density control method on LTI; double-integrator + quadrotor examples",
+      "evidence": "Sec 4: '(1) 2D double integrator... (2) quadrotor 착륙 + 바람 난류(9-DOF, Dryden PSD)'; contribution is open-loop+feedback DR-OC SDP for generic LTI, '단일 phase·고정 dynamics'.",
+      "confidence": "med",
+      "group": "C"
+    },
+    {
+      "title": "Risk-Sensitive Orbital Debris Collision Avoidance Using Distributionally Robust Chance Constraints",
+      "year": "2025",
+      "authors": "Ryu·Bouvier·Lalani·Eggl·Mehr",
+      "dof": "3-DoF",
+      "model": "nonlinear translational orbital dynamics (2-body + drag), position state",
+      "evidence": "Sec 2: '위성/잔해 비선형 궤도역학(2체+대기항력, RK4 이산화). 충돌안전집합 R_free={‖r_d−r_s‖>d_thres}' — translational position/velocity only, no attitude.",
+      "confidence": "med",
+      "group": "C"
+    },
+    {
+      "title": "Operator Splitting Covariance Steering for Safe Stochastic Nonlinear Control",
+      "year": "2025",
+      "authors": "Ratheesh·Pacelli·Saravanos·Theodorou",
+      "dof": "N/A",
+      "model": "nonlinear CS via ADMM operator splitting; unicycle/quadrotor robotics examples",
+      "evidence": "Sec 4: 'unicycle(3상태) 5장애물... quadrotor(12상태)... HW Robotarium unicycle. 전부 robotics motion planning, 항공 없음' — contribution is the ADMM-splitting solver.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Wasserstein Distributionally Robust Adaptive Covariance Steering",
+      "year": "2025",
+      "authors": "Gahlawat·Khatana·Wang·Karumanchi·Hovakimyan·Voulgaris",
+      "dof": "N/A",
+      "model": "generic nonlinear stochastic CS + L1-DRAC formulation; no vehicle, no sim",
+      "evidence": "Sec 4: '없음. Fig 1(개념)... Algorithm 1(의사코드)만 제시' — pure formulation paper on generic dX=[A_μX+B(U+H_μ)]dt+..., not tied to vehicle dimensionality.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Chance-Constrained Covariance Steering for Discrete-Time Markov Jump Linear Systems",
+      "year": "2025",
+      "authors": "Shrivastava·Oguri",
+      "dof": "N/A",
+      "model": "MJLS CS method; 2D 2-mode and double-integrator 3-mode examples",
+      "evidence": "Sec 4: '(1) 2모드 2D... (2) 실용적 double-integrator 3모드' — contribution is lossless convex MJLS CS for generic Markov-jump linear systems, '항공 예제는 없으나'.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Strong Duality and Dual Ascent Approach to Continuous-Time Chance-Constrained Stochastic Optimal Control",
+      "year": "2025",
+      "authors": "Patil·Duarte·Bisetti·Tanaka",
+      "dof": "N/A",
+      "model": "continuous-time chance-constrained SOC via exit-time/path-integral; robot 2D/car 5D toys",
+      "evidence": "Sec 4: 'mobile-robot 2D/car 5D 파라미터... 항공·착륙·다phase 예제 전무' — contribution is the exit-time strong-duality formulation on generic control-affine Itô SDEs.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Recursively Feasible Stochastic Model Predictive Control for Time-Varying Linear Systems Subject to Unbounded Disturbances",
+      "year": "2026",
+      "authors": "Knaup·Tsiotras",
+      "dof": "N/A",
+      "model": "generic LTV SMPC recursive-feasibility theory; kinematic-bicycle LTV example",
+      "evidence": "Sec 4: 'nonlinear kinematic bicycle를 reference 주변 선형화한 LTV(상태 [δ,e_ψ,e_y]...)' — contribution is recursive-feasibility theorem for generic LTV systems under unbounded disturbances.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Gaussian-Process-Based Covariance Control for Autonomous On-Orbit Servicing",
+      "year": "2026",
+      "authors": "Garzelli·Benedikter·Zavoli·Suarez·Ollero",
+      "dof": "3-DoF",
+      "model": "HCW linear translational relative motion (RPO docking) + GP drag disturbance",
+      "evidence": "Sec 1: 'HCW 선형 상대운동에 GP-disturbance로 적재'; Sec 4: 'LEO 200km 도킹... V-bar 접근, cone α=15°' — translational relative position/velocity, no attitude states.",
+      "confidence": "med",
+      "group": "C"
+    },
+    {
+      "title": "Free Final Time Adaptive Mesh Covariance Steering via Sequential Convex Programming",
+      "year": "2026",
+      "authors": "Pilipovsky",
+      "dof": "N/A",
+      "model": "free-final-time multiplicative-noise CS method; 2D double-integrator+drag toy",
+      "evidence": "Sec 4: '2D double-integrator(drag CD=0.15 + velocity-dependent diffusion g1)... 단일 toy 예제, 항공·다phase 없음' — contribution is the time-dilation adaptive-mesh SCP algorithm.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Statistical Contraction for Chance-Constrained Trajectory Optimization of Non-Gaussian Stochastic Systems",
+      "year": "2026",
+      "authors": "D'Silva·Tsukamoto",
+      "dof": "N/A",
+      "model": "conformal-prediction + contraction method; Dubins 4-state / Crazyflie 10-state",
+      "evidence": "Sec 4: 'sim(Dubins 4-state) + HW(Crazyflie 10-state)... 로봇 도메인·단일궤적' — contribution is the CP×contraction distribution-free chance framework, not a fixed vehicle.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Stochastic Model Predictive Control with Online Risk Allocation and Feedback Gain Selection",
+      "year": "2026",
+      "authors": "Barbosa·Löfberg",
+      "dof": "N/A",
+      "model": "SMPC MICP risk-allocation/feedback-selection method; 2D vehicle path-planning",
+      "evidence": "Sec 4: 'sim only, 2D 차량 path-planning. Case1... Case2(단일 obstacle), N=10... 단일 toy 도메인' — contribution is the MICP formulation (probit conic approximation), abstract vehicle.",
+      "confidence": "high",
+      "group": "C"
+    },
+    {
+      "title": "Optimal Control of Switching Surfaces in Hybrid Dynamical Systems",
+      "year": "2005",
+      "authors": "Boccadoro, Wardi, Egerstedt, Verriest",
+      "dof": "N/A",
+      "model": "Generic switched-mode hybrid system ẋ=f_i(x); switching-surface parameter optimization",
+      "evidence": "스위치드-모드 하이브리드 시스템 ẋ=f_i(x)...진짜 결정변수는 면을 매개하는 유한차원 파라미터 a; example is unicycle robot toy (costate-gradient method, not a vehicle)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Transition-time optimization for switched-mode dynamical systems",
+      "year": "2006",
+      "authors": "Egerstedt, Wardi, Axelsson",
+      "dof": "N/A",
+      "model": "Generic autonomous switched system ẋ=f_i(x); switching-time gradient method",
+      "evidence": "autonomous 스위치드 시스템 ẋ=f_i(x)에서 스위칭 시각 τ을 직접 결정변수로; 수치예제는 2x2 행렬 A1,A2 사이 스위칭 toy (algorithm contribution, abstract LTV toy)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Probabilistic reachability and safety for controlled discrete time stochastic hybrid systems",
+      "year": "2008",
+      "authors": "Abate, Prandini, Lygeros, Sastry",
+      "dof": "N/A",
+      "model": "Discrete-time stochastic hybrid system (DTSHS); DP probabilistic-safety theory",
+      "evidence": "제어입력 있는 이산시간 stochastic hybrid system(DTSHS)...DP로 계산; case study는 2룸 온도조절 (estimation/reachability theory, no fixed vehicle dimensionality)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Dual Quaternion-Based Powered Descent Guidance with State-Triggered Constraints",
+      "year": "2020",
+      "authors": "Reynolds, Szmuk, Malyuta, Mesbahi, Açıkmeşe, Carson",
+      "dof": "6-DoF",
+      "model": "Unit dual-quaternion 6-DoF rigid body (attitude+position), angular velocity, inertia J",
+      "evidence": "6-DoF free-final-time 연료최적 PDG를 단위 dual quaternion(자세+위치를 8차원으로 통합)...dq̃/dt=½q̃⊗ω̃, J ω̃̇+ω̃×Jω̃=Φu_B+mg̃_B",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Successive Convexification for Real-Time Six-Degree-of-Freedom Powered Descent Guidance with State-Triggered Constraints",
+      "year": "2020",
+      "authors": "Szmuk, Reynolds, Açıkmeşe",
+      "dof": "6-DoF",
+      "model": "Cartesian + quaternion 6-DoF rigid body with angular velocity (Mars PDG)",
+      "evidence": "6-DoF free-final-time 연료최적 PDG(Cartesian+quaternion)를 SCvx로...q-α STC 응용 (받음각, 자세 quaternion)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "The Salted Kalman Filter: Kalman filtering on hybrid dynamical systems",
+      "year": "2021",
+      "authors": "Kong, Payne, Council, Johnson",
+      "dof": "N/A",
+      "model": "Kalman/EKF covariance filtering on generic hybrid systems via saltation matrix",
+      "evidence": "state-driven hybrid system의 Kalman 필터링...saltation matrix Ξ로 갱신; examples constant-flow 2D, ASLIP 8-state (estimation/filtering theory, generic)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "iLQR for Piecewise-Smooth Hybrid Dynamical Systems",
+      "year": "2021",
+      "authors": "Kong, Council, Johnson",
+      "dof": "N/A",
+      "model": "Generic hybrid iLQR trajectory-optimization method (saltation in backward pass)",
+      "evidence": "iLQR를 상태점프 있는 piecewise-smooth hybrid system으로 확장; 4개 toy: 1D 탄성공, perching quadcopter 등 (deterministic trajopt method, algorithm contribution)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "The Uncertainty Aware Salted Kalman Filter: State Estimation for Hybrid Systems with Uncertain Guards",
+      "year": "2022",
+      "authors": "Payne, Kong, Johnson",
+      "dof": "N/A",
+      "model": "Salted KF estimation with guard saltation matrix Ξ_g for uncertain guards",
+      "evidence": "guard 위치 불확실성과 reset 파라미터 불확실성을 1차로 공분산에 주입...uaSKF; examples 탄성공, plastic impact, ASLIP hopper (estimation theory)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Trajectory sensitivity analysis of hybrid systems with sliding motion",
+      "year": "2022",
+      "authors": "Pytlak, Suski",
+      "dof": "N/A",
+      "model": "Index-2 DAE trajectory-sensitivity theory for sliding hybrid systems",
+      "evidence": "sliding motion 있는 hybrid system의 trajectory sensitivity를 index-2 DAE 틀에서 엄밀히 정립; 시뮬/실험 없음(저자 명시) (sensitivity theory, no vehicle, no numerical example)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Saltation Matrices: The Essential Tool for Linearizing Hybrid Dynamical Systems",
+      "year": "2024",
+      "authors": "Kong, Payne, Zhu, Johnson",
+      "dof": "N/A",
+      "model": "Survey/tutorial on saltation matrix Ξ for hybrid linearization",
+      "evidence": "saltation matrix Ξ에 대한 서베이+튜토리얼; 독자 실험은 없고(서베이)...covariance/Riccati 갱신 (tutorial, generic hybrid-systems tool)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Feasibility-Guided Safety-Aware Model Predictive Control for Jump Markov Linear Systems",
+      "year": "2024",
+      "authors": "Laouar, Ho, Mazouz, Becker, Sunberg",
+      "dof": "N/A",
+      "model": "Jump Markov Linear System MPC; generic LTI per-mode, consensus-horizon",
+      "evidence": "JMLS: xₜ₊₁ = A_{i(t)}xₜ + B_{i(t)}uₜ...M모드 각각에 trajectory 변수; examples spacecraft CWH rendezvous(6D) + hexacopter(12D) (generic LTI/JMLS algorithm, no attitude rigid-body model)",
+      "confidence": "med",
+      "group": "D"
+    },
+    {
+      "title": "Robustifying Model-Based Locomotion by Zero-order Stochastic Nonlinear Model Predictive Control with Guard Saltation Matrix",
+      "year": "2024",
+      "authors": "Katayama, Takasugi, Kaneko, Nagatsuka, Kinoshita",
+      "dof": "N/A",
+      "model": "Stochastic NMPC for legged locomotion (full-centroidal) with guard saltation covariance",
+      "evidence": "보행로봇의 접촉 불확실성을 stochastic/robust NMPC의 covariance 전파에...full-centroidal NMPC 적용; platforms Tachyon 3 wheeled-legged, EVAL-03 humanoid (locomotion NMPC method, not a fixed-DoF vehicle)",
+      "confidence": "med",
+      "group": "D"
+    },
+    {
+      "title": "Constrained Trajectory Optimization for Hybrid Dynamical Systems",
+      "year": "2024",
+      "authors": "Crestaz, Alcan, Kyrki",
+      "dof": "2D",
+      "model": "Hybrid iLQR (HiLQR) + DBaS/AL constraint handling; sole example 2D bouncing ball",
+      "evidence": "실험이 단일 toy(2D bouncing ball)뿐...2D bouncing ball(4상태, 2모드 ż≷0, e=0.75) 단일 시스템 (method paper but only worked example is explicitly 2D)",
+      "confidence": "med",
+      "group": "D"
+    },
+    {
+      "title": "Sequential Convex Programming for 6-DoF Powered Descent Guidance with Continuous-time Compound State-Triggered Constraints",
+      "year": "2025",
+      "authors": "Uzun, Açıkmeşe, Carson III",
+      "dof": "6-DoF",
+      "model": "6-DoF rocket x=(m,r_I,v_I,q_{B←I},ω_B); gimbaled-engine PDG",
+      "evidence": "6-DoF 로켓: x=(m, r_I, v_I, q_{B←I}, ω_B), u=(T, δ_e, φ_e, δ_b, φ_b)...quaternion + 각속도 ω_B",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Path Integral Particle Filtering for Hybrid Systems via Saltation Matrices",
+      "year": "2026",
+      "authors": "Shaji, Jayadevan, Yuan, Yu, Chen",
+      "dof": "N/A",
+      "model": "Path-integral particle-filter state estimation on hybrid systems via saltation",
+      "evidence": "하이브리드 시스템의 상태추정을...path integral particle filter(PIPF)로; examples bouncing ball(2상태), SLIP(flight 5D↔stance 4D) (estimation/filtering theory, not control of a vehicle)",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Cautious Model Predictive Control Using Gaussian Process Regression",
+      "year": "2020",
+      "authors": "Hewing, Kabzan, Zeilinger",
+      "dof": "N/A",
+      "model": "Generic GP-residual NMPC method; states x,u + GP disturbance, PRS tightening",
+      "evidence": "Method paper; central examples are AUV depth control sim and a 1:43 RC autonomous-racing car (model predictive contouring), not a fixed rocket/spacecraft. Contribution is the GP-MPC + dynamic-sparse-GP algorithm/real-time impl, not a vehicle.",
+      "confidence": "med",
+      "group": "E"
+    },
+    {
+      "title": "Adaptive Conformal Inference Under Distribution Shift",
+      "year": "2021",
+      "authors": "Gibbs, Candès",
+      "dof": "N/A",
+      "model": "Online conformal-prediction wrapper; single scalar α_t tracking, no vehicle dynamics",
+      "evidence": "Pure distribution-free conformal-inference theory ('shift = single-parameter tracking'); experiments are stock-volatility and 2020 election county data. No dynamics integrated.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Data-Driven MPC for Quadrotors",
+      "year": "2021",
+      "authors": "Torrente, Kaufmann, Föhn, Scaramuzza",
+      "dof": "6-DoF",
+      "model": "13-state rigid-body quadrotor + GP aero residual, motor-level full-state MPC",
+      "evidence": "Review: '명목 6-DoF 강체, RK4 이산화' and 'GP 잔차를 모터입력 레벨 full-state MPC에 tightly 통합(가상입력 bodyrate 아님)'; 13-state nominal model.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Uniform Error and Posterior Variance Bounds for Gaussian Process Regression with Application to Safe Control",
+      "year": "2021",
+      "authors": "Lederer, Umlauft, Hirche",
+      "dof": "N/A",
+      "model": "GP-regression error/variance bound theory; safe-control demo on a robot manipulator",
+      "evidence": "Contribution is computable GP uniform error bound (|f−ν_N|≤β·σ_N+γ) and posterior-variance bound; worked control example is a robot manipulator tracking, not a fixed-dimension vehicle. Generic GP safe-control theory.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "A real-time GP based MPC for quadcopters with unknown disturbances",
+      "year": "2022",
+      "authors": "Schmid, Gruner, Abbas, Rostalski",
+      "dof": "6-DoF",
+      "model": "Hover-linearized quadcopter model + 3 SS-GP latent force/moment disturbances",
+      "evidence": "Review: '쿼드 선형모델(hover 선형화)' augmented with 3 GPs; disturbances treated as 'latent force/moment'. Hover-linearized quad (attitude included); but model is linearized — hence lower confidence.",
+      "confidence": "low",
+      "group": "E"
+    },
+    {
+      "title": "Gaussian Process Uniform Error Bounds with Unknown Hyperparameters for Safety-Critical Applications",
+      "year": "2022",
+      "authors": "Capone, Lederer, Hirche",
+      "dof": "N/A",
+      "model": "Robust GP uniform error-bound theory under unknown hyperparameters; manipulator backstepping demo",
+      "evidence": "Contribution is a hyperparameter-robust GP error bound (length-scale monotonicity); validated on UCI regression and a strict-feedback manipulator backstepping example. GP safe-learning theory, not a vehicle.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Neural-Fly enables rapid learning for agile flight in strong winds",
+      "year": "2022",
+      "authors": "O'Connell, Shi, Shi, Azizzadenesheli, Anandkumar, Yue, Chung",
+      "dof": "6-DoF",
+      "model": "Euler-Lagrange rigid-body quadrotor + learned aero residual φ·a, adaptive control",
+      "evidence": "Review: control law u_NF=M q̈_r+C q̇_r+g−Ks−φâ over Euler-Lagrange quadrotor; ISS-ball stability on the full rigid-body model. Limitation notes it is 'Euler-Lagrange(쿼드로터)에 특화'.",
+      "confidence": "med",
+      "group": "E"
+    },
+    {
+      "title": "Multihierarchy Gaussian Process Models for Probabilistic Aerodynamic Databases using Uncertain Nominal and Off-Nominal Configuration Data",
+      "year": "2023",
+      "authors": "Scoggins, Wignall, Nakamura-Zimmerer, Bibb",
+      "dof": "N/A",
+      "model": "Multifidelity GP mixture for aerodynamic-coefficient database (C_L/C_D/C_m); no integrated dynamics",
+      "evidence": "Builds aerodatabase as nominal+correction GP mixture f=f₀+ΣwᵢΔfᵢ for Orion CM wind-tunnel coefficients; outputs trim-α/drag distributions, not a propagated trajectory. Static-coefficient GP modeling, not a vehicle dynamics model.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Conformal prediction beyond exchangeability",
+      "year": "2023",
+      "authors": "Barber, Candès, Ramdas, Tibshirani",
+      "dof": "N/A",
+      "model": "Non-exchangeable conformal coverage theory (weighted quantile + swap); coverage-gap bound",
+      "evidence": "Distribution-free conformal-prediction theorem (coverage gap ≤ Σw̃ᵢ·d_TV); experiments are i.i.d./changepoint/drift synthetic + ELEC2/election data. No dynamics.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Conformal PID Control for Time Series Prediction",
+      "year": "2023",
+      "authors": "Angelopoulos, Candès, Tibshirani",
+      "dof": "N/A",
+      "model": "Time-series conformal-prediction framework (P/I/D quantile control); long-run coverage",
+      "evidence": "Recasts time-series conformal as PID on the prediction-set quantile; experiments are COVID/electricity/stock/temperature forecasting. 'PID control' is a metaphor for set calibration, not vehicle control.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Sharp Calibrated Gaussian Processes",
+      "year": "2023",
+      "authors": "Capone, Hirche, Pleiss",
+      "dof": "N/A",
+      "model": "GP recalibration theory (two GPs, lengthscale re-optimized for sharp quantiles)",
+      "evidence": "Replaces variance with a separately-trained calibration GP for finite-sample calibrated quantiles; validated on 1D toy + 7 UCI regression datasets. UQ/calibration theory, no dynamics.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Safety-Critical Control with Uncertainty Quantification using Adaptive Conformal Prediction",
+      "year": "2024",
+      "authors": "Zhou, Zhang, Luo",
+      "dof": "N/A",
+      "model": "ACP→probabilistic-CBF chance-margin method; toy single-integrator/unicycle robots",
+      "evidence": "Review: 'single/unicycle integrator 장난감 동역학 ... R=0'. Contribution is the ACP+CBF chance hand-off algorithm demonstrated on generic planar integrator/unicycle collision avoidance, not a specific vehicle.",
+      "confidence": "low",
+      "group": "E"
+    },
+    {
+      "title": "Efficient Zero-Order Robust Optimization for Real-Time Model Predictive Control with acados",
+      "year": "2024",
+      "authors": "Frey, Gao, Messerer, Lahr, Zeilinger, Diehl",
+      "dof": "N/A",
+      "model": "zoRO tube-NMPC solver/implementation (covariance propagated outside OCP, backoff injected)",
+      "evidence": "Review: 'algorithm 신규성 0, 엔지니어링 신규성 높음' — an acados/BLASFEO C implementation of zoRO; examples are a chain-of-masses benchmark and a differential-drive robot. Generic robust-NMPC solver paper.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Gaussian processes for dynamics learning in model predictive control",
+      "year": "2025",
+      "authors": "Scampicchio, Arcari, Lahr, Zeilinger",
+      "dof": "N/A",
+      "model": "Survey of GP-based stochastic NMPC (scalability/propagation/closed-loop safety)",
+      "evidence": "Self-contained survey of GP-MPC; '서베이라 자체 실험 없음'. Reviews methods across robotics/process applications, no single vehicle dynamics model.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Learning for Predictive Control: A Dual Gaussian Process Approach",
+      "year": "2025",
+      "authors": "Liu, Wang, Tóth",
+      "dof": "3-DoF",
+      "model": "Outer-loop translational (position) MPC + dual-GP residual; inner-loop PD for attitude",
+      "evidence": "Review: 'quadrotor helix tracking ... 외부루프(병진) MPC+내부루프 PD'. The optimized MPC model is the translational (point-mass) outer loop; attitude handled by an inner PD loop, so the dynamics integrated/optimized are 3-DoF translational.",
+      "confidence": "med",
+      "group": "E"
+    },
+    {
+      "title": "Atmospheric-Density-Compensating Model Predictive Control for Targeted Reentry of Drag-Modulated Spacecraft",
+      "year": "2025",
+      "authors": "Hayes, Caverly",
+      "dof": "3-DoF",
+      "model": "Linear (Schweighart-Sedwick) translational relative-motion model, 4 states + EKF density",
+      "evidence": "Review: 'Schweighart-Sedwick J2-포함 선형모델 (cross-track 비제어라 제거→4상태)'; drag-modulated (no thrust, only C_b), a_d=ρv²C_b. Translational point-mass relative motion only — no attitude/torque states.",
+      "confidence": "high",
+      "group": "E"
+    },
+    {
+      "title": "Inherently Robust Suboptimal MPC for Autonomous Racing With Anytime Feasible SQP",
+      "year": "2024",
+      "authors": "Numerow, Zanelli, Carron, Zeilinger",
+      "dof": "3-DoF",
+      "model": "Planar racing-car (single-track) MPC: position + heading on track",
+      "evidence": "Real vehicle worked example (Kyosho Mini-Z 1:28, VICON+EKF, 30Hz); '차량모델·비용·트랙 명시', track lap periodic trajectory x_f(t) — planar x,y,yaw ground vehicle, no attitude/inertia states. Contribution is FSQP robustness analysis but the dynamics integrated is the planar car model.",
+      "confidence": "med",
+      "group": "F"
+    },
+    {
+      "title": "Code Generation and Conic Constraints for Model-Predictive Control on Microcontrollers with Conic-TinyMPC",
+      "year": "2024",
+      "authors": "Mahajan, Nguyen, Schoedel et al.",
+      "dof": "N/A",
+      "model": "ADMM conic-MPC solver + C++ codegen; LTI/SOC generic, multiple example vehicles",
+      "evidence": "Solver/codegen paper — contribution is SOC closed-form projection in ADMM + dependency-free codegen, not a vehicle. Examples are disparate (safety filter QP n<=32, Crazyflie hover, rocket soft-landing SOCP n=6 m=3); '실 MCU 실측+풋프린트로 C7 최상단'. Tied to the solver, not a fixed vehicle dimensionality.",
+      "confidence": "high",
+      "group": "F"
+    },
+    {
+      "title": "Practical Considerations for Implementing Robust-to-Early Termination Model Predictive Control",
+      "year": "2025",
+      "authors": "Amiri, Hosseinzadeh",
+      "dof": "N/A",
+      "model": "Anytime MPC method (discrete-time REAP, dynamic KKT-sigma); generic LTI + polytope",
+      "evidence": "'선형시스템·polytope 제약 한정. (1)은 LTI, (3)는 convex polytope.' Contribution is the discrete-time REAP gradient-flow safety condition (Theorems 1-3); central example is a 6-state linear drone position-control (point-mass) but the paper is a generic LTI/polytope method, not a fixed vehicle.",
+      "confidence": "high",
+      "group": "F"
+    },
+    {
+      "title": "Clarabel: An Interior-Point Solver for Conic Programs with Quadratic Objectives",
+      "year": "2026",
+      "authors": "Goulart, Chen",
+      "dof": "N/A",
+      "model": "General-purpose conic IPM solver (quadratic-objective homogeneous embedding)",
+      "evidence": "'Clarabel은 범용 데스크톱 솔버'. Benchmarks are standard solver corpora (Maros-Meszaros, SuiteSparse, optimal-control set, NETLIB, CBLIB, SDPLIB) — no fixed vehicle; contribution is the IPM algorithm/implementation.",
+      "confidence": "high",
+      "group": "F"
+    },
+    {
+      "title": "QOCO: A Quadratic Objective Conic Optimizer with Custom Solver Generation",
+      "year": "2026",
+      "authors": "Chari, Acikmese",
+      "dof": "N/A",
+      "model": "Conic (SOCP) C solver + custom codegen; quadratic-objective PDIPM",
+      "evidence": "Solver + codegen paper; contribution is C implementation + QOCOGEN custom linear algebra. Benchmarks are 5 problem classes (robust-KF, group-lasso, LCvx powered-descent, portfolio, oscillating-mass) + 64 MPC + Maros-Meszaros — algorithm not tied to one vehicle; '알고리즘 신규성 없음(Clarabel 복제+C패키징)'.",
+      "confidence": "high",
+      "group": "F"
+    },
+    {
+      "title": "Customized Interior-Point Methods Solver for Embedded Real-Time Convex Optimization",
+      "year": "2026",
+      "authors": "Jang, Lee",
+      "dof": "N/A",
+      "model": "Embedded conic-IPM solver + loop-based codegen; quadratic-objective homogeneous embedding",
+      "evidence": "Solver/codegen paper — contribution is infeasibility-certifying C-codegen IPM (Algorithm 1, NT-scaling, loop-based linear algebra). Examples (Mars powered-descent LCvx SOCP, quadcopter MPC) are demos of the solver; '알고리즘 신규성 없음(조합·이식)'. Not tied to a fixed vehicle dimensionality.",
+      "confidence": "high",
+      "group": "F"
+    },
+    {
+      "title": "Turbulence for extraterrestrial aviation: Gust specification for Dragonfly's powered flights",
+      "year": "2022",
+      "authors": "Lorenz",
+      "dof": "N/A",
+      "model": "Wind gust stochastic process: AR(1)/OU time series + Dryden shaping, σ RSS",
+      "evidence": "Pure wind/turbulence disturbance specification, not a vehicle dynamics model. Review opens '※ 사양·데이터 논문(알고리즘 아님)'. Core model is the wind stochastic process: '식4: U_g[n]=exp(−kδ)·U_g[n−1]+(2kδ)^0.5·σ_g·N(0,1) — 1차 자기회귀(AR(1)) = 지수상관 = 이산화된 Ornstein-Uhlenbeck' plus σ_g RSS (식3) and discrete cosine gust (식5). No vehicle states integrated — falls under disturbance/turbulence model = N/A.",
+      "confidence": "high",
+      "group": "G"
+    },
+    {
+      "title": "L4acados: Learning-Based Models for acados, Applied to Gaussian Process-Based Predictive Control",
+      "year": "2025",
+      "authors": "Lahr·Näf·Wabersich·Frey·Siehl·Carron·Diehl·Zeilinger",
+      "dof": "N/A",
+      "group": "E",
+      "model": "acados solver-interface framework for learning-based (NN/GP) residual models + zero-order GP-MPC",
+      "evidence": "Software/solver-interface framework (external-sensitivity injection into acados SQP); worked examples are 1:24 and full-scale racing/lane-change cars — contribution is the implementation, not a fixed vehicle.",
+      "confidence": "high"
+    },
+    {
+      "title": "Who Moved My Distribution? Conformal Prediction for Interactive Multi-Agent Systems",
+      "year": "2025",
+      "authors": "Binny·Dixit",
+      "dof": "N/A",
+      "group": "E",
+      "model": "iterative conformal-prediction recalibration for multi-agent safe planning (abstract ego x_{t+1}=f(x,u))",
+      "evidence": "Distribution-free conformal-prediction method for endogenous distribution shift; 2–3 agent sim, LSTM predictor, abstract ego dynamics — UQ theory, not a vehicle.",
+      "confidence": "high"
+    },
+    {
+      "title": "Multi-phase trajectory optimization of aerospace vehicle using sequential penalized convex relaxation",
+      "year": "2021",
+      "authors": "Zhao·Shang·Dong·Wang",
+      "dof": "N/A",
+      "model": "generic multi-phase OCP method (time-projection + penalized SDP relaxation); demos point-mass launch/rendezvous",
+      "evidence": "vehicle-agnostic method; §5 examples are point-mass launch-vehicle / spacecraft (r,v,m), no rigid-body attitude.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Direct-Indirect Hybrid Strategy for Optimal Powered Descent and Landing",
+      "year": "2023",
+      "authors": "Spada·Sagliano·Topputo",
+      "dof": "3-DoF",
+      "model": "point-mass x=[r,v,m], vacuum (ṙ=v, v̇=(u_T·T_max/m)i_T+g), no aero/attitude",
+      "evidence": "translational point-mass in vacuum; no rigid-body attitude states.",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Rocket Landing Guidance Based on Linearization-Free Convexification",
+      "year": "2024",
+      "authors": "Yang·Liu·Song",
+      "dof": "3-DoF",
+      "model": "point-mass [x,z,V,γ,ψ,m]; thrust aligned with longitudinal axis, attitude adjustment neglected",
+      "evidence": "translational point-mass; 'attitude adjustment process is neglected' (Sec. II).",
+      "confidence": "high",
+      "group": "A"
+    },
+    {
+      "title": "Optimal Terminal Area Strategies and Energy Tube Concept for a Winged Re-Entry Vehicle",
+      "year": "2009",
+      "authors": "de Ridder·Mooij",
+      "dof": "3-DoF",
+      "model": "point-mass vertical-plane energy-state EOM, states [h,x,y,V,γ,χ]",
+      "evidence": "point-mass energy-state TAEM; no attitude/rigid-body.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Entry Guidance: A Unified Method",
+      "year": "2014",
+      "authors": "Lu",
+      "dof": "3-DoF",
+      "model": "point-mass spherical rotating Earth entry [r,θ,φ,V,γ,ψ], bank-angle control",
+      "evidence": "point-mass translational, bank control; no attitude/angular states (Eqs.1-6).",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Launch abort trajectory optimisation for reusable launch vehicles",
+      "year": "2017",
+      "authors": "Toso·Maddock",
+      "dof": "3-DoF",
+      "model": "ECEF point-mass [h,λ,θ,v,γ,χ] with J2/J3/J4 + Earth rotation",
+      "evidence": "point-mass abort glide; no rigid-body attitude states.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "High-Precision Adaptive Predictive Entry Guidance for Vertical Rocket Landing",
+      "year": "2019",
+      "authors": "Zhang·Liu·Liu",
+      "dof": "3-DoF",
+      "model": "point-mass entry [r,θ,φ,V,γ,ψ] ellipsoidal rotating Earth+J2, α/β dual-channel control",
+      "evidence": "point-mass; no attitude/angular-rate states (Eqs.1-6).",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Direct trajectory optimization framework for vertical takeoff and vertical landing reusable rockets: case study of two-stage rockets",
+      "year": "2019",
+      "authors": "Ma·Wang·Shao·Song·Biegler",
+      "dof": "3-DoF",
+      "model": "ECI point-mass ṙ=v, v̇=−μr/‖r‖³+T/m+D/m, ṁ=−‖T‖/(g0 Isp); states (r,v,m)",
+      "evidence": "translational point-mass, no attitude/angular states.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Guidance of Reusable Launchers: Improving Descent and Landing Performance",
+      "year": "2019",
+      "authors": "Simplício·Marcos·Bennani",
+      "dof": "3-DoF",
+      "model": "translational r,v,m SCvx (DESCENDO) under perfect-attitude assumption; runs on 6-DoF benchmark plant",
+      "evidence": "the solved OCP is point-mass translational; attitude assumed perfectly controlled.",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Full-stage Reentry Trajectory Optimization for Reusable Launch Vehicle",
+      "year": "2020",
+      "authors": "Wu·Tian·Li",
+      "dof": "3-DoF",
+      "model": "point-mass spherical-Earth [r,θ,φ,V,γ,ψ], bank-angle control (IRE→TAEM→A&L)",
+      "evidence": "point-mass per-phase EOM; no attitude/angular-rate states.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Recovery trajectory planning for the reusable launch vehicle",
+      "year": "2021",
+      "authors": "Cheng·Jing·Gao",
+      "dof": "3-DoF",
+      "model": "point-mass LCS ṙ=v, v̇=g+(P+R)/m, ṁ=−‖P‖/Isp; grid rudder unmodeled",
+      "evidence": "point-mass, no attitude/inertia.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Multi-phase and dual aero/propulsive rocket landing guidance using successive convex programming",
+      "year": "2023",
+      "authors": "Lee·Lee",
+      "dof": "6-DoF",
+      "model": "rigid body x=[m,r_I,v_I,q_B,ω_B]; ω̇_B=I⁻¹(M_B−ω×Iω), AC fins generate moments",
+      "evidence": "full attitude dynamics (quaternion + angular rate), inertia/torque (Eqs.1-9).",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Fast and Robust Optimization of Full Trajectory from Entry Through Powered Descent",
+      "year": "2024",
+      "authors": "Lu·Sandoval·Davami",
+      "dof": "3-DoF",
+      "model": "entry 6-state point-mass [r,θ,φ,V,γ,ψ] (bank-only) + PDG 7-state point-mass [r,V,m]",
+      "evidence": "point-mass gliding entry + point-mass thrust-vector PDG; no rigid-body attitude.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "A novel re-entry trajectory design strategy enforcing inequality and terminal constraints in height-velocity plane",
+      "year": "2024",
+      "authors": "Mishra·Sushnigdha",
+      "dof": "3-DoF",
+      "model": "point-mass entry [h,v,γ,θ,φ,ψ], bank-angle control + fixed α(v)",
+      "evidence": "point-mass h–V corridor design; no rigid-body attitude.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Endoatmospheric powered descent guidance",
+      "year": "2024",
+      "authors": "Wang·Zhang·Li",
+      "dof": "3-DoF",
+      "model": "restricted-6-DoF: rotational kinematics Q̇=Q⊗Ω/2 with ω as direct control, rotational dynamics (ω̇/inertia) dropped",
+      "evidence": "'between 3-DoF and 6-DoF' (§2.2): attitude kinematics kept but no rotational dynamics states → classified 3-DoF (cf. corpus Chen-2026).",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Optimal feedback guidance with disturbance rejection for endoatmospheric powered descent",
+      "year": "2025",
+      "authors": "Chen·Zhang·Li",
+      "dof": "3-DoF",
+      "model": "reduced-6-DoF: integrated states [r,v,m,θ,ψ] + ω as control, rotational dynamics neglected (Remark 1)",
+      "evidence": "translational + 2 trimmed attitude angles, no rotational dynamics/inertia states.",
+      "confidence": "med",
+      "group": "B"
+    },
+    {
+      "title": "Convex Optimization Based Landing Guidance for Reusable Orbital Rockets",
+      "year": "2025",
+      "authors": "Lee·Jung·Lee",
+      "dof": "6-DoF",
+      "model": "rigid body x∈R14=[m,r,v,q,ω], quaternion + Euler rotational dynamics ω̇, TVC",
+      "evidence": "full attitude (quaternion) + angular-rate states; 4-phase belly-flop/flip/align/land.",
+      "confidence": "high",
+      "group": "B"
+    },
+    {
+      "title": "Optimal Control of Switched Systems Based on Parameterization of the Switching Instants",
+      "year": "2004",
+      "authors": "Xu·Antsaklis",
+      "dof": "N/A",
+      "model": "generic nonlinear switched-system OC; switching instants as decision variables, exact ∂J/∂t_s via sensitivity-BVP",
+      "evidence": "generic theory; examples are scalar/2-D toy subsystems, not tied to any vehicle.",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Autonomous Trajectory Planning with Event-Trigger Constraints Using Nonsingular Convex Optimization",
+      "year": "2024",
+      "authors": "Zhao·Shang·Liu·Zhang",
+      "dof": "N/A",
+      "model": "generic SCP method (event-trigger if-statement homotopy convexification); ex CW rendezvous (3-DoF) + 2-D hopping",
+      "evidence": "vehicle-agnostic method; 6-DoF attitude-coupled case explicitly deferred to future work.",
+      "confidence": "high",
+      "group": "D"
+    },
+    {
+      "title": "Transformer-Based Atmospheric Rocket Landing Guidance Using Meta-Reinforcement Learning",
+      "year": "2026",
+      "authors": "Carradori·Sagliano·Mooij",
+      "dof": "6-DoF",
+      "model": "22-state rigid body, quaternion attitude + ω̇ Euler dynamics (J⁻¹(M−ω×Jω)), TVC, fins",
+      "evidence": "full rigid-body attitude + angular rate (Eqs.8-10).",
+      "confidence": "high",
+      "group": "E"
+    }
+  ]
+}

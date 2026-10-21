@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+- aero_descent
+- _self_
+scenario:
+  name: fin_deployment
+  description: Instantaneous fin aerodynamic exposure; no deployment impulse or inertia
+    change.
+  inputs:
+  - t: 0.0
+    label: stowed
+    throttle: 0.0
+    fin_deployment: 0.0
+  - t: 1.0
+    label: deployed
+    fin_deployment: 1.0

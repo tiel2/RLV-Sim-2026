@@ -1,0 +1,24 @@
+# @package _global_
+defaults:
+- _prescribed
+- _self_
+scenario:
+  name: aero_descent
+  ic:
+    r_ned:
+    - 0
+    - 0
+    - -8000
+    v_ned:
+    - 80
+    - 20
+    - 200
+    pitch_deg: 72
+    yaw_deg: -165.96375653207352
+    m: 35000
+  horizon:
+    t_max: 5.0
+  inputs:
+  - t: 0.0
+    label: coast
+    throttle: 0.0

@@ -1,0 +1,49 @@
+# @package _global_
+# Reproducible reference before adding sensor noise or navigation algorithms.
+defaults:
+  - override /vehicle_set: falcon9
+  - override /plant/vehicle: falcon9_stage1
+  - override /plant/aero: table
+  - override /plant/actuator: ideal
+  - override /plant/thrust: backpressure
+  - override /plant/slosh: none
+  - override /environment/atmosphere: ussa_poly
+  - override /environment/wind: none
+  - override /environment/earth: fixed
+  - override /fault: none
+  - override /scenario: pdg
+  - override /gnc/scheduler: altitude
+  - override /gnc/guidance: lcvx
+  - override /gnc/control: pd
+  - override /gnc/allocation: default
+  - override /gnc/navigation: identity
+  - override /run: single
+
+baseline_id: falcon9_pdg_v2
+seed: 0
+plant_dt: 0.001
+gnc:
+  delay_ticks: 0
+  guidance:
+    convex_replan: false
+  allocation:
+    rcs_enabled: false
+scenario:
+  start_phase: powered
+  ic:
+    r_ned: [0.0, 0.0, -300.0]
+    v_ned: [0.0, 0.0, 25.0]
+    roll_deg: 0.0
+    pitch_deg: 90.0
+    yaw_deg: 0.0
+    w_body: [0.0, 0.0, 0.0]
+    m: 29500.0
+    throttle0: 0.0
+  dispersion:
+    enable: false
+  horizon:
+    t_max: 40.0
+    nav_dt: 0.01
+    ctrl_dt: 0.02
+    guidance_dt: 1.0
+    log_dt: 0.1

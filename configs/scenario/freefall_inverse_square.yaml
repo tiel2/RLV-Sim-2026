@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+- freefall_uniform
+- _self_
+- override /environment/gravity: inverse_square
+scenario:
+  name: freefall_inverse_square
+  validation:
+    kind: inverse_square_energy
+    relative_tolerance: 1.0e-08
