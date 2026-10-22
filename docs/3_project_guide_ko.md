@@ -1046,8 +1046,9 @@ $$
 | `physics.npz` | 궤적 시각의 truth, 힘·모멘트, 동압·Mach·받음각, CG·관성 대각 성분, 주/RCS 연료, 핀 전개 상태 |
 | `events.json` | 지정 입력·구성 변경, 관측된 주 연료 소진·지면 통과 이벤트 |
 | `metrics.json` | 실행 종료와 착륙 평가의 구분, 물리량 극값·최종 상태 |
-| `validation.json` | 해석 기준별 오차·단위·허용 오차·판정; 미요청 시 `not_requested` |
-| `reference.npz` | 해석 기준을 요청한 경우 기준 이력·보존량 비교 데이터 |
+| `validation.json` | 독립 기준 계산 방법, 최대·RMS·종단 오차, 허용값·판정, 기준 적분 안정성; 미요청 시 `not_requested` |
+| `reference.npz` | 기준 이력, `actual_*` 시뮬레이션 이력, `error_*`, 보존량과 추력 비교 마스크 |
+| `comparison.csv` | 시각별 기준값·시뮬레이션값·오차를 나란히 저장한 표 |
 | `timing.json` | 실제 작업 시각·주기·지연·시작·종료 |
 | `telemetry_schema.json` | 좌표계·단위·샘플·타임스탬프 의미 |
 | `solver_stats.json` | 해당 모듈 실행 시 최적화 시도·상태·시간 통계 |
@@ -1253,7 +1254,7 @@ python scripts/run_single.py plant/actuator=ideal gnc/guidance=scvx \
 | `fault.fin_lock` | 4개 fin 잠금 플래그; 현실적 구동기에서 적용 |
 | `plant.slosh.slosh_mass` | 출렁임 참여 질량 [kg]; 모델 그룹을 먼저 선택 |
 | `plant.vehicle.actuator.throttle_tau` | throttle 시정수 [s]; 구동기 계수는 `plant.vehicle.actuator` 아래에 있음 |
-| `plant.vehicle.actuator.tvc_deflection_max_rad` | TVC 최대 편향 [rad] |
+| `plant.vehicle.actuator.tvc_deflection_max_rad` | 각 축 TVC 명령각 한계 [rad]; 동적 응답은 overshoot 가능 |
 
 유도·제어의 대표 인자는 아래와 같다. 추가 최적화 인자와 의미는 9절 및 해당 YAML에 정리되어 있다.
 
@@ -1629,20 +1630,9 @@ python scripts/check_convergence.py scenario=mass_depletion \
 
 각 사례는 **초기 상태 + 물리 모델 + 지정 입력 + 비교 기준**으로 정의한다. 목표 위치·속도에 도달하도록 입력을 최적화하는 문제가 아니며, 보기 좋은 궤적이나 연착륙을 만들기 위해 검증 조건을 조정하지 않는다. 해석 기준의 종단 상태는 지정된 물리 문제에서 따라 나오는 결과다. 설정을 변경한 실험은 기준 사례와 구분해 저장하고 `resolved_config.yaml`로 식별한다.
 
-#### A. 해석해·보존량·질량 예산 기준: 6개
+#### A. 해석 기준 검사: 6개 시나리오
 
-이 그룹은 현재 `validation.json`의 자동 판정이 구현되어 있다. 아래 허용값은 현재 해당 검증기가 실제로 사용하는 값이며, YAML 상속으로 남아 있는 다른 검증 종류의 필드는 해당 판정에 사용하지 않는다. 공통 quaternion norm 오차 한계는 $10^{-12}$다.
-
-| 시나리오 | 주 검증 질문 | 유지할 조건 | 현재 자동 판정 |
-|---|---|---|---|
-| `freefall_uniform` | 일정 중력에서 병진 적분이 해석해와 일치하는가? | 진공·일정 중력·엔진 정지·일정 질량 | 위치 벡터 오차 최대 $10^{-5}$ m, 속도 벡터 오차 최대 $10^{-6}$ m/s |
-| `freefall_inverse_square` | 고도별 역제곱 중력에서 비에너지가 보존되는가? | 진공·역제곱 중력·엔진 정지·수직 자유낙하 | 비에너지의 초기값 대비 최대 상대 변화 $10^{-8}$ |
-| `free_rotation` | 무토크 회전의 좌표 변환과 회전 적분이 일관되는가? | 진공·무중력·일정 관성·초기 각속도 | NED 각운동량 벡터와 회전 에너지의 최대 상대 변화 각각 $10^{-7}$ |
-| `vacuum_burn` | 추력·질량유량·속도 증가가 일치하는가? | 진공·무중력·이상 구동기·중앙 엔진 일정 throttle·초기 throttle 일치 | 로켓 방정식 속도 오차 $10^{-5}$ m/s, 질량 예산 오차 $10^{-5}$ kg |
-| `mass_depletion` | 주 추진제 소진 시 추력이 사라지고 이후 비행이 이어지는가? | `vacuum_burn`의 입력·모델, 주 추진제 초기량만 500 kg | 위 속도·질량 기준, 최종 주 추진제 $10^{-5}$ kg 이하, 최종 추력 $10^{-8}$ N 이하, RCS 잔량 변화 $10^{-8}$ kg 이하, 예상 소진 후 1 s 초과 비행 |
-| `drag_descent` | 제한된 항력 문제의 속도·위치가 해석해와 일치하는가? | 일정 중력·사실상 일정 밀도·상수 $C_D$·핀 면적 0·수직 비회전 하강 | 위치 벡터 오차 최대 $10^{-4}$ m, 속도 벡터 오차 최대 $10^{-5}$ m/s |
-
-이 그룹의 통과는 해당 조건에서의 구현·수치 검증이다. 일반 공력의 정확도, 다양한 자세에서의 중력장, 실기체 비행 데이터와의 일치까지 입증하는 것은 아니다.
+`freefall_uniform`, `freefall_inverse_square`, `free_rotation`, `vacuum_burn`, `mass_depletion`, `drag_descent`는 자동 기준 비교를 지원한다. `validation.json`에 적용 조건·오차·허용값·판정을, `comparison.csv`와 `reference.npz`에 비교 이력을 저장한다. 기준 수식·실험 가정·결과는 [영문 검증 보고서](verification/physics_implementation_report_en.md)에 정리했다.
 
 #### B. 대표 비행 구간: 3개
 
@@ -1764,6 +1754,17 @@ python scripts/run_single.py plant/vehicle=falcon9_octaweb \
 
 처음 읽을 때는 [run_single.py](../scripts/run_single.py) → [run.py](../src/sim/run.py) → [interfaces.py](../src/core/interfaces.py) → [loop.py](../src/sim/loop.py) → 개루프의 [open_loop.py](../src/sim/open_loop.py) 또는 폐루프의 [build.py](../src/gnc/build.py)·[stack.py](../src/gnc/stack.py) → [plant.cpp](../src/native/plant.cpp) 순서가 자연스럽다.
 
+### 12.5 물리 구현 검증
+
+[영문 물리 구현 검증 보고서](verification/physics_implementation_report_en.md)에 모델 가정, 독립 기준 수식, 허용값과 결과를 정리했다.
+
+```bash
+python scripts/check_propulsion.py scenario=vacuum_burn plant/thrust=vacuum
+python scripts/check_vehicle_physics.py --stage all
+```
+
+차량 검증기는 `--stage 1`–`5`와 `--output <directory>`를 지원한다. 실행 결과는 `results/`에 JSON/CSV 판정, NPZ 이력, 설정, 소스 해시·사본으로 저장한다. 결합 검증은 보고서 그림의 PNG/PDF도 생성한다. 생성 결과는 Git에서 제외한다.
+
 <a id="limitations"></a>
 
 ## 13. 현재 가정과 구현상 제한
@@ -1779,6 +1780,7 @@ python scripts/run_single.py plant/vehicle=falcon9_octaweb \
 | 최적화 자유도 | 3자유도 병진 계획; 자세·각속도·서보 내부 상태는 직접 최적화하지 않음 |
 | 추력 변화율 | 계획 노드 간 크기 변화 제한; 첫 노드와 현재 throttle 연결, 점화·재시동·서보 지연을 완전히 모델링하지 않음 |
 | 구동기 일치 | convex 유도의 기본 전제는 이상 추력 응답; realistic/simplified는 모델 불일치 실험 |
+| TVC 각도 한계 | 각 축의 명령각 한계; 작은 실제 각도 overshoot는 모델 특성으로 기록. 기계적 hard stop은 별도 요구 시 검증 (12.5절) |
 | 공칭 환경 | 할당 동압은 지상 상대 추정 속도, 배압은 지수 근사; SCvx도 전체 Plant 공력의 축약 모델 |
 | 다중 엔진 할당 | 동일 엔진 공칭값·균등 추력 분배·공통 짐벌 명령; 고장 적응 최적 할당은 없음 |
 | Roll | 기본 해석식 fin 할당과 RCS 비활성에서는 roll 무제어 |

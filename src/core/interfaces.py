@@ -334,7 +334,7 @@ class ActuatorParams:
     tvc_omega: Array  # () natural freq [rad/s] (~2π·6 Hz)
     tvc_zeta: Array  # () damping ratio (~0.707)
     tvc_rate_max_rad_s: Array  # () rate limit [rad/s]
-    tvc_deflection_max_rad: Array  # () deflection limit [rad]
+    tvc_deflection_max_rad: Array  # () per-axis command limit [rad]; dynamic servo may overshoot
     # throttle: 1st-order lag + rate limit
     throttle_tau: Array  # () lag time constant [s]
     throttle_rate_max: Array  # () throttle-fraction rate limit [1/s]

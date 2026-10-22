@@ -1046,8 +1046,9 @@ Assess execution outcome, landing performance, and physics verification separate
 | `physics.npz` | Truth, forces/moments, dynamic pressure, Mach, AoA, CG, diagonal inertia, main/RCS propellant, fin deployment at trajectory epochs |
 | `events.json` | Prescribed-input/configuration changes, observed main-propellant depletion and ground crossing |
 | `metrics.json` | Execution outcome versus landing assessment, physical extrema, final state |
-| `validation.json` | Analytical errors, units, tolerances, verdicts; `not_requested` if no check requested |
-| `reference.npz` | Reference histories and conservation comparisons when analytical verification is requested |
+| `validation.json` | Independent reference method, maximum/RMS/final errors, tolerances, verdicts, reference integration stability; `not_requested` when disabled |
+| `reference.npz` | Reference histories, `actual_*` simulation histories, `error_*`, conserved quantities, and thrust comparison mask |
+| `comparison.csv` | Reference values, simulation values, and errors side by side at each sample time |
 | `timing.json` | Actual task epochs, periods, delays, start/end |
 | `telemetry_schema.json` | Frames, units, sample and timestamp meanings |
 | `solver_stats.json` | Optimization attempts, status, timing when the module runs |
@@ -1253,7 +1254,7 @@ All update periods and `t_max` must be positive integer multiples of `plant_dt`.
 | `fault.fin_lock` | Four fin-lock flags; applied with realistic actuation |
 | `plant.slosh.slosh_mass` | Participating slosh mass [kg]; select the model group first |
 | `plant.vehicle.actuator.throttle_tau` | Throttle time constant [s]; actuator coefficients are under `plant.vehicle.actuator` |
-| `plant.vehicle.actuator.tvc_deflection_max_rad` | Maximum TVC deflection [rad] |
+| `plant.vehicle.actuator.tvc_deflection_max_rad` | Per-axis TVC command bound [rad]; dynamic response may overshoot |
 
 Representative guidance/control arguments follow. Section 9 and the corresponding YAML files describe additional optimization arguments.
 
@@ -1629,20 +1630,9 @@ As of 2026-10-21, the roles of the existing 13 prescribed-input experiments are 
 
 Each case is defined by **initial state + physics model + prescribed inputs + comparison reference**. These are not problems that optimize inputs to reach a target position and velocity, and verification conditions are not tuned to produce attractive trajectories or soft landings. The terminal state of an analytical reference follows from the prescribed physical problem. Save experiments with changed settings separately from the reference cases and identify them using `resolved_config.yaml`.
 
-#### A. Analytical solutions, conserved quantities, and mass budgets: six cases
+#### A. Analytical reference cases: six scenarios
 
-Automatic verdicts in `validation.json` are implemented for this group. The tolerances below are those actually used by each current verifier; fields for other verification types left over through YAML inheritance do not affect its verdict. The common quaternion norm error limit is $10^{-12}$.
-
-| Scenario | Main verification question | Conditions to retain | Current automatic criteria |
-|---|---|---|---|
-| `freefall_uniform` | Does translational integration under constant gravity match the analytical solution? | Vacuum, constant gravity, engines off, constant mass | Maximum position vector error $10^{-5}$ m; maximum velocity vector error $10^{-6}$ m/s |
-| `freefall_inverse_square` | Is specific energy conserved under altitude-dependent inverse-square gravity? | Vacuum, inverse-square gravity, engines off, vertical free fall | Maximum relative change in specific energy from its initial value: $10^{-8}$ |
-| `free_rotation` | Are frame transformations and rotational integration consistent for torque-free rotation? | Vacuum, zero gravity, constant inertia, initial angular velocity | Maximum relative changes in the NED angular momentum vector and rotational energy: $10^{-7}$ each |
-| `vacuum_burn` | Are thrust, mass flow, and velocity gain consistent? | Vacuum, zero gravity, ideal actuators, constant center-engine throttle, matching initial throttle | Rocket-equation velocity error $10^{-5}$ m/s; mass budget error $10^{-5}$ kg |
-| `mass_depletion` | Does thrust vanish when main propellant is depleted, with flight continuing afterward? | Same inputs and model as `vacuum_burn`, but only 500 kg of initial main propellant | Same velocity and mass limits; final main propellant at most $10^{-5}$ kg; final thrust at most $10^{-8}$ N; RCS mass change at most $10^{-8}$ kg; flight continues more than 1 s after expected depletion |
-| `drag_descent` | Do velocity and position match the analytical solution for the restricted drag problem? | Constant gravity, effectively constant density, constant $C_D$, zero fin area, vertical descent without rotation | Maximum position vector error $10^{-4}$ m; maximum velocity vector error $10^{-5}$ m/s |
-
-Passing this group verifies the implementation and numerical behavior under these specific conditions. It does not establish general aerodynamic accuracy, gravity-field behavior across different attitudes, or agreement with actual vehicle flight data.
+`freefall_uniform`, `freefall_inverse_square`, `free_rotation`, `vacuum_burn`, `mass_depletion`, and `drag_descent` implement automatic reference checks. `validation.json` records applicability, errors, tolerances, and verdicts; `comparison.csv` and `reference.npz` retain the comparison histories. The [verification report](verification/physics_implementation_report_en.md) presents the reference equations, benchmark assumptions, and results.
 
 #### B. Representative flight segments: three cases
 
@@ -1764,6 +1754,17 @@ These records are not comparisons against actual flight data or verification of 
 
 A useful first reading order is [run_single.py](../scripts/run_single.py) → [run.py](../src/sim/run.py) → [interfaces.py](../src/core/interfaces.py) → [loop.py](../src/sim/loop.py) → [open_loop.py](../src/sim/open_loop.py) for open-loop runs, or [build.py](../src/gnc/build.py) and [stack.py](../src/gnc/stack.py) for closed-loop runs → [plant.cpp](../src/native/plant.cpp).
 
+### 12.5 Physics verification
+
+The [physical implementation verification report](verification/physics_implementation_report_en.md) presents the model assumptions, independent reference equations, acceptance criteria, and results.
+
+```bash
+python scripts/check_propulsion.py scenario=vacuum_burn plant/thrust=vacuum
+python scripts/check_vehicle_physics.py --stage all
+```
+
+The vehicle verifier accepts `--stage 1`–`5` and `--output <directory>`. Runs save JSON/CSV checks, NPZ histories, resolved settings, source hashes and snapshots under `results/`. Coupled verification also generates the report figure as PNG/PDF. These generated outputs are excluded from Git.
+
 <a id="limitations"></a>
 
 ## 13. Assumptions and implementation limits
@@ -1779,6 +1780,7 @@ A useful first reading order is [run_single.py](../scripts/run_single.py) → [r
 | Optimization degrees of freedom | Three-degree-of-freedom translational planning; attitude, angular velocity, and internal servo states are not optimized directly |
 | Thrust rate | Limits magnitude changes between planning nodes; does not fully model the connection between the first node and current throttle, ignition, restart, or servo lag |
 | Actuator agreement | Convex guidance assumes ideal thrust response by default; realistic/simplified settings are model-mismatch experiments |
+| TVC angle bound | Per-axis command bound; small actual-angle overshoot is recorded as a model transient. A mechanical hard stop requires separate verification (Section 12.5) |
 | Nominal environment | Allocation uses estimated ground-relative velocity for dynamic pressure and an exponential back-pressure approximation; SCvx also uses reduced aerodynamics relative to the full Plant |
 | Multi-engine allocation | Identical nominal engine parameters, equal thrust distribution, common gimbal commands; no fault-adaptive optimal allocation |
 | Roll | Uncontrolled with the default analytical fin allocation and RCS disabled |

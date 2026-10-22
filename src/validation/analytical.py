@@ -1,18 +1,17 @@
-"""Analytical anchors for explicitly restricted physics experiments.
+"""Compare restricted vehicle runs against independently computed references."""
 
-These checks establish implementation consistency, not flight-data validation.
-Tolerances come from the scenario and are included in every result.
-"""
-
+import csv
 import json
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
-from core.frames import dcm_from_quat
+from validation.references import attitude_error, build_reference, mass_properties
 
 
 def validate_episode(result, bundle, cfg):
+    """Keep the shared-runner API; reference construction never receives ``bundle``."""
     spec = cfg.scenario.get("validation", {})
     kind = str(spec.get("kind", "none"))
     report = {
@@ -21,211 +20,166 @@ def validate_episode(result, bundle, cfg):
         "checks": {},
         "scope": "numerical/analytical verification; not flight-data validation",
     }
-    reference = {"t": result.t}
     if kind == "none":
-        return report, reference
-    p = bundle.params
-    t = result.t - result.t[0]
-    r, v, m = result.r_ned, result.v_ned, result.m
+        return report, {"t": result.t}
+    reference, method = build_reference(cfg, result.t)
+    report["reference"] = method
     aux = result.aux["per_tick"]
 
-    def require(condition, message):
-        if not condition:
-            raise ValueError(f"{kind} is not applicable: {message}")
-
-    def check(name, value, tolerance, unit):
+    def check(name, error, tolerance, unit):
+        values = np.atleast_1d(error).astype(float)
+        finite = bool(np.all(np.isfinite(values)))
+        peak = float(np.max(np.abs(values))) if finite else None
         report["checks"][name] = {
-            "error": float(value),
+            "error": peak,
             "tolerance": float(tolerance),
             "unit": unit,
-            "passed": bool(np.isfinite(value) and value <= tolerance),
+            "rms_error": float(np.sqrt(np.mean(values**2))) if finite else None,
+            "final_error": float(abs(values[-1])) if finite else None,
+            "passed": bool(finite and peak <= tolerance),
         }
 
-    require(bundle.meta["earth_model"] == "fixed", "requires fixed local frame")
-    if kind != "constant_drag":
-        require(bundle.meta["atmosphere_model"] == "vacuum", "requires vacuum atmosphere")
-    require(bundle.meta["slosh_model"] == "none", "requires slosh disabled")
-    require(np.allclose([a["rcs_mdot"] for a in aux], 0), "requires RCS off")
+    def compare(key, actual, tolerance, unit, name=None):
+        actual = np.asarray(actual)
+        expected = reference[key]
+        delta = actual - expected
+        error = np.linalg.norm(delta, axis=1) if delta.ndim == 2 else np.abs(delta)
+        reference["actual_" + key] = actual
+        reference["error_" + key] = error
+        check(name or key, error, tolerance, unit)
+
     check(
-        "quaternion_norm",
-        np.max(np.abs(np.linalg.norm(result.q_bn, axis=1) - 1)),
-        1e-12,
+        "quaternion_norm", np.abs(np.linalg.norm(result.q_bn, axis=1) - 1), 1e-12, "dimensionless"
+    )
+    compare("r_ned", result.r_ned, spec["position_atol_m"], "m", "position")
+    compare("v_ned", result.v_ned, spec["velocity_atol_mps"], "m/s", "velocity")
+    compare("mass", result.m, spec.get("mass_atol_kg", 1e-8), "kg", "mass_budget")
+    compare("rcs_fuel", [a["rcs_fuel"] for a in aux], 1e-8, "kg", "rcs_reserve")
+    angle = attitude_error(result.q_bn, reference["q_bn"])
+    reference["actual_q_bn"] = result.q_bn
+    reference["error_q_bn"] = angle
+    angle_tol, rate_tol = (
+        float(spec.get("attitude_atol_rad", 1e-8)),
+        float(spec.get("angular_velocity_atol_rad_s", 1e-9)),
+    )
+    check("attitude", angle, angle_tol, "rad")
+    compare("w_body", result.w_body, rate_tol, "rad/s", "angular_velocity")
+
+    # Check the independently integrated reference before trusting its comparison.
+    if "numerical_reference" in method:
+        limits = {
+            "r_ned": spec["position_atol_m"],
+            "v_ned": spec["velocity_atol_mps"],
+            "q_bn": angle_tol,
+            "w_body": rate_tol,
+        }
+        units = {"r_ned": "m", "v_ned": "m/s", "q_bn": "rad", "w_body": "rad/s"}
+        for key, value in method["numerical_reference"]["max_refinement_difference"].items():
+            check("reference_stability_" + key, value, 0.01 * limits[key], units[key])
+
+    # Verify mass properties using reference mass, not simulated mass or diagnostics.
+    properties = [
+        mass_properties(cfg.plant.vehicle, m, gas)
+        for m, gas in zip(reference["mass"], reference["rcs_fuel"], strict=True)
+    ]
+    reference["x_cg"] = np.array([x[0] for x in properties])
+    reference["inertia_diag"] = np.array([np.diag(x[1]) for x in properties])
+    compare("x_cg", [a["x_cg"] for a in aux], 1e-8, "m")
+    actual_inertia = np.array([a["inertia_diag"] for a in aux])
+    reference["actual_inertia_diag"] = actual_inertia
+    inertia_error = np.linalg.norm(actual_inertia - reference["inertia_diag"], axis=1)
+    reference["error_inertia_diag"] = inertia_error
+    check(
+        "inertia_relative",
+        inertia_error / np.linalg.norm(reference["inertia_diag"], axis=1),
+        1e-10,
         "dimensionless",
     )
-    if kind in ("freefall_uniform", "inverse_square_energy", "free_rotation"):
-        require(np.allclose(m, m[0], atol=1e-8, rtol=0), "requires constant mass")
-        require(np.allclose([a["thrust_mag"] for a in aux], 0), "requires engines off")
-    if kind == "freefall_uniform":
-        require(not bool(p.gravity.inverse_square), "requires uniform gravity")
-        g = np.asarray(p.g_ned)
-        reference["r_ned"] = r[0] + t[:, None] * v[0] + 0.5 * t[:, None] ** 2 * g
-        reference["v_ned"] = v[0] + t[:, None] * g
-        check(
-            "position",
-            np.max(np.linalg.norm(r - reference["r_ned"], axis=1)),
-            spec["position_atol_m"],
-            "m",
+
+    thrust = np.array([a["thrust_mag"] for a in aux])
+    reference["actual_thrust_mag"] = thrust
+    thrust_error = np.abs(thrust - reference["thrust_mag"])
+    reference["error_thrust_mag"] = thrust_error
+    mask = np.ones(len(result.t), dtype=bool)
+    if kind in ("rocket_equation", "mass_depletion"):
+        depletion = method["expected_depletion_s"]
+        report["expected_depletion_s"] = depletion
+        # The native last burn spreads remaining impulse over one plant step.
+        # Compare instantaneous thrust away from that explicitly identified interval.
+        mask = np.abs(result.t - depletion) > float(cfg.plant_dt) + 1e-12
+        report["thrust_boundary_exclusion"] = {
+            "half_width_s": float(cfg.plant_dt),
+            "excluded_samples": int(np.sum(~mask)),
+            "reason": "last partial burn is averaged over one plant integration step",
+        }
+        if kind == "mass_depletion":
+            check("remaining_main_fuel", aux[-1]["main_propellant"], spec["mass_atol_kg"], "kg")
+            check("final_thrust", thrust[-1], 1e-8, "N")
+            check(
+                "continued_after_depletion",
+                0 if result.t[-1] > depletion + 1 else 1,
+                0,
+                "boolean_error",
+            )
+            empty = np.flatnonzero(np.array([a["main_propellant"] for a in aux]) <= 1e-8)
+            bracket = None
+            if len(empty) and empty[0] > 0:
+                idx = int(empty[0])
+                bracket = [float(result.t[idx - 1]), float(result.t[idx])]
+            report["depletion_observation"] = {
+                "sample_bracket_s": bracket,
+                "note": "logging bracket, not an exact measured event time",
+            }
+            distance = (
+                max(bracket[0] - depletion, depletion - bracket[1], 0)
+                if bracket is not None
+                else float("inf")
+            )
+            check("depletion_bracket", distance, float(cfg.plant_dt), "s")
+    reference["thrust_comparison_mask"] = mask
+    check("thrust", thrust_error[mask], 1e-6, "N")
+
+    if kind == "inverse_square_energy":
+        grav = cfg.environment.gravity
+        energy = 0.5 * np.sum(result.v_ned**2, axis=1) - grav.mu / (
+            grav.radius - result.r_ned[:, 2]
         )
-        check(
-            "velocity",
-            np.max(np.linalg.norm(v - reference["v_ned"], axis=1)),
-            spec["velocity_atol_mps"],
-            "m/s",
-        )
-    elif kind == "constant_drag":
-        require(not bool(p.gravity.inverse_square), "requires uniform gravity")
-        require(np.allclose(m, m[0], rtol=0, atol=1e-8), "requires constant mass")
-        require(np.allclose([a["thrust_mag"] for a in aux], 0), "requires engines off")
-        require(float(p.aero.fin_area) == 0, "requires fin forces disabled")
-        require(
-            np.allclose(result.w_body, 0, atol=1e-10) and np.allclose(v[:, :2], 0, atol=1e-9),
-            "requires vertical nonrotating flight",
-        )
-        cd = np.array([a["aero_cd"] for a in aux])
-        rho = np.array([a["rho"] for a in aux])
-        require(np.allclose(cd, cd[0], atol=1e-12, rtol=0), "requires constant CD")
-        require(
-            np.max(np.abs(rho - rho[0])) / rho[0] < 1e-7, "requires effectively constant density"
-        )
-        g = float(p.g_ned[2])
-        require(g > 0 and cd[0] > 0 and rho[0] > 0, "requires positive gravity and drag")
-        terminal = np.sqrt(2 * m[0] * g / (rho[0] * float(p.geom.s_ref) * cd[0]))
-        require(0 <= v[0, 2] < terminal, "anchor uses subterminal initial descent")
-        offset = np.arctanh(v[0, 2] / terminal)
-        arg = g * t / terminal + offset
-        reference["v_ned"] = np.tile(v[0], (len(t), 1))
-        reference["v_ned"][:, 2] = terminal * np.tanh(arg)
-        reference["r_ned"] = np.tile(r[0], (len(t), 1))
-        reference["r_ned"][:, 2] += (
-            terminal**2 / g * (np.log(np.cosh(arg)) - np.log(np.cosh(offset)))
-        )
-        report["terminal_speed_mps"] = float(terminal)
-        check(
-            "position",
-            np.max(np.linalg.norm(r - reference["r_ned"], axis=1)),
-            spec["position_atol_m"],
-            "m",
-        )
-        check(
-            "velocity",
-            np.max(np.linalg.norm(v - reference["v_ned"], axis=1)),
-            spec["velocity_atol_mps"],
-            "m/s",
-        )
-    elif kind == "inverse_square_energy":
-        require(bool(p.gravity.inverse_square), "requires inverse-square gravity")
-        energy = 0.5 * np.sum(v * v, axis=1) - float(p.gravity.mu) / (
-            float(p.gravity.radius) - r[:, 2]
-        )
+        expected = reference["expected_specific_energy"]
         reference["specific_energy"] = energy
-        reference["expected_specific_energy"] = np.full_like(t, energy[0])
         check(
             "specific_energy_relative",
-            np.max(np.abs(energy - energy[0])) / abs(energy[0]),
+            np.abs(energy - expected) / abs(expected[0]),
             spec["relative_tolerance"],
             "dimensionless",
         )
     elif kind == "free_rotation":
-        inertia = np.asarray(aux[0]["inertia_diag"])
-        products = np.asarray(p.mass.inertia_products)
-        I = np.diag(inertia)
-        I[0, 1] = I[1, 0] = products[0]
-        I[0, 2] = I[2, 0] = products[1]
-        I[1, 2] = I[2, 1] = products[2]
-        H = np.array(
-            [dcm_from_quat(q) @ I @ w for q, w in zip(result.q_bn, result.w_body, strict=True)]
-        )
-        energy = 0.5 * np.einsum("ni,ij,nj->n", result.w_body, I, result.w_body)
-        require(np.linalg.norm(H[0]) > 0 and energy[0] > 0, "requires nonzero angular velocity")
-        reference.update(
-            angular_momentum=H,
-            rotational_energy=energy,
-            expected_angular_momentum=np.tile(H[0], (len(t), 1)),
-            expected_rotational_energy=np.full_like(t, energy[0]),
-        )
-        tol = spec["relative_tolerance"]
+        inertia = np.asarray(method["inertia_kg_m2"])
+        C = Rotation.from_quat(np.roll(result.q_bn, -1, axis=1)).as_matrix()
+        H = np.einsum("nij,nj->ni", C, result.w_body @ inertia.T)
+        energy = 0.5 * np.einsum("ni,ij,nj->n", result.w_body, inertia, result.w_body)
+        reference.update(angular_momentum=H, rotational_energy=energy)
+        H0, E0 = reference["expected_angular_momentum"], reference["expected_rotational_energy"]
         check(
             "angular_momentum_relative",
-            np.max(np.linalg.norm(H - H[0], axis=1)) / np.linalg.norm(H[0]),
-            tol,
+            np.linalg.norm(H - H0, axis=1) / np.linalg.norm(H0[0]),
+            spec["relative_tolerance"],
             "dimensionless",
         )
         check(
             "rotational_energy_relative",
-            np.max(np.abs(energy - energy[0])) / energy[0],
-            tol,
+            np.abs(energy - E0) / E0[0],
+            spec["relative_tolerance"],
             "dimensionless",
         )
-    elif kind in ("rocket_equation", "mass_depletion"):
-        require(
-            not bool(p.gravity.inverse_square) and np.allclose(p.g_ned, 0), "requires zero gravity"
-        )
-        require(np.allclose(result.w_body, 0, atol=1e-10), "requires straight nonrotating flight")
-        require(
-            bundle.meta["actuator_model"] == "ideal", "requires ideal actuation for flow anchor"
-        )
-        require(result.aux.get("input_mode") == "prescribed", "requires prescribed input")
-        require(len(cfg.scenario.inputs) == 1, "requires a constant command")
-        throttle = np.asarray(
-            result.actuators.held.throttle[0]
-            if result.actuators is not None
-            else cfg.scenario.inputs[0].throttle,
-            dtype=float,
-        )
-        throttle = np.broadcast_to(throttle, p.engines.thrust_vac.shape)
-        on = throttle > 0
-        require(np.any(on), "requires an active engine")
-        require(
-            np.all(throttle[on] >= np.asarray(p.engines.throttle_min)[on]),
-            "requires firing above minimum throttle",
-        )
-        require(
-            np.allclose(p.engines.isp[on], p.engines.isp[on][0]),
-            "requires common active-engine Isp",
-        )
-        require(
-            np.allclose(p.engines.thrust_scale, 1) and np.allclose(p.engines.engine_on, 1),
-            "requires healthy engines",
-        )
-        require(
-            np.allclose(result.tvc, 0)
-            and np.allclose(p.engines.cant, 0)
-            and np.allclose(p.engines.tvc_bias, 0),
-            "requires axial thrust",
-        )
-        isp = float(p.engines.isp[on][0])
-        axis = dcm_from_quat(result.q_bn[0]) @ np.array([1.0, 0.0, 0.0])
-        reference["v_ned"] = v[0] + (isp * 9.80665 * np.log(m[0] / m))[:, None] * axis
-        dv_error = np.max(np.linalg.norm(v - reference["v_ned"], axis=1))
-        check("rocket_velocity", dv_error, float(spec.get("velocity_atol_mps", 1e-4)), "m/s")
-        flow = float(
-            np.sum(
-                throttle * np.asarray(p.engines.thrust_vac) / (np.asarray(p.engines.isp) * 9.80665)
-            )
-        )
-        floor = float(p.mass.m_dry) + float(aux[0]["rcs_fuel"])
-        reference["mass"] = np.maximum(m[0] - flow * t, floor)
-        check("mass_budget", np.max(np.abs(m - reference["mass"])), spec["mass_atol_kg"], "kg")
-        if kind == "mass_depletion":
-            depletion = (m[0] - floor) / flow
-            report["expected_depletion_s"] = depletion
-            check("remaining_main_fuel", aux[-1]["main_propellant"], spec["mass_atol_kg"], "kg")
-            check("final_thrust", aux[-1]["thrust_mag"], 1e-8, "N")
-            check(
-                "rcs_reserve",
-                abs(float(aux[-1]["rcs_fuel"]) - float(aux[0]["rcs_fuel"])),
-                1e-8,
-                "kg",
-            )
-            check(
-                "continued_after_depletion",
-                0.0 if t[-1] > depletion + 1.0 else 1.0,
-                0.0,
-                "boolean_error",
-            )
-    else:
-        raise ValueError(f"unknown validation kind {kind!r}")
-    report["status"] = "passed" if all(x["passed"] for x in report["checks"].values()) else "failed"
+    elif kind == "constant_drag":
+        report["terminal_speed_mps"] = method["terminal_speed_mps"]
+        compare("rho", [a["rho"] for a in aux], 1e-10, "kg/m^3")
+        compare("aero_cd", [a["aero_cd"] for a in aux], 1e-12, "dimensionless")
+        # Constant-density trajectory is approximate; permit its documented 1e-7
+        # relative density variation in the force check as well as roundoff.
+        force = np.array([np.linalg.norm(a["F_aero_body"]) for a in aux])
+        compare("drag_force_n", force, 1e-7 * np.max(reference["drag_force_n"]) + 1e-6, "N")
+    report["status"] = "passed" if all(c["passed"] for c in report["checks"].values()) else "failed"
     return report, reference
 
 
@@ -235,24 +189,82 @@ def write_validation(report, reference, directory, *, plot=True):
     if report["status"] == "not_requested":
         return
     np.savez_compressed(out / "reference.npz", **reference)
-    if plot:
-        import matplotlib
+    # Side-by-side values and per-sample errors are readable without a plotting tool.
+    columns = {"t_s": reference["t"]}
+    for key in reference:
+        if not key.startswith("actual_"):
+            continue
+        name = key.removeprefix("actual_")
+        for label, values in (("reference", reference[name]), ("simulation", reference[key])):
+            values = np.asarray(values)
+            if values.ndim == 1:
+                columns[f"{name}_{label}"] = values
+            else:
+                for index in range(values.shape[1]):
+                    columns[f"{name}_{label}_{index}"] = values[:, index]
+        if "error_" + name in reference:
+            columns[name + "_error"] = reference["error_" + name]
+    columns["thrust_compared"] = reference["thrust_comparison_mask"]
+    with (out / "comparison.csv").open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(columns)
+        writer.writerows(zip(*columns.values(), strict=True))
+    if not plot:
+        return
+    import matplotlib
 
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
-        checks = report["checks"]
-        fig, ax = plt.subplots(figsize=(9, 4))
-        names = list(checks)
-        ratios = [
-            max(checks[k]["error"] / max(checks[k]["tolerance"], 1e-30), 1e-16) for k in names
-        ]
-        ax.bar(names, ratios)
-        ax.axhline(1, color="red", linestyle="--", label="tolerance")
-        ax.set(yscale="log", ylabel="error / tolerance", title=report["kind"])
-        ax.tick_params(axis="x", rotation=20)
-        ax.legend()
-        fig.tight_layout()
-        (out / "plots").mkdir(exist_ok=True)
-        fig.savefig(out / "plots" / "validation.png", dpi=120)
-        plt.close(fig)
+    checks = report["checks"]
+    fig, ax = plt.subplots(figsize=(14, 5))
+    names = list(checks)
+    ratios = [
+        max(
+            (checks[k]["error"] if checks[k]["error"] is not None else 1e30)
+            / max(checks[k]["tolerance"], 1e-30),
+            1e-16,
+        )
+        for k in names
+    ]
+    ax.bar(names, ratios)
+    ax.axhline(1, color="red", linestyle="--", label="tolerance")
+    ax.set(yscale="log", ylabel="error / tolerance", title=report["kind"])
+    ax.tick_params(axis="x", rotation=75)
+    ax.legend()
+    fig.tight_layout()
+    (out / "plots").mkdir(exist_ok=True)
+    fig.savefig(out / "plots" / "validation.png", dpi=120)
+    plt.close(fig)
+
+    quantities = [
+        ("r_ned", "Position [m]"),
+        ("v_ned", "Velocity [m/s]"),
+        ("mass", "Mass [kg]"),
+        ("q_bn", "Attitude from initial [rad]"),
+        ("w_body", "Angular velocity [rad/s]"),
+    ]
+    fig, axes = plt.subplots(len(quantities), 2, figsize=(13, 14))
+    t = reference["t"]
+    for (key, label), (left, right) in zip(quantities, axes, strict=True):
+        for prefix, style, title in (("", "--", "reference"), ("actual_", ":", "simulation")):
+            values = reference[prefix + key]
+            if key == "q_bn":
+                values = attitude_error(values, np.tile(reference[key][0], (len(t), 1)))
+            if values.ndim == 1:
+                left.plot(t, values, style, label=title)
+            else:
+                for i, axis in enumerate("xyz"):
+                    left.plot(t, values[:, i], style, color=f"C{i}", label=f"{title} {axis}")
+        left.set(ylabel=label)
+        left.legend(fontsize=7, ncol=2)
+        right.semilogy(t, np.maximum(reference["error_" + key], 1e-16))
+        right.set(ylabel="Error (norm for vectors)")
+        left.grid(True)
+        right.grid(True)
+    axes[-1, 0].set_xlabel("Time [s]")
+    axes[-1, 1].set_xlabel("Time [s]")
+    fig.suptitle(report["kind"] + ": independent reference vs simulation")
+    fig.tight_layout()
+    fig.savefig(out / "plots" / "reference_comparison.png", dpi=140)
+    plt.close(fig)
