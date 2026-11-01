@@ -1,0 +1,43 @@
+--- guidance.py (previous)
++++ guidance.py (phase-reset test)
+@@ -126,6 +126,8 @@
+ 
+     def initial_memory(self) -> dict:
+         return {
++            "_planner_phase_owner": self.phase,  # prevent stale plan reuse across phases
++            "phase_reset_count": 0,
+             "ignited": False,
+             "plan": None,
+             "t_ignite": None,
+@@ -150,9 +152,30 @@
+         }
+ 
+     def _memory(self, memory: dict) -> dict:
++        """Ensure an LCvx plan belongs to the *current* engine/target phase.
++
++        The scheduled guidance dispatcher can retain planner memory while changing
++        POWERED_BRAKE (3 engines, 2 km target) to POWERED_DESCENT (1 engine, ground).
++        A cached, frozen, or expired brake plan is invalid in the landing phase.
++        Retain historical solve logs for diagnostics but reset planner-only state.
++        """
+         mem = dict(memory)
+-        for key, value in self.initial_memory().items():
++        defaults = self.initial_memory()
++        owner = mem.get("_planner_phase_owner")
++        if owner is not None and int(owner) != self.phase:
++            previous_log = list(mem.get("solve_log", []))
++            reset_count = int(mem.get("phase_reset_count", 0)) + 1
++            # Replace only LCvx-specific entries; preserve scheduler/other metadata.
++            for key, value in defaults.items():
++                if key not in ("solve_log", "phase_reset_count"):
++                    mem[key] = value
++            mem["solve_log"] = previous_log
++            mem["phase_reset_count"] = reset_count
++        for key, value in defaults.items():
+             mem.setdefault(key, value)
++        # Tag legacy memory without an owner. This is safe for freshly constructed
++        # runs; don't guess the owner of untagged plans from earlier code versions.
++        mem["_planner_phase_owner"] = self.phase
+         return mem
+ 
+     def _bp_kw(self):

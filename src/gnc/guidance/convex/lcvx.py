@@ -280,11 +280,21 @@ def min_fuel_tf(
         # last resort: scan a coarse grid (golden section can miss a narrow feasible band).
         # Flagged in the result so the guidance solve_log records that the fallback fired
         # (no silent fallbacks).
-        for tf in np.linspace(tf_lo, tf_hi, 12):
+        # Drag-template searches can have a narrow feasible time-of-flight
+        # window. The original 12-point fallback may miss it altogether. Keep
+        # the ordinary vacuum search unchanged, but sample more densely when
+        # drag is part of the planner and retain the best feasible candidate.
+        samples = 41 if drag_seq_fn is not None else 12
+        best_grid = None
+        for tf in np.linspace(tf_lo, tf_hi, samples):
             s = attempt(tf)
-            if s["feasible"]:
-                s["grid_fallback_used"] = True
-                return s
+            if s.get("feasible") and (
+                best_grid is None or float(s["fuel"]) < float(best_grid["fuel"])
+            ):
+                best_grid = s
+        if best_grid is not None:
+            best_grid["grid_fallback_used"] = True
+            return best_grid
     return best
 
 
