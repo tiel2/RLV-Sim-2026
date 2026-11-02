@@ -23,6 +23,7 @@ def _attempt(feasible, status):
 
 class _RefinementStub(LcvxGuidance):
     def __init__(self, *, drag_template=False):
+        self.phase = 3
         self.grid_fallback = False
         self.terminal_slack = False
         self.reanchor_min_alt = 0.0

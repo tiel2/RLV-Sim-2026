@@ -10,3 +10,5 @@ landing_engines: [0]
 reentry_end_altitude: 20000.0
 switch_altitude: 2000.0
 brake_end_altitude: 800.0
+# Convex brake target uses this same altitude; final landing keeps its own target.
+brake_terminal_vz_max_mps: 180.0 # positive-down NED speed bound at the brake handoff

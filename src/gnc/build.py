@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
 from core.interfaces import Phase
 from gnc.context import GncContext
@@ -299,7 +300,27 @@ def build_gnc(cfg, params) -> GNCStack:
     def make_powered_guidance(active, phase):
         # Resolve the powered-descent law by config (gd.law._target_ -> build(ctx)) and wrap it so a
         # law may return a bare NED thrust vector (adapter adds phase/active_engines + q_ref).
-        ctx = GncContext(cfg=gd, nominal=nominal, params=params, active_engines=active, phase=phase)
+        phase_gd = gd
+        if phase == int(Phase.POWERED_BRAKE) and "convex_target_ned" in gd:
+            sink_limit = float(sched.brake_terminal_vz_max_mps)
+            if not np.isfinite(sink_limit) or sink_limit <= 0.0:
+                raise ValueError("brake_terminal_vz_max_mps must be finite and positive")
+            # Both convex factories receive the same handoff contract. Copy the
+            # module config so the final landing target and caller's config stay intact.
+            phase_gd = OmegaConf.merge(
+                gd,
+                {
+                    "convex_target_ned": [
+                        float(gd.convex_target_ned[0]),
+                        float(gd.convex_target_ned[1]),
+                        -float(sched.brake_end_altitude),
+                    ],
+                    "convex_terminal_vz_max_mps": sink_limit,
+                },
+            )
+        ctx = GncContext(
+            cfg=phase_gd, nominal=nominal, params=params, active_engines=active, phase=phase
+        )
         tilt = float(np.deg2rad(float(gd.attitude_tilt_max_deg)))
         return _PoweredCommand(instantiate(gd.law, ctx), phase, active, tilt)
 

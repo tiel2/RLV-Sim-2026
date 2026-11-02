@@ -84,15 +84,8 @@ class LcvxGuidance:
         self.phase = int(phase)
         self.N = int(N)
         self.target = tuple(float(x) for x in target)
-        # EXPERIMENTAL staged-descent handoff for the current 2-km brake schedule.
-        # Phase 2 is POWERED_BRAKE, phase 3 is POWERED_DESCENT. Each owns a
-        # distinct LCvx instance/memory. Brake to the handoff altitude with
-        # a bounded *downward* speed; leave final zero-velocity touchdown
-        # to the single-engine landing phase.
-        # IMPORTANT: this diagnostic must match gnc.scheduler.brake_end_altitude=2000.
-        if self.phase == 2:
-            self.target = (self.target[0], self.target[1], -2000.0)
-            self.terminal_vz_max = 180.0
+        # Phase-specific targets are supplied by the GNC builder. Do not override
+        # them here: LCvx and SCvx must use the scheduler's configured handoff.
         self.theta = np.deg2rad(theta_max_deg) if theta_max_deg is not None else None
         self.gamma = np.deg2rad(gamma_gs_deg) if gamma_gs_deg is not None else None
         self.solver = solver
