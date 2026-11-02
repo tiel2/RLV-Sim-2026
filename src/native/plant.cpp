@@ -245,12 +245,12 @@ struct Engines {
 };
 
 struct State {
-    double t{}, m{}, rcs_fuel{};
+    double t{}, m{}, rcs_fuel{}, liftoff_time{-1.0};
     Vec3 r{}, v{}, w{}, wind_mean{}, wind_gust{};
     Vec4 q{};
     Vec tvc, tvc_rate, throttle, fin, fin_rate, slosh, wind_filter;
     std::uint64_t rng{};
-    bool done{};
+    bool done{}, launch_pending{};
 };
 struct Command {
     Vec throttle, gimbal, fin;
@@ -267,11 +267,14 @@ struct Aux {
     double altitude{}, rho{}, mach{}, thrust_mag{}, x_cg{}, mdot{};
     double alpha{}, q_dyn{}, cd{}, cl{}, x_cp{}, static_margin{};
     double fin_force_mag{}, fin_transonic{};
-    Vec throttle_eff, rcs_on;
+    Vec throttle_eff, rcs_on, engine_forces;
     double rcs_mdot{}, main_propellant{}, rcs_fuel{}, fin_deployment{1.0};
     Vec3 inertia{}, m_fin{};
     Vec3 gravity_ned{}, gravity_body{}, f_rcs{}, m_rcs{};
     Vec3 f_aero{}, f_fin{}, thrust{}, moment{}, a_coriolis{}, a_centrifugal{}, v_air_body{};
+    Vec3 force_total{}, moment_cg{}, idot{}, pad_force{}, pad_moment{};
+    bool launch_pending{};
+    double liftoff_time{-1.0};
 };
 struct RhsResult { Derivative d; Aux aux; };
 
@@ -298,6 +301,10 @@ State read_state(py::handle value) {
     }
     s.rng += 0x9e3779b97f4a7c15ULL;
     s.done = py::cast<bool>(value.attr("done"));
+    s.launch_pending = py::hasattr(value, "launch_pending") && py::cast<bool>(value.attr("launch_pending"));
+    if(py::hasattr(value,"liftoff_time"))s.liftoff_time=scalar(value.attr("liftoff_time"));
+    if (s.launch_pending && (std::abs(s.r[2]) > 1e-9 || norm(s.v) > 1e-9 || norm(s.w) > 1e-9))
+        throw py::value_error("launch pad initialization requires zero altitude, velocity and rate");
     return s;
 }
 
@@ -922,7 +929,7 @@ class NativePlant {
         return x * x * (3.0 - 2.0 * x);
     }
 
-    struct EngineResult { Vec3 force{}, moment{}; double mdot{}; };
+    struct EngineResult { Vec3 force{}, moment{}; double mdot{}; Vec individual_force; };
     EngineResult engines(const Vec& throttle, const Vec& tvc, double xcg, double ambient) const {
         Vec angles = engines_.cant;
         for (std::size_t g = 0; g < engines_.ng; ++g) {
@@ -930,7 +937,7 @@ class NativePlant {
             angles[2*i] += tvc[2*g] + engines_.tvc_bias[2*g];
             angles[2*i+1] += tvc[2*g+1] + engines_.tvc_bias[2*g+1];
         }
-        EngineResult total;
+        EngineResult total; total.individual_force.resize(3*engines_.n);
         for (std::size_t i = 0; i < engines_.n; ++i) {
             const double pitch = angles[2*i], yaw = angles[2*i+1];
             const Vec3 direction{std::cos(pitch)*std::cos(yaw), std::cos(pitch)*std::sin(yaw), -std::sin(pitch)};
@@ -938,6 +945,7 @@ class NativePlant {
             const double magnitude = engines_.thrust_scale[i] * engines_.engine_on[i] * phi *
                 std::max(t * engines_.thrust_vac[i] - ambient * engines_.exit_area[i], 0.0);
             const Vec3 force = mul(magnitude, direction);
+            for(int axis=0;axis<3;++axis)total.individual_force[3*i+axis]=force[axis];
             const Vec3 arm{engines_.positions[3*i]-xcg, engines_.positions[3*i+1], engines_.positions[3*i+2]};
             total.force = add(total.force, force); total.moment = add(total.moment, cross(arm, force));
             total.mdot += engines_.engine_on[i] * phi * t * engines_.thrust_vac[i] / (engines_.isp[i] * kG0);
@@ -1037,7 +1045,8 @@ class NativePlant {
     }
 
     RhsResult evaluate(const State& s, const Command& c, const Vec3& wind,
-                       double main_cap=-1.0,double gas_cap=-1.0,double sample_time=-1.0) const {
+                       double main_cap=-1.0,double gas_cap=-1.0,double sample_time=-1.0,
+                       bool constrain_pad=true) const {
         RhsResult out; Aux& aux=out.aux; Derivative& d=out.d;
         aux.t=s.t;
         aux.altitude=-s.r[2]; const auto [rho,sound]=atmosphere(aux.altitude); aux.rho=rho;
@@ -1059,7 +1068,9 @@ class NativePlant {
         // A finite per-step cap conserves propellant and impulse in the final partial burn.
         const double main_limit=main_cap>=0?main_cap:(aux.main_propellant>1e-9?eng.mdot:0.0);
         if(eng.mdot>main_limit){const double f=main_limit/eng.mdot;
-            eng.force=mul(f,eng.force);eng.moment=mul(f,eng.moment);eng.mdot=main_limit;}
+            eng.force=mul(f,eng.force);eng.moment=mul(f,eng.moment);eng.mdot=main_limit;
+            for(double& value:eng.individual_force)value*=f;}
+        aux.engine_forces=eng.individual_force;
         const bool gas_available=gas_cap>=0?gas_cap>0:s.rcs_fuel>1e-9;
         const Vec3 activity=gas_available?rcs_activity(c.rcs,sample_time>=0?sample_time:s.t):Vec3{};
         RcsResult rcs=rcs_wrench(activity,xcg);
@@ -1099,6 +1110,14 @@ class NativePlant {
         d.m=-eng.mdot-rcs.mdot; Derivative ad=actuator_derivatives(s,c);
         d.tvc=std::move(ad.tvc);d.tvc_rate=std::move(ad.tvc_rate);d.throttle=std::move(ad.throttle);
         d.fin=std::move(ad.fin);d.fin_rate=std::move(ad.fin_rate);d.rcs_fuel=-rcs.mdot;d.slosh=sl.derivative;
+        aux.force_total=total_force;
+        aux.moment_cg=sub(total_moment,cross(lateral,total_force));
+        aux.idot=idot; aux.launch_pending=s.launch_pending;aux.liftoff_time=s.liftoff_time;
+        if(s.launch_pending && constrain_pad){
+            aux.pad_force=transpose_matvec(rotation,mul(-s.m,d.v));
+            aux.pad_moment=mul(-1.0,aux.moment_cg);
+            d.r={};d.v={};d.q={};d.w={};
+        }
         aux.thrust_mag=norm(eng.force);aux.f_aero=aero.force;aux.f_fin=fins.force;aux.thrust=eng.force;aux.moment=total_moment;
         aux.alpha=aero.alpha;aux.q_dyn=aero.qdyn;aux.cd=aero.cd;aux.cl=aero.cl;aux.x_cp=aero.xcp;aux.static_margin=aero.xcp-xcg;
         aux.fin_force_mag=norm(fins.force);aux.fin_transonic=fins.transonic; return out;
@@ -1107,7 +1126,15 @@ class NativePlant {
     Aux integrate_once(State& state, const Command& command, const Vec3& wind) const {
         const double main_cap=main_propellant(state.m,state.rcs_fuel)/dt_;
         const double gas_cap=std::max(state.rcs_fuel,0.0)/dt_, sample_time=state.t;
-        const auto rhs=[&](const State& value){return evaluate(value,command,wind,main_cap,gas_cap,sample_time);};
+        // Release once upward free acceleration is available. While held, the pad
+        // supplies rigid-body reaction forces/torques; fuel and actuators still evolve.
+        if(state.launch_pending && evaluate(state,command,wind,main_cap,gas_cap,sample_time,false).d.v[2]<0.0){
+            state.launch_pending=false;state.liftoff_time=state.t;
+        }
+        const auto rhs=[&](const State& value){
+            auto result=evaluate(value,command,wind,main_cap,gas_cap,sample_time);
+            return result;
+        };
         const RhsResult base=rhs(state);
         if(state.done)return base.aux;
         const Derivative& k1=base.d;
@@ -1121,7 +1148,7 @@ class NativePlant {
         state.rcs_fuel=std::max(state.rcs_fuel,0.0);
         state.m=std::max(state.m,mass_.dry+state.rcs_fuel);
         // Fuel exhaustion cuts thrust, not the vehicle's subsequent ballistic trajectory.
-        state.done=-state.r[2]<=0.0;
+        state.done=!state.launch_pending && state.r[2]>=0.0;
         return base.aux;
     }
 
@@ -1156,19 +1183,24 @@ class NativePlant {
         d["rcs_thruster_on"]=array(a.rcs_on);d["rcs_mdot"]=a.rcs_mdot;
         d["main_propellant"]=a.main_propellant;d["rcs_fuel"]=a.rcs_fuel;
         d["inertia_diag"]=array(a.inertia);d["M_fin_body"]=array(a.m_fin);
+        d["inertia_rate_diag"]=array(a.idot);d["F_body_total"]=array(a.force_total);
+        d["M_cg_body"]=array(a.moment_cg);d["F_pad_body"]=array(a.pad_force);
+        d["M_pad_body"]=array(a.pad_moment);d["launch_pending"]=a.launch_pending;
+        d["liftoff_time"]=a.liftoff_time;
+        d["engine_force_body"]=matrix_array(a.engine_forces,engines_.n,3);
         d["fin_deployment"]=a.fin_deployment;
         d["fin_fin_force_mag"]=a.fin_force_mag;d["fin_fin_transonic"]=a.fin_transonic;return d;}
     py::dict state_dict(const State&s) const {py::dict d;d["t"]=s.t;d["r_ned"]=array(s.r);d["v_ned"]=array(s.v);d["q_bn"]=array(s.q);d["w_body"]=array(s.w);d["m"]=s.m;
         d["tvc"]=matrix_array(s.tvc,engines_.ng,2);d["tvc_rate"]=matrix_array(s.tvc_rate,engines_.ng,2);d["throttle_act"]=array(s.throttle);
         d["fin"]=array(s.fin);d["fin_rate"]=array(s.fin_rate);d["rcs_fuel"]=s.rcs_fuel;d["slosh"]=array(s.slosh);
         d["wind_mean"]=array(s.wind_mean);d["wind_gust"]=array(s.wind_gust);d["wind_filter"]=matrix_array(s.wind_filter,3,3);
-        d["done"]=s.done;return d;}
+        d["done"]=s.done;d["launch_pending"]=s.launch_pending;d["liftoff_time"]=s.liftoff_time;return d;}
     py::dict public_snapshot(const State&s) const {py::dict d;d["t"]=s.t;d["r_ned"]=array(s.r);d["v_ned"]=array(s.v);
         Vec throttle,tvc,fin; actuator_inputs(s,held_command_,throttle,tvc,fin);
         d["q_bn"]=array(s.q);d["w_body"]=array(s.w);d["m"]=s.m;d["throttle_act"]=array(throttle);
         d["tvc"]=matrix_array(tvc,engines_.ng,2);d["fin"]=array(fin);
         d["rcs_act"]=array(mul(s.rcs_fuel>0?1.0:0.0,rcs_activity(held_command_.rcs,s.t)));
-        d["done"]=s.done;return d;}
+        d["done"]=s.done;d["launch_pending"]=s.launch_pending;return d;}
 };
 
 }  // namespace

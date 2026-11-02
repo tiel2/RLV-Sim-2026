@@ -131,10 +131,9 @@ def _finalize(log, aux_log, final_state, bundle, hit_max, pos_tol, speed_tol, ti
     tvc = np.stack(log["tvc"])
     fin_act = np.stack(log["fin"])
 
-    # touchdown index = first altitude <= 0, else last
+    # Pad samples at t=0 (or while waiting for release) are not touchdown.
     alt = -r[:, 2]
-    below = np.where(alt <= 0.0)[0]
-    td = int(below[0]) if below.size else len(alt) - 1
+    td = len(alt) - 1  # terminal native contact, or horizon endpoint if no contact
 
     # interpolate the state to the EXACT ground crossing alt=0: the logged ``td`` is
     # the first SUB-ground sample, so reading KPIs there biases them; lerp between the last-above
@@ -562,9 +561,19 @@ def run_simulation(
         if tick == 0:
             _log_step(log, aux_log, state, phase, aux)
         start = float(state.t)
+        was_on_pad = bool(getattr(state, "launch_pending", False))
         steps = next_tick - tick
         snapshot, aux = session.advance(held, steps)
         state = SimpleNamespace(**snapshot)
+        if was_on_pad and not bool(state.launch_pending):
+            physical_events.append(
+                {
+                    "t": float(aux["liftoff_time"]),
+                    "kind": "liftoff",
+                    "detected_at_s": float(state.t),
+                    "time_uncertainty_s": plant_dt,
+                }
+            )
         main = float(aux["main_propellant"])
         if last_main > 1e-8 and main <= 1e-8:
             physical_events.append(

@@ -1,21 +1,48 @@
-# RLV Descent Replay — 3D Viewer
+# RLV Flight Replay — 3D Viewer
 
-A Vizard-style (Basilisk-like) web viewer for closed-loop and prescribed-input reusable-launch-vehicle descent
-episodes. It renders a Falcon-9-class **first stage** flying the actual logged trajectory — a
-photoreal glTF hull (the bundled Forest Katsch landing booster, auto-isolated from its display scene to the first stage), otherwise a
-procedural booster — with the 3D path, **9-engine octaweb** plumes that light up with throttle,
-grid fins, a gimballing center engine, and a **SpaceX-broadcast-style HUD**: a bottom band with the
-big **SPEED / ALTITUDE** readout and a **mission timeline** (Aero Guidance → Landing Burn →
-Landing) flanking a `T+` clock, an **octaweb 9-engine status ring**, an engineering telemetry
-column (alt/speed/vert/downrange/mass/Mach/tilt/thrust/TWR), a TVC-gimbal + grid-fin actuator card,
-and playback controls. The scene is set at an **autonomous-spaceport-drone-ship at sea**: a
-physically-based golden-hour sky (three.js `Sky`), a reflective animated ocean (three.js `Water`,
-using the bundled `waternormals.jpg`), and a procedural ASDS barge with a painted bullseye/X landing
-target at the origin.
+A web viewer for closed-loop and prescribed-input reusable-launch-vehicle episodes. It follows
+the logged CG trajectory and attitude, using the configured engine count, positions and gimbal
+axes. Actual per-engine force controls plume direction/intensity and fuel-depletion shutdown.
+Recovery uses a first-stage glTF hull or procedural booster; attached-stack ascent uses separate
+schematic booster and upper-stack geometry. The HUD shows flight/actuator telemetry, engine
+status, recorded phases and playback controls. Closely spaced timeline labels remain available
+as marker tooltips. The actuator card displays the first gimbal; all gimbals move in the 3D scene.
+
+Launch-pad episodes use a schematic land scene at the recorded launch position. Recovery
+retains the ocean/drone-ship scene. Ground/deck alignment is a visual offset to the engine plane,
+not a geometric contact model. Separation is not implemented and is not animated.
 
 Everything is driven by a single `replay.json` exported from the simulator. The viewer runs out of
 the box with the procedural booster (**no licensing strings attached**); drop in a glTF for the
 photoreal hull (see below).
+
+## Ascent and rendering checks
+
+Generate the three regression replays with the same native build:
+
+```bash
+python scripts/run_single.py scenario=ascent hydra.run.dir=results/ascent_physics_replay
+python scripts/run_single.py +baseline=pdg run.save_plots=false hydra.run.dir=results/replay_landing_regression
+python scripts/run_single.py scenario=mass_depletion run.save_plots=false hydra.run.dir=results/replay_fuel_depletion
+python scripts/view_replay.py results/ascent_physics_replay
+```
+
+Optional browser assertions use Playwright and Chromium (or `--browser /path/to/chrome`):
+
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python scripts/check_replay_browser.py
+```
+
+The checker starts a temporary local server and inspects six WebGL checkpoints, including
+reverse seeking and zero-thrust shutdown. Reports/screenshots go to
+`results/visual_checks/ascent/`. Three.js imports require network access. The `?inspect` URL
+flag exposes scene objects only for these explicit checks.
+
+For independent physics verification, run `python scripts/check_ascent_physics.py`.
+The [project guide](../docs/3_project_guide_ko.md#ascent-physics) separates verified model behavior,
+schematic rendering and still-unimplemented full-flight events.
 
 ## 1. Get a replay
 
@@ -162,7 +189,8 @@ sit where the physics puts them.
 ## Photoreal glTF model (bundled — loads automatically)
 
 The glTF loader is **already wired** in `app.js` (`tryLoadPhotorealModel`) and the viewer ships with a
-hull, so it loads on start; with no GLB it silently falls back to the procedural booster. The bundled
+hull, so it loads on start for recovery vehicles; attached stacks use schematic geometry.
+With no GLB it falls back to the procedural booster. The bundled
 default is **`viz/resources/falcon9_landing.glb`** — the Forest Katsch *Falcon 9* **landing** scene
 (a first-stage booster with legs, topped by a Dragon 2 capsule on a pad). On start the loader:
 
@@ -177,11 +205,10 @@ default is **`viz/resources/falcon9_landing.glb`** — the Forest Katsch *Falcon
    experiments disable leg deployment through `meta.leg_deploy.enabled=false`.
 3. **Re-fits the visible booster** to the real length `L` (long axis → body +X, base at `x=-L`,
    interstage top at `x=0`), measuring a *visible-only* bounding box so the capsule/pad never skew it.
-4. **Hides the procedural hull and legs** (kept as the no-asset fallback), hides the GLB's static
-   `grid fin*` parts, and keeps the **dynamic grid-fin rig** and **9 procedural engine plumes**
-   overlaid on the GLB engine bells (the GLB has no flame). The single
-   replay throttle channel drives the **center engine** (landing-burn config); a per-engine export
-   (`thr.length ≥ 9`) is used directly when present.
+4. **Hides the procedural hull and legs** (kept as the no-asset fallback) and the GLB's static
+   `grid fin*` and `m1ds` engine assembly. Dynamic fins and engine bells/plumes use the replay's
+   configured count and mounting positions, so a single-engine configuration shows one engine.
+   Current exports use actual per-engine force; older exports fall back to throttle channels.
 
 ### Grid-fin state and geometry
 

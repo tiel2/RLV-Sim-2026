@@ -277,7 +277,9 @@ def inertia_rate(vehicle, mass, gas, main_flow, gas_flow):
         raise ValueError("coupled reference requires dual tanks")
     p, t = vehicle.mass, vehicle.tanks
     fractions = np.array([t.of_ratio, 1]) / (1 + t.of_ratio)
-    liquid = (mass - p.m_dry - gas) * fractions
+    attached = getattr(vehicle, "attached_component", None)
+    inert_mass = p.m_dry + (attached.mass if attached is not None else 0.0)
+    liquid = (mass - inert_mass - gas) * fractions
     radii = np.array(t.radius)
     k = 1 / (np.pi * radii**2 * np.array(t.density))
     cg = mass_properties(vehicle, mass, gas)[0]

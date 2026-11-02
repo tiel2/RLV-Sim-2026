@@ -2,6 +2,14 @@
 
 [Korean version](3_project_guide_ko.md)
 
+**2 November 2026 update:** Attached-stack ascent through MECO/coast now has independent
+150 s dynamics verification, open-system balance checks, pad-reaction diagnostics and
+state-driven rendering. Flight-reference comparison is disabled by default. The updated
+[Korean guide Section 12.6](3_project_guide_ko.md#ascent-physics) and
+[English verification report Section 6](verification/physics_implementation_report_en.md#6-ascent-physics-and-rendering-verification)
+describe the implementation and its limits. The October overview below predates this addition;
+separation, boostback and end-to-end mission integration remain unimplemented.
+
 RLV-Sim is a research simulator for Falcon 9 first-stage reentry, descent, and landing, with interchangeable guidance, navigation, and control algorithms. Python handles configuration, GNC, execution scheduling, and analysis; C++ handles the six-degree-of-freedom physics and numerical integration.
 
 This guide reflects the shared runner, prescribed-input open-loop experiments, and physics verification features as of 2026-10-21. It covers existing closed-loop GNC and Monte Carlo capabilities, 13 vehicle experiments with independent initial conditions, fin deployment, physical quantities and event logging, analytical references, and integration-step comparisons. Sensor-based navigation is not yet implemented. Equations explain the implementation; omitted terms and nominal approximations are identified where relevant. Source links accompany each section. Enable math and Mermaid support in your Markdown viewer to render `$...$`, `$$...$$`, and diagrams.

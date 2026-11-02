@@ -2,9 +2,39 @@
 
 Body x points toward the nose. Liquid fills from each aft tank boundary toward +x.
 This quasi-static model assumes axial settling; it does not solve free-surface motion.
+The equivalent dry body may include a fixed attached stage and its inaccessible propellant.
 """
 
 import numpy as np
+
+
+def attach_axial_component(p, component, length):
+    """Combine a fixed coaxial component with dry structure, never with burnable fuel.
+
+    Component inertia is about its own CG in the same body axes. Configuration keeps
+    the two components separate; the existing plant receives their equivalent dry body.
+    Runtime separation is deliberately not represented by this build-time operation.
+    """
+    mass = float(component.mass)
+    x = float(component.x_cg)
+    inertia = np.asarray(component.inertia, dtype=float)
+    if (
+        not np.isfinite(mass)
+        or mass <= 0
+        or not np.isfinite(x)
+        or not -length <= x <= 0
+        or inertia.shape != (3,)
+        or not np.all(np.isfinite(inertia))
+        or np.any(inertia <= 0)
+    ):
+        raise ValueError("attached component needs positive mass/inertia and an in-body axial CG")
+    if np.any(np.asarray(p.cg_lateral) != 0) or np.any(np.asarray(p.inertia_products) != 0):
+        raise ValueError("attached component currently requires coaxial principal-axis structure")
+    dry = float(p.m_dry)
+    cg = (dry * float(p.x_cg_dry) + mass * x) / (dry + mass)
+    combined = np.asarray(p.I_dry) + inertia
+    combined[1:] += dry * (float(p.x_cg_dry) - cg) ** 2 + mass * (x - cg) ** 2
+    return p.replace(m_dry=np.asarray(dry + mass), x_cg_dry=np.asarray(cg), I_dry=combined)
 
 
 def dual_tank_properties(total_mass, rcs_fuel, p):

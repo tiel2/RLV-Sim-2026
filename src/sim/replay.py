@@ -18,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
+from core.frames import body_to_ned
+
 # NED -> viz (Y-up, [North, Up, East]) is a +90° rotation about X: q_vn (scalar-first Hamilton).
 _SQRT_HALF = float(np.sqrt(0.5))
 Q_VN = np.array([_SQRT_HALF, _SQRT_HALF, 0.0, 0.0])
@@ -99,6 +101,10 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
                 "downrange": float(np.linalg.norm(result.r_ned[i, :2] - result.r_ned[0, :2])),
                 "phase": int(result.phase[i]),
                 "fin_deployment": float(result.aux["per_tick"][i].get("fin_deployment", 1.0)),
+                "engine_force_body": np.asarray(
+                    result.aux["per_tick"][i]["engine_force_body"]
+                ).tolist(),
+                "launch_pending": bool(result.aux["per_tick"][i].get("launch_pending", False)),
             }
         )
 
@@ -132,6 +138,28 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
         "thrust_vac": [float(x) for x in np.atleast_1d(p.engines.thrust_vac)],
     }
     contact = result.landing_class is not None
+    attached = cfg.plant.vehicle.get("attached_component")
+    vehicle["attached_component"] = (
+        {"aft_x": float(attached.aft_x), "mass": float(attached.mass)}
+        if attached is not None
+        else None
+    )
+    is_launch = bool(cfg.scenario.ic.get("launch_pad", False))
+    anchor = 0 if is_launch else -1
+    anchor_offset = body_to_ned(
+        np.array([float(p.geom.x_eng) - float(xcg[anchor]), 0, 0]), result.q_bn[anchor]
+    )
+    ground_y = (
+        float(-anchor_offset[2])
+        if (is_launch or contact)
+        else -abs(float(p.geom.x_eng) - float(p.mass.x_cg_dry))
+    )
+    scene = {
+        "kind": "land" if is_launch else "ocean",
+        "launch_position": frames[0]["p"] if is_launch else None,
+        "ground_y": ground_y,
+        "alignment": "visual engine-plane offset; physical contact uses point altitude zero",
+    }
     kpi = {
         "termination_reason": int(result.termination_reason),
         "landing_position_error_m": float(result.landing_position_error) if contact else None,
@@ -167,6 +195,7 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
             },
             "phase_names": result.aux.get("phase_names", PHASE_NAMES),
             "vehicle": vehicle,
+            "scene": scene,
             "kpi": kpi,
             "credits": "Procedural viewer (no external asset); glTF hook in viz/README.md.",
         },

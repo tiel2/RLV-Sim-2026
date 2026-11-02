@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RLV Descent Replay — Falcon-9-class booster</title>
+<title>RLV Flight Replay — ascent and recovery</title>
 <link rel="icon" href="data:," />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -206,7 +206,7 @@
 
 <!-- top-left: engineering telemetry -->
 <div id="eng-col">
-  <div class="hdr"><span class="dot"></span>Booster · Stage 1</div>
+  <div class="hdr"><span class="dot"></span><span id="vehicleLabel">Vehicle</span></div>
   <div class="erow"><span class="k">altitude</span><span class="v" id="vAlt">— m</span></div>
   <div class="erow"><span class="k">speed</span><span class="v" id="vSpd">— m/s</span></div>
   <div class="erow"><span class="k">vertical</span><span class="v" id="vVert">— m/s</span></div>
@@ -221,7 +221,7 @@
 
 <!-- top-right: octaweb engine status -->
 <div id="octaweb">
-  <div class="cap">Octaweb · 9× Merlin 1D</div>
+  <div class="cap" id="engineLabel">Engines</div>
   <svg id="octSvg" viewBox="0 0 100 100"></svg>
   <div id="octThrottle">—<small>throttle</small></div>
 </div>
@@ -234,7 +234,7 @@
       <div id="gimbalPad">
         <div class="cross h"></div><div class="cross v"></div><div id="gimbalDot"></div>
       </div>
-      <div class="subcap">TVC gimbal</div>
+      <div class="subcap" id="gimbalLabel">TVC gimbal</div>
     </div>
     <div style="flex:1">
       <div class="finbars" id="finbars"></div>

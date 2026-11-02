@@ -48,6 +48,24 @@ This is a reentry/descent experiment, not an end-to-end landing validation. Atmo
 thrust, actuator, slosh, and guidance choices remain available for both Falcon configurations.
 Generic file-backed aerodynamic tables and geometry-based fin allocation are also retained.
 
+A provisional ascent experiment now covers pad departure, prescribed MECO at 145 s,
+and attached-stack coast to 150 s:
+
+```bash
+python scripts/run_single.py scenario=ascent
+python scripts/check_ascent_physics.py
+python scripts/check_convergence.py scenario=ascent
+```
+
+It uses a separately configured attached upper-stage mass and nose-first aerodynamics,
+with no sensors/navigation. The independent physics check covers the full 150 s trajectory
+and open-system mass/momentum balances. Replay shows the attached stack, configured engine
+count and actual thrust directions on a schematic land pad. Stage separation and full-flight
+recovery remain pending. Development proceeds through physics verification, rendering and
+the [project guide](docs/3_project_guide_ko.md#ascent-physics), before flight-data validation.
+CRS-11 comparison is disabled by default; the archived comparison tool remains available with
+`scenario.reference.enabled=true`. See [ascent assumptions](docs/reference/crs11_ascent.md).
+
 ## Vehicle physics (Module 4 pp.7–23)
 
 - Gravity: `mu / (radius + h)^2` down in NED, with the corresponding quaternion-rotated body force.
@@ -126,12 +144,8 @@ truth to GNC as the estimated state. Its optional state-level noise/bias helpers
 perturbations, not IMU/GNSS/altimeter models. The navigation template also passes truth through;
 selecting `gnc/navigation=ekf` raises `NotImplementedError`.
 
-The following navigation work remains TODO:
-
-- [ ] IMU, GNSS, and altimeter measurement models, including sensor errors and availability.
-- [ ] Sensor sampling/latency contracts for asynchronous measurements.
-- [ ] INS propagation, initialization/alignment, and aided state estimation (e.g. EKF).
-- [ ] Sensor/estimator validation and navigation-error Monte Carlo evaluation.
+The ordered backlog for ascent, recovery phases, sensor models, and navigation is maintained in
+[Development TODO](docs/TODO.md).
 
 The existing update schedule, truth/measurement/estimate records, and error statistics remain
 available as infrastructure for this future work. The reference case continues to use identity

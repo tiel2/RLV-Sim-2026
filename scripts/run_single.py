@@ -111,6 +111,14 @@ def main(cfg):
     write_validation(report, reference, out_dir, plot=bool(cfg.run.save_plots))
     print("validation:", report["status"])
 
+    if cfg.scenario.get("reference") is not None and cfg.scenario.reference.get("enabled", True):
+        from validation.flight_reference import write_flight_comparison
+
+        comparison = write_flight_comparison(
+            result, cfg.scenario.reference, out_dir, plot=bool(cfg.run.save_plots)
+        )
+        print("flight reference:", comparison["status"])
+
     # Per-run 3D replay for the web viewer.
     if cfg.run.save_replay:
         doc = build_replay_doc(result, bundle, cfg)

@@ -88,6 +88,7 @@ def test_session_boundary_returns_only_tick_consumers():
         "fin",
         "rcs_act",
         "done",
+        "launch_pending",
     }
     # These remain native-owned and therefore cannot accidentally cross the hot boundary.
     internal = {"tvc_rate", "fin_rate", "slosh", "wind_filter", "wind_mean", "wind_gust", "key"}

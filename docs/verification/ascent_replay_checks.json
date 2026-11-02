@@ -1,0 +1,44 @@
+[
+  {
+    "case": "ascent",
+    "issues": [],
+    "engines": 9,
+    "time_s": 0,
+    "plumes": 9
+  },
+  {
+    "case": "ascent",
+    "issues": [],
+    "engines": 9,
+    "time_s": 10.999999999999343,
+    "plumes": 9
+  },
+  {
+    "case": "ascent",
+    "issues": [],
+    "engines": 9,
+    "time_s": 147.00000000033785,
+    "plumes": 0
+  },
+  {
+    "case": "ascent",
+    "issues": [],
+    "engines": 9,
+    "time_s": 10.999999999999343,
+    "plumes": 9
+  },
+  {
+    "case": "landing",
+    "issues": [],
+    "engines": 1,
+    "time_s": 17.146999999997973,
+    "plumes": 0
+  },
+  {
+    "case": "depletion",
+    "issues": [],
+    "engines": 9,
+    "time_s": 9.999999999999897,
+    "plumes": 0
+  }
+]

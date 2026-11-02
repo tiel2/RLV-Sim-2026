@@ -21,7 +21,8 @@ def _result(v_ned, q_bn, *, speed_tol=5.0, tilt_tol_deg=15.0, main_propellant=No
         "tvc": [np.zeros((1, 2))],
         "fin": [np.zeros(4)],
     }
-    state = SimpleNamespace(r_ned=np.zeros(3), m=110.0)
+    # A ground-level sample alone can now be a launch-pad state; this fixture is contact.
+    state = SimpleNamespace(r_ned=np.zeros(3), m=110.0, done=True)
     bundle = SimpleNamespace(params=SimpleNamespace(mass=SimpleNamespace(m_dry=100.0)))
     aux = {} if main_propellant is None else {"main_propellant": main_propellant}
     return _finalize(log, [aux], state, bundle, False, 10.0, speed_tol, tilt_tol_deg)

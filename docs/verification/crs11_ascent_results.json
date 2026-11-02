@@ -1,0 +1,316 @@
+{
+  "scenario": "ascent",
+  "date": "2026-11-02",
+  "comparison": {
+    "status": "comparison_only",
+    "role": "uncalibrated_comparison",
+    "reference_commit": "b245d3b81aa36b7941ec10f3f4b508999d106a6d",
+    "source": "stage1_raw.json",
+    "conventions": "Assumed launch-relative altitude and ground-relative speed; unverified.",
+    "time_mapping": "simulation_time = reference_time + time_offset_s",
+    "time_offset_s": 0.0,
+    "altitude_offset_m": 0.0,
+    "requested_range_s": [
+      0.0,
+      145.0
+    ],
+    "overlap_range_s": [
+      0.0,
+      144.978
+    ],
+    "weighting": "trapezoidal time weighting; intervals > 1.1 s excluded; no extrapolation",
+    "error_sign": "simulation minus reference",
+    "metrics": {
+      "requested_overlap": {
+        "altitude_m": {
+          "samples": 4248,
+          "covered_duration_s": 143.67600000000002,
+          "bias": 7069.004456088021,
+          "rmse": 10229.58785538285,
+          "max_abs": 27594.023573864208
+        },
+        "speed_m_s": {
+          "samples": 4248,
+          "covered_duration_s": 143.67600000000002,
+          "bias": 161.8107743868927,
+          "rmse": 205.46144743479763,
+          "max_abs": 514.322140163953
+        }
+      },
+      "early_ascent": {
+        "altitude_m": {
+          "samples": 1464,
+          "covered_duration_s": 49.983,
+          "bias": 643.7940350434819,
+          "rmse": 864.1240860029942,
+          "max_abs": 1994.4980598396114
+        },
+        "speed_m_s": {
+          "samples": 1464,
+          "covered_duration_s": 49.983,
+          "bias": 40.5872490204695,
+          "rmse": 47.057900563215384,
+          "max_abs": 88.89208609047918
+        }
+      },
+      "throttle_down": {
+        "altitude_m": {
+          "samples": 666,
+          "covered_duration_s": 22.65500000000001,
+          "bias": 3091.155821945178,
+          "rmse": 3166.0867513074486,
+          "max_abs": 4468.41770566965
+        },
+        "speed_m_s": {
+          "samples": 666,
+          "covered_duration_s": 22.65500000000001,
+          "bias": 103.56502684366605,
+          "rmse": 103.93574961389015,
+          "max_abs": 120.8367891212655
+        }
+      },
+      "late_ascent": {
+        "altitude_m": {
+          "samples": 2118,
+          "covered_duration_s": 70.971,
+          "bias": 12867.498076139744,
+          "rmse": 14425.96520062062,
+          "max_abs": 27594.023573864208
+        },
+        "speed_m_s": {
+          "samples": 2118,
+          "covered_duration_s": 70.971,
+          "bias": 265.8318209377113,
+          "rmse": 283.6223310897759,
+          "max_abs": 514.322140163953
+        }
+      }
+    },
+    "checkpoints": {
+      "meco_command": {
+        "time_s": 145.0000000003283,
+        "r_ned": [
+          44635.14090100536,
+          25635.14090101495,
+          -89996.65626895046
+        ],
+        "v_ned": [
+          856.7368650382106,
+          856.7368650385639,
+          -1835.9090045796097
+        ],
+        "q_bn": [
+          0.8109546494106203,
+          -0.183336157478913,
+          0.44261263785905397,
+          0.3359084142554563
+        ],
+        "w_body": [
+          8.853370869439916e-18,
+          -0.0018025200024720854,
+          -1.807070466605213e-15
+        ],
+        "m": 167057.35799631957,
+        "throttle_act": [
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861,
+          0.9999999999999861
+        ],
+        "tvc": [
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ]
+        ],
+        "main_propellant": 21857.357996319566,
+        "rcs_fuel": 200.0,
+        "x_cg": -26.31252609079316,
+        "inertia_diag": [
+          272833.91995403764,
+          77144161.44122986,
+          77144161.44122986
+        ],
+        "thrust_mag": 8225998.894115223
+      },
+      "final": {
+        "time_s": 150.00000000035217,
+        "r_ned": [
+          48958.646494075685,
+          29958.646494087076,
+          -99144.41869041162
+        ],
+        "v_ned": [
+          865.1721434240853,
+          865.1721434244433,
+          -1806.7601813169688
+        ],
+        "q_bn": [
+          0.8129141362055683,
+          -0.18184116812326653,
+          0.4390034142810279,
+          0.3367200602612215
+        ],
+        "w_body": [
+          8.91704638921506e-18,
+          -0.0017768736145605522,
+          -1.7775161989078813e-15
+        ],
+        "m": 165854.72026361807,
+        "throttle_act": [
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08,
+          1.4062177922218587e-08
+        ],
+        "tvc": [
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ],
+          [
+            9e-323,
+            0.0
+          ]
+        ],
+        "main_propellant": 20654.720263618074,
+        "rcs_fuel": 200.0,
+        "x_cg": -26.09108535074077,
+        "inertia_diag": [
+          270885.6468270613,
+          75962407.54216431,
+          75962407.54216431
+        ],
+        "thrust_mag": 0.0
+      }
+    },
+    "event_time_scores": null,
+    "limitations": [
+      "Timing anchors are prescribed inputs, not independently predicted events.",
+      "Altitude datum/speed frame remain assumptions; no acceptance limits assigned.",
+      "Attached-stack coast after MECO is excluded from flight-data scoring."
+    ]
+  },
+  "numerical_agreement": {
+    "status": "passed",
+    "steps_s": [
+      0.002,
+      0.001,
+      0.0005
+    ],
+    "limits": {
+      "position_m": 0.05,
+      "velocity_mps": 0.05,
+      "attitude_rad": 0.001,
+      "mass_kg": 0.01,
+      "dynamic_pressure_pa": 10.0,
+      "terminal_time_s": 0.005
+    },
+    "comparisons": [
+      {
+        "errors": {
+          "position_m": 7.104498333588331e-07,
+          "velocity_mps": 2.2266381742724884e-08,
+          "attitude_rad": 5.464403862745312e-12,
+          "mass_kg": 2.134329406544566e-06,
+          "dynamic_pressure_pa": 9.435643733013421e-08,
+          "terminal_time_s": 3.6405367609404493e-10
+        },
+        "shared_samples": 751,
+        "compared_until_s": 150.00000000035217,
+        "same_contact_status": true,
+        "coarse_dt": 0.002,
+        "fine_dt": 0.001,
+        "passed": true
+      },
+      {
+        "errors": {
+          "position_m": 1.658825820247375e-06,
+          "velocity_mps": 5.5415220321165453e-08,
+          "attitude_rad": 1.0589171151699666e-11,
+          "mass_kg": 4.1729072108864784e-06,
+          "dynamic_pressure_pa": 3.4029289963655174e-07,
+          "terminal_time_s": 4.432649802765809e-10
+        },
+        "shared_samples": 751,
+        "compared_until_s": 149.9999999999089,
+        "same_contact_status": true,
+        "coarse_dt": 0.001,
+        "fine_dt": 0.0005,
+        "passed": true
+      }
+    ],
+    "criterion": "all adjacent step pairs meet numerical agreement limits",
+    "scope": "deterministic fixed-input comparison; no assumed RK4 order across events"
+  }
+}

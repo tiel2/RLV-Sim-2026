@@ -1,0 +1,44 @@
+# @package _global_
+# First integration milestone: liftoff -> prescribed MECO -> attached-stack coast.
+# Reference/assumptions: docs/reference/crs11_ascent.md. No runtime separation yet.
+defaults:
+  - _prescribed
+  - override /plant/vehicle: falcon9_ascent
+  - override /plant/aero: ascent
+  - _self_
+plant:
+  rcs:
+    center_x: -58.0
+scenario:
+  name: ascent
+  description: Attached-stack ascent physics experiment; flight-data validation deferred.
+  ic:
+    r_ned: [14000.0, -5000.0, 0.0] # assumed LC-39A displacement from LZ-1; not surveyed
+    v_ned: [0.0, 0.0, 0.0]
+    pitch_deg: 90.0
+    yaw_deg: 45.0 # assumed northeast ascent azimuth; undefined at exact vertical until tipover
+    m: 545200.0
+    throttle0: 1.0 # pre-ignited at T+0; ignition transient before liftoff excluded
+    launch_pad: true
+  horizon:
+    t_max: 150.0
+    input_dt: 0.02
+    log_dt: 0.2
+  inputs:
+    - {t: 0.0, label: ascent, throttle: 1.0, fin_deployment: 0.0}
+    - t: 10.0
+      label: pitch_kick
+      gimbal: [[0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0]]
+    - {t: 12.0, label: gravity_turn, gimbal: 0.0}
+    - {t: 50.0, label: throttle_down, throttle: 0.8}
+    - {t: 74.0, label: full_thrust, throttle: 1.0}
+    - {t: 145.0, label: meco_coast, throttle: 0.0}
+  reference:
+    enabled: false # physics -> replay -> guide first; explicit opt-in for later comparison
+    dataset: crs11
+    start_s: 0.0
+    end_s: 145.0 # coast is an attached-stack physics check, not stage-1 recovery validation
+    time_offset_s: 0.0
+    altitude_offset_m: 0.0
+    conventions: Assumed launch-relative altitude and ground-relative speed; unverified.
+    role: uncalibrated_comparison

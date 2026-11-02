@@ -1,0 +1,61 @@
+{
+  "mission": "SpaceX CRS-11",
+  "stage": 1,
+  "repository": "https://github.com/shahar603/Telemetry-Data",
+  "commit": "b245d3b81aa36b7941ec10f3f4b508999d106a6d",
+  "retrieved_on": "2026-11-02",
+  "retrieval_date_timezone": "Asia/Seoul",
+  "license": "Unlicense; see LICENSE",
+  "provenance": "Webcast-derived public telemetry; not onboard sensor logs. Upstream files preserved byte for byte.",
+  "files": [
+    {
+      "file": "stage1_raw.json",
+      "upstream_path": "SpaceX CRS-11/JSON/stage1 raw.json",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON/stage1%20raw.json",
+      "bytes": 318124,
+      "sha256": "deaebfe4ecb311c2f589bcee7c87ace3b91de935b5dc73cd0d59bc85cba54011"
+    },
+    {
+      "file": "analysed.json",
+      "upstream_path": "SpaceX CRS-11/JSON/analysed.json",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON/analysed.json",
+      "bytes": 35973,
+      "sha256": "771e667b92c06aeef59ac5bd1b4d1aa425e33ec6f2a13a0649ccae3619a27a2a"
+    },
+    {
+      "file": "events.json",
+      "upstream_path": "SpaceX CRS-11/JSON/events.json",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON/events.json",
+      "bytes": 276,
+      "sha256": "be6e0bd92911be2a8b2d91cfed029b45047bc6136f3c7f9dba54b5893e1ac210"
+    },
+    {
+      "file": "stages.json",
+      "upstream_path": "SpaceX CRS-11/JSON/stages.json",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON/stages.json",
+      "bytes": 12,
+      "sha256": "acc63913173323d6e1639b1b241b78e769de17387e6cdb1fce0e6a7f14a3530d"
+    },
+    {
+      "file": "upstream_launches.json",
+      "upstream_path": "Laucnhes.json",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/Laucnhes.json",
+      "bytes": 76691,
+      "sha256": "23cf566d436052a6298621db57d325ae59bfb6036b27a273c1b3f19c235bd2b4"
+    },
+    {
+      "file": "upstream_README.md",
+      "upstream_path": "README.md",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/README.md",
+      "bytes": 5187,
+      "sha256": "90ae92696f61602e7027408bb0bde627d3af227b04f0903565573da43e0f3e70"
+    },
+    {
+      "file": "LICENSE",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/LICENSE",
+      "bytes": 1210,
+      "sha256": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd"
+    }
+  ]
+}

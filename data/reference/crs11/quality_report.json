@@ -1,0 +1,350 @@
+{
+  "mission": "SpaceX CRS-11",
+  "commit": "b245d3b81aa36b7941ec10f3f4b508999d106a6d",
+  "snapshot_integrity": "passed",
+  "scope": "Structural checks and quality flags only; not flight-model validation.",
+  "units": {
+    "time": "s",
+    "velocity": "m/s",
+    "altitude": "km"
+  },
+  "thresholds": {
+    "gap_flag_s": 1.1,
+    "component_excess_flag_m_s": 0.01,
+    "meaning": "Audit thresholds, not measurement uncertainties or acceptance limits."
+  },
+  "series": {
+    "stage1_raw.json": {
+      "samples": 13489,
+      "time_range_s": [
+        0.0,
+        464.63
+      ],
+      "median_step_s": 0.03300000000001546,
+      "maximum_step_s": 1.3019999999999925,
+      "gaps_over_1_1_s": [
+        {
+          "start_s": 70.87,
+          "end_s": 72.172,
+          "duration_s": 1.302
+        }
+      ],
+      "fields": [
+        "time",
+        "velocity",
+        "altitude"
+      ]
+    },
+    "analysed.json": {
+      "samples": 465,
+      "time_range_s": [
+        0.0,
+        464.0
+      ],
+      "median_step_s": 1.0,
+      "maximum_step_s": 1.0,
+      "gaps_over_1_1_s": [],
+      "fields": [
+        "time",
+        "velocity",
+        "altitude",
+        "velocity_y",
+        "velocity_x",
+        "acceleration",
+        "downrange_distance",
+        "angle",
+        "q"
+      ]
+    }
+  },
+  "derived_data_flags": {
+    "vertical_component_exceeds_speed": [
+      {
+        "t_s": 0.0,
+        "speed_m_s": 0.0,
+        "vertical_velocity_m_s": 0.065
+      },
+      {
+        "t_s": 1.0,
+        "speed_m_s": 1.944,
+        "vertical_velocity_m_s": 1.968
+      },
+      {
+        "t_s": 2.0,
+        "speed_m_s": 2.877,
+        "vertical_velocity_m_s": 3.871
+      },
+      {
+        "t_s": 3.0,
+        "speed_m_s": 5.352,
+        "vertical_velocity_m_s": 5.992
+      },
+      {
+        "t_s": 4.0,
+        "speed_m_s": 8.23,
+        "vertical_velocity_m_s": 8.549
+      },
+      {
+        "t_s": 5.0,
+        "speed_m_s": 11.09,
+        "vertical_velocity_m_s": 11.412
+      },
+      {
+        "t_s": 6.0,
+        "speed_m_s": 14.427,
+        "vertical_velocity_m_s": 14.54
+      },
+      {
+        "t_s": 7.0,
+        "speed_m_s": 17.666,
+        "vertical_velocity_m_s": 17.812
+      },
+      {
+        "t_s": 8.0,
+        "speed_m_s": 21.026,
+        "vertical_velocity_m_s": 21.179
+      },
+      {
+        "t_s": 10.0,
+        "speed_m_s": 28.03,
+        "vertical_velocity_m_s": 28.148
+      },
+      {
+        "t_s": 11.0,
+        "speed_m_s": 31.544,
+        "vertical_velocity_m_s": 31.73
+      },
+      {
+        "t_s": 12.0,
+        "speed_m_s": 35.338,
+        "vertical_velocity_m_s": 35.384
+      },
+      {
+        "t_s": 13.0,
+        "speed_m_s": 39.038,
+        "vertical_velocity_m_s": 39.134
+      },
+      {
+        "t_s": 14.0,
+        "speed_m_s": 42.741,
+        "vertical_velocity_m_s": 43.004
+      },
+      {
+        "t_s": 15.0,
+        "speed_m_s": 46.775,
+        "vertical_velocity_m_s": 46.971
+      },
+      {
+        "t_s": 16.0,
+        "speed_m_s": 50.985,
+        "vertical_velocity_m_s": 51.038
+      },
+      {
+        "t_s": 18.0,
+        "speed_m_s": 59.232,
+        "vertical_velocity_m_s": 59.425
+      },
+      {
+        "t_s": 21.0,
+        "speed_m_s": 72.276,
+        "vertical_velocity_m_s": 72.347
+      },
+      {
+        "t_s": 22.0,
+        "speed_m_s": 76.489,
+        "vertical_velocity_m_s": 76.776
+      },
+      {
+        "t_s": 24.0,
+        "speed_m_s": 85.736,
+        "vertical_velocity_m_s": 85.77
+      },
+      {
+        "t_s": 25.0,
+        "speed_m_s": 90.314,
+        "vertical_velocity_m_s": 90.355
+      },
+      {
+        "t_s": 26.0,
+        "speed_m_s": 94.755,
+        "vertical_velocity_m_s": 95.014
+      },
+      {
+        "t_s": 28.0,
+        "speed_m_s": 104.33,
+        "vertical_velocity_m_s": 104.543
+      },
+      {
+        "t_s": 29.0,
+        "speed_m_s": 109.326,
+        "vertical_velocity_m_s": 109.446
+      },
+      {
+        "t_s": 30.0,
+        "speed_m_s": 114.322,
+        "vertical_velocity_m_s": 114.452
+      },
+      {
+        "t_s": 31.0,
+        "speed_m_s": 119.456,
+        "vertical_velocity_m_s": 119.558
+      },
+      {
+        "t_s": 32.0,
+        "speed_m_s": 124.591,
+        "vertical_velocity_m_s": 124.777
+      },
+      {
+        "t_s": 33.0,
+        "speed_m_s": 129.865,
+        "vertical_velocity_m_s": 130.078
+      },
+      {
+        "t_s": 35.0,
+        "speed_m_s": 140.829,
+        "vertical_velocity_m_s": 140.993
+      },
+      {
+        "t_s": 36.0,
+        "speed_m_s": 146.241,
+        "vertical_velocity_m_s": 146.635
+      },
+      {
+        "t_s": 37.0,
+        "speed_m_s": 152.197,
+        "vertical_velocity_m_s": 152.342
+      },
+      {
+        "t_s": 40.0,
+        "speed_m_s": 169.419,
+        "vertical_velocity_m_s": 169.784
+      },
+      {
+        "t_s": 41.0,
+        "speed_m_s": 175.248,
+        "vertical_velocity_m_s": 175.73
+      },
+      {
+        "t_s": 42.0,
+        "speed_m_s": 181.771,
+        "vertical_velocity_m_s": 181.795
+      },
+      {
+        "t_s": 43.0,
+        "speed_m_s": 187.979,
+        "vertical_velocity_m_s": 188.038
+      },
+      {
+        "t_s": 44.0,
+        "speed_m_s": 194.082,
+        "vertical_velocity_m_s": 194.451
+      },
+      {
+        "t_s": 45.0,
+        "speed_m_s": 200.787,
+        "vertical_velocity_m_s": 200.973
+      },
+      {
+        "t_s": 198.0,
+        "speed_m_s": 529.975,
+        "vertical_velocity_m_s": 531.063
+      },
+      {
+        "t_s": 199.0,
+        "speed_m_s": 514.427,
+        "vertical_velocity_m_s": 516.853
+      },
+      {
+        "t_s": 446.0,
+        "speed_m_s": 139.264,
+        "vertical_velocity_m_s": -139.344
+      },
+      {
+        "t_s": 452.0,
+        "speed_m_s": 80.702,
+        "vertical_velocity_m_s": -80.788
+      },
+      {
+        "t_s": 453.0,
+        "speed_m_s": 70.71,
+        "vertical_velocity_m_s": -71.098
+      },
+      {
+        "t_s": 454.0,
+        "speed_m_s": 60.997,
+        "vertical_velocity_m_s": -61.593
+      },
+      {
+        "t_s": 455.0,
+        "speed_m_s": 51.733,
+        "vertical_velocity_m_s": -52.41
+      },
+      {
+        "t_s": 457.0,
+        "speed_m_s": 34.076,
+        "vertical_velocity_m_s": -35.39
+      },
+      {
+        "t_s": 458.0,
+        "speed_m_s": 26.584,
+        "vertical_velocity_m_s": -27.757
+      },
+      {
+        "t_s": 459.0,
+        "speed_m_s": 19.926,
+        "vertical_velocity_m_s": -20.877
+      },
+      {
+        "t_s": 460.0,
+        "speed_m_s": 13.441,
+        "vertical_velocity_m_s": -14.878
+      },
+      {
+        "t_s": 461.0,
+        "speed_m_s": 8.582,
+        "vertical_velocity_m_s": -9.921
+      },
+      {
+        "t_s": 462.0,
+        "speed_m_s": 4.282,
+        "vertical_velocity_m_s": -6.053
+      },
+      {
+        "t_s": 463.0,
+        "speed_m_s": 1.518,
+        "vertical_velocity_m_s": -2.717
+      },
+      {
+        "t_s": 464.0,
+        "speed_m_s": 0.423,
+        "vertical_velocity_m_s": 0.62
+      }
+    ],
+    "final_downrange_km": -6.534,
+    "interpretation": "Derived channels are not an independent, consistent state-vector truth. Downrange must not be equated with distance to the landing target."
+  },
+  "events_s": {
+    "maxq": 65,
+    "throttle_down_start": 50,
+    "throttle_down_end": 74,
+    "meco": 145,
+    "boostback_start": 161,
+    "boostback_end": 211,
+    "apogee": 248,
+    "entry_start": 372,
+    "entry_end": 384,
+    "landing_start": 429,
+    "landing_end": 462,
+    "ses1": null,
+    "seco1": null,
+    "ses2": null,
+    "seco2": null
+  },
+  "missing_reference_information": [
+    "Stage-separation time and fin-deployment time",
+    "Altitude datum and speed reference frame",
+    "Launch/landing coordinates and heading",
+    "Attitude, angular rates, mass/propellant and actuator histories",
+    "Measurement uncertainties and original display update rate"
+  ]
+}

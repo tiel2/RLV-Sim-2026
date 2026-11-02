@@ -213,12 +213,173 @@ The evaluated implementation reproduced the prescribed force and moment models, 
 
 The findings apply to the specified model assumptions. Instantaneous fin exposure, unloaded servo dynamics, and coefficient-table boundary clamping remain approximations. File-based aerodynamic databases, incremental-fin models, and coupled trajectories combining nonlinear actuators with PWM were not assessed by this comparison campaign. Agreement with actual aerodynamic coefficients, actuator hardware, or flight measurements requires separate physical validation.
 
+## 5. Ascent Integration and Initial Flight-Data Comparison
+
+**Historical comparison, now deferred.** Flight-data comparison is disabled by default.
+This section preserves the earlier experiment; current acceptance work is the independent
+physics and rendering verification in Section 6. No flight-data fitting was performed.
+
+This addendum records the 2 November 2026 ascent integration milestone separately from
+the October implementation-verification campaign. The [ascent configuration and assumptions](../reference/crs11_ascent.md)
+define a 545,200 kg attached stack, prescribed throttle/gimbal inputs, a nose-first
+aerodynamic table, and an explicit rigid-pad release state. Attached upper-stage mass
+is combined with the booster structure through the parallel-axis theorem and excluded
+from first-stage burnable propellant. No stage separation or navigation model is included.
+
+The reproducible commands are:
+
+```bash
+python scripts/run_single.py scenario=ascent scenario.reference.enabled=true hydra.run.dir=results/ascent_reference
+python scripts/check_convergence.py scenario=ascent hydra.run.dir=results/ascent_convergence
+python -m pytest tests/sim/test_ascent.py -q
+```
+
+The run reached 150 s without contact or fuel exhaustion. At the prescribed 145 s MECO
+command, altitude was 89,996.656 m, speed was 2,199.672 m/s, and first-stage main propellant
+was 21,857.358 kg. Effective thrust decayed after the command through the realistic actuator
+model. At 150 s, altitude was 99,144.419 m, speed was 2,182.070 m/s, main propellant was
+20,654.720 kg, and RCS gas remained 200 kg. This final coast retains the attached component;
+it must not be interpreted as the real separated first-stage trajectory.
+
+Independent structural tests check the composite dry CG/inertia and exclusion of attached
+mass from the fuel budget. Pad tests cover supported fuel consumption, release, later contact,
+and the distinction between a no-liftoff horizon and landing. The cutoff integration test
+checks cessation of thrust and fuel use during the final coast. Existing contact-quality
+tests explicitly identify terminated contact states, since altitude zero alone may now be
+a live pad state.
+
+The complete regression suite passed **316 tests**, and `ruff check src tests scripts`
+passed after this extension.
+
+At 751 shared log epochs, the 2→1 ms and 1→0.5 ms comparisons passed the existing numerical
+agreement limits. Across both pairs, maximum position, velocity, and mass differences were
+approximately $1.66\times10^{-6}$ m, $5.55\times10^{-8}$ m/s, and $4.18\times10^{-6}$ kg.
+This establishes timestep agreement for the selected inputs; it does not establish an
+integration order or flight-model accuracy.
+
+The comparison uses the [pinned raw CRS-11 stage-1 observations](../reference/crs11_flight_reference.md),
+not its derived state channels. The requested 0–145 s interval contains 4,248 raw samples,
+ending at 144.978 s. Excluding intervals over 1.1 s leaves 143.676 s of covered duration.
+Errors use trapezoidal time weighting, simulation-minus-reference sign, and explicit zero
+time/height offsets. The webcast altitude datum and speed frame remain assumptions.
+
+| Observable | Bias | RMSE | Maximum absolute error |
+|---|---:|---:|---:|
+| Altitude [m] | 7,069.004 | 10,229.588 | 27,594.024 |
+| Speed [m/s] | 161.811 | 205.461 | 514.322 |
+
+![Initial CRS-11 ascent comparison](figures/crs11_ascent_comparison.png)
+
+**Figure 2. Uncalibrated ascent comparison.** Left: raw webcast observations and the
+simulated altitude/speed. Right: errors at observation epochs. Missing reference coverage
+is not interpolated. Published burn timings are inputs and receive no event-time scores.
+[Machine-readable comparison and convergence results](crs11_ascent_results.json).
+
+The differences are much larger than timestep effects. They identify an initial model/input
+mismatch, with no flight-accuracy acceptance verdict. Mass, thrust, steering, and aerodynamic
+assumptions have not been fitted; scalar altitude/speed alone cannot uniquely separate their
+effects. When flight validation resumes, resolve reference conventions and define a
+calibration/holdout split before tuning. Separation and its state handoff can be implemented
+and physically verified first using declared experiment assumptions.
+
+## 6. Ascent Physics and Rendering Verification
+
+On 2 November 2026, the complete 0–150 s attached-stack ascent was checked independently
+of flight observations. The case uses realistic nine-engine throttle and gimbal dynamics,
+varying propellant/CG/inertia, nose-first aerodynamic loads, gravity and atmospheric pressure,
+a prescribed MECO command at 145 s, and coast to 150 s. It does not include separation.
+
+The [independent reference](../../src/validation/ascent.py) reconstructs loads from configuration
+constants without production RHS, mass-property or aerodynamic-table generation calls.
+It uses distributed-cylinder mass quadrature, analytical inertia derivatives, rotation-matrix
+kinematics and DOP853 integration with exact splits at prescribed command epochs. Relative
+tolerances of $10^{-12}$ and $10^{-13}$ check reference refinement; differences must remain
+below one tenth of each state acceptance limit. This is verification of the specified
+mathematical model, not validation of its coefficients or real-vehicle fidelity.
+
+| State | Maximum native/reference difference | Acceptance limit |
+|---|---:|---:|
+| Position [m] | $1.00382\times10^{-6}$ | 0.01 |
+| Velocity [m/s] | $7.85616\times10^{-8}$ | 0.001 |
+| Angular velocity [rad/s] | $6.28274\times10^{-12}$ | $10^{-6}$ |
+| Attitude rotation angle [rad] | $1.17134\times10^{-10}$ | $10^{-6}$ |
+| Mass [kg] | $3.22418\times10^{-6}$ | 0.001 |
+
+All state and reference-refinement criteria passed. The reference position change on refinement
+was $3.08\times10^{-6}$ m, so the listed discrepancy does not establish accuracy at every
+displayed digit.
+
+A complementary audit integrates recorded loads. With positive propellant outflow
+$\dot m_{\rm out}$, non-gravity body force $\mathbf F_b$, support force $\mathbf F_{\rm pad,b}$,
+and effective CG moment $\mathbf M_{\rm eff,b}$ including the modeled exhaust angular
+momentum flux, the fixed-frame/coaxial case checks
+
+$$
+R_m=\Delta m+\int\dot m_{\rm out}\,dt,\qquad
+\mathbf R_p=\Delta(m\mathbf v)
+-\int[m\mathbf g+C_{bn}(\mathbf F_b+\mathbf F_{\rm pad,b})]\,dt
++\int\dot m_{\rm out}\mathbf v\,dt,
+$$
+
+$$
+\mathbf R_H=\Delta(C_{bn}I\boldsymbol\omega)
+-\int C_{bn}(\mathbf M_{\rm eff,b}+\mathbf M_{\rm pad,b})\,dt.
+$$
+
+Thrust already includes the engine exhaust reaction; the angular flux is already in the
+effective moment. Neither is counted twice. Vehicle momentum/energy alone is not held
+constant during propulsion. The audit uses production diagnostics and therefore complements,
+rather than replaces, independent load calculation.
+
+| Maximum balance residual | 0.01 s log sampling | 0.005 s log sampling | Fine-sampling limit |
+|---|---:|---:|---:|
+| Mass [kg] | 0.095678 | 0.023992 | 0.1 |
+| Linear momentum [kg m/s] | 79.0523 | 19.8160 | 100 |
+| Angular momentum [kg m²/s] | 63.4233 | 15.8286 | 50 |
+
+Every fine residual is below its limit and below 0.4 times its coarse value, with a $10^{-6}$
+absolute floor. Log spacing changes load quadrature resolution, not the native integration step.
+Rigid-pad support is checked separately with fixed pose/rates, continuing propellant/actuator
+evolution, and balancing force/moment diagnostics. Native release time is retained separately
+from observation time; support-impulse integration stops at that event rather than spreading
+the discontinuity over a log interval.
+
+Replay was corrected to render configured engine counts/positions, all gimbal axes, actual
+per-engine thrust and fuel-exhaustion shutdown, and a schematic attached upper stack and land
+pad. It no longer stretches the recovery first-stage GLB to represent the complete stack.
+The ground offset is cosmetic engine-plane alignment; geometric contact remains unmodeled.
+Chrome passed six state/geometry checkpoints: ascent at 0, 11, 147 s and a reverse seek to
+11 s, single-engine landing, and fuel depletion. Checks cover CG transform, engine
+count/placement/thrust axes, upper-stage presence, fin state, pad alignment, zero-force
+plume hiding and JavaScript errors.
+
+```bash
+python scripts/check_ascent_physics.py
+python -m pytest tests/ -q
+```
+
+The complete test suite passed **321 tests**. [Physics verdict and source hashes](ascent_physics_results.json),
+[browser checkpoint report](ascent_replay_checks.json), and
+[browser reproduction commands](../../viz/README.md#ascent-and-rendering-checks) accompany this record.
+Example verified views: [attached stack at launch](figures/ascent_launch.png) and
+[attached-stack coast](figures/ascent_coast.png).
+
+Remaining scope includes separation mass/CG/inertia/aerodynamic changes and impulse assumptions,
+state handoff, flip/boostback and full-flight integration. Settled propellant, simplified jet
+damping, fixed local NED, vertical gravity, assumed aerodynamic coefficients and schematic
+contact remain explicit model limitations. Sensor/navigation and flight-data validation are deferred.
+
 ## Verification Sources
 
-The reported cases were evaluated on 21–22 October 2026. The version-controlled implementations below define the independent references and acceptance criteria. Generated run records are retained separately under `results/`.
+The original cases were evaluated on 21–22 October 2026; ascent additions were evaluated on 2 November 2026. The version-controlled implementations below define the independent references and acceptance criteria. Generated run records are retained separately under `results/`.
 
 [1] Canonical motion: [reference calculations](../../src/validation/references.py) and [comparison implementation](../../src/validation/analytical.py).
 
 [2] [Engine and TVC verification](../../src/validation/propulsion.py).
 
 [3] Component and coupled dynamics: [reference calculations](../../src/validation/vehicle_references.py) and [comparison implementation](../../src/validation/vehicle_physics.py).
+
+[4] Ascent: [independent equations and balance audit](../../src/validation/ascent.py),
+[verification runner](../../scripts/check_ascent_physics.py), and [regression tests](../../tests/plant/test_ascent_physics.py).
+
+[5] Rendering: [browser assertions](../../scripts/check_replay_browser.py).

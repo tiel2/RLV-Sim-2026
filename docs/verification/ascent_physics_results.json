@@ -1,0 +1,61 @@
+{
+  "status": "passed",
+  "scope": "0\u2013150 s attached-stack realistic-actuator ascent; no separation or flight data",
+  "independent_reference": {
+    "method": "DOP853 with rotation matrices and mass quadrature",
+    "rtol": [
+      1e-12,
+      1e-13
+    ],
+    "errors": {
+      "r_ned": 1.0038205484803653e-06,
+      "v_ned": 7.856160481018083e-08,
+      "w_body": 6.2827365948254905e-12,
+      "q_bn": 1.1713437378622917e-10,
+      "m": 3.224180545657873e-06
+    },
+    "refinement_errors": {
+      "r_ned": 3.0828262689812143e-06,
+      "v_ned": 7.629685828611591e-08,
+      "w_body": 3.0733263156973266e-12,
+      "q_bn": 3.5297986755995185e-11,
+      "m": 6.994232535362244e-07
+    },
+    "limits": {
+      "r_ned": 0.01,
+      "v_ned": 0.001,
+      "w_body": 1e-06,
+      "q_bn": 1e-06,
+      "m": 0.001
+    }
+  },
+  "balance_audit": {
+    "log_steps_s": [
+      0.01,
+      0.005
+    ],
+    "coarse": {
+      "mass_kg": 0.09567753178998828,
+      "linear_momentum_kg_m_s": 79.05230704898857,
+      "angular_momentum_kg_m2_s": 63.42329183268788
+    },
+    "fine": {
+      "mass_kg": 0.02399184968089685,
+      "linear_momentum_kg_m_s": 19.81597788846591,
+      "angular_momentum_kg_m2_s": 15.828640286074732
+    },
+    "limits": {
+      "mass_kg": 0.1,
+      "linear_momentum_kg_m_s": 100,
+      "angular_momentum_kg_m2_s": 50
+    },
+    "criterion": "fine residual within limit and <= 0.4*coarse + 1e-6",
+    "note": "recorded loads, not independent force verification"
+  },
+  "source_sha256": {
+    "src/native/plant.cpp": "02e4bee79c609a0bcf80e64ee7e6053ebc42a9debb9f9a7f0a9d0a3ae3024a9e",
+    "src/validation/ascent.py": "f1dde831eae2b67672c0f8eab5834411286c0e51c26a25fcfb10bca8039af9dd",
+    "src/validation/references.py": "397483d88f9d7c2086ff4decbbaa5e2ca08144990741ba0acc16c147eca210ba",
+    "src/validation/vehicle_references.py": "6af5421bd9d88dcc13069de13d6c82e3d02dfdfa0d8edb825c2e53281e07f7f4"
+  }
+}

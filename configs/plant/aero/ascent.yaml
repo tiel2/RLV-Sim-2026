@@ -1,0 +1,19 @@
+# Assumed nose-first coefficients, distinct from recovery/base-first coefficients.
+defaults:
+  - table
+  - _self_
+grid:
+  mach_max: 12.0
+  n_mach: 49
+  alpha_max_deg: 180.0 # avoid silently clamping a reversed flight direction to 90 deg
+  n_alpha: 37
+coeffs:
+  cd_base: 0.25
+  cd_transonic: 0.3
+  cd_hyper: 0.1
+  cd_alpha: 2.0
+  cn_alpha: 2.5
+  xcp_frac_base: 0.70
+  xcp_frac_alpha: 0.0
+fins:
+  fin_x: -31.0 # translated from booster frame; stowed throughout this scenario

@@ -28,7 +28,7 @@ from core.interfaces import (
 )
 from core.seeding import fold_in, rng_from_seed, seed_value, seed_words
 from plant import aero_data
-from plant.mass_properties import dual_tank_properties
+from plant.mass_properties import attach_axial_component, dual_tank_properties
 
 _MASS_EPS = 1e-3  # m_dry tolerance for fuel-depletion predicate
 
@@ -74,6 +74,11 @@ def build_params(cfg) -> tuple[PlantParams, dict]:
         rcs_gas_length=_arr(v.tanks.rcs_gas_length),
     )
     ap = v.actuator
+    attached = v.get("attached_component")
+    if attached is not None:
+        if str(v.massprops_model) != "dual_tank":
+            raise ValueError("attached component requires dual_tank mass properties")
+        mass = attach_axial_component(mass, attached, float(v.geom.length))
     _validate_mass(mass, float(ap.rcs_fuel0), float(v.geom.length))
     if str(v.massprops_model) == "dual_tank":
         cg, inertia, *_ = dual_tank_properties(float(mass.m_wet), float(ap.rcs_fuel0), mass)
@@ -443,6 +448,13 @@ def initial_state(ic, params: PlantParams) -> PlantState:
         raise ValueError("initial total mass must include structural dry mass and RCS gas")
     if float(ic["m"]) > float(params.mass.m_wet):
         raise ValueError("initial mass exceeds configured wet capacity")
+    launch_pending = bool(ic.get("launch_pad", False))
+    if launch_pending and (
+        abs(float(ic["r_ned"][2])) > 1e-9
+        or np.linalg.norm(ic["v_ned"]) > 1e-9
+        or np.linalg.norm(ic.get("w_body", [0.0, 0.0, 0.0])) > 1e-9
+    ):
+        raise ValueError("launch_pad requires zero altitude, velocity, and angular rate")
     return PlantState(
         t=_arr(0.0),
         r_ned=_arr(ic["r_ned"]),
@@ -462,6 +474,7 @@ def initial_state(ic, params: PlantParams) -> PlantState:
         wind_filter=_arr([[0.0, 0.0, 0.0]] * 3),  # (3,3) per-axis shaping-filter states, start at 0
         key=seed_words(int(ic.get("seed", 0))),
         done=np.asarray(False),
+        launch_pending=launch_pending,
     )
 
 
@@ -486,6 +499,7 @@ def ic_from_scenario(scn, seed) -> dict:
         "throttle0": np.asarray(scn.ic.throttle0).tolist(),
         **({"rcs_fuel": float(scn.ic.rcs_fuel)} if "rcs_fuel" in scn.ic else {}),
         "seed": fold_in(normalized_seed, 0x504C414E54),
+        "launch_pad": bool(scn.ic.get("launch_pad", False)),
     }
 
 
@@ -495,7 +509,7 @@ def termination_reason(final_state: PlantState, params: PlantParams, hit_max_ste
 
     h = float(-np.asarray(final_state.r_ned)[2])
     m = float(np.asarray(final_state.m))
-    if h <= 1e-3:
+    if h <= 1e-3 and bool(final_state.done):
         return int(TerminationReason.TOUCHDOWN)
     if hit_max_steps:
         return int(TerminationReason.MAX_STEPS)

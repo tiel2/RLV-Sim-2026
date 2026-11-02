@@ -113,7 +113,7 @@ function init(replay) {
   const scene = new THREE.Scene();
   // sky + ocean + droneship are built in buildEnvironment() below (needs the sun light + renderer)
 
-  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 12000);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 1000000);
   camera.position.set(70, 60, 90);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -135,8 +135,8 @@ function init(replay) {
   // leg plane sits |x_eng - x_cg| below the CG, so the booster base rests that far under the trajectory's
   // y=0. The whole sea + barge drops by that much (freeboard preserved) so the deck meets the legs at
   // touchdown rather than the booster passing through it.
-  const groundY = -Math.abs(V.x_eng - V.x_cg_dry); // world-y of the landing deck (legs rest here) ~ -12 m
-  const env = buildEnvironment(scene, renderer, sun, groundY); // sky + ocean + droneship lowered to groundY
+  const groundY = meta.scene?.ground_y ?? -Math.abs(V.x_eng - V.x_cg_dry);
+  const env = buildEnvironment(scene, renderer, sun, groundY, meta.scene);
   const traj = buildTrajectory(scene, frames);
   const rocket = buildVehicle(V);
   scene.add(rocket.group);
@@ -210,17 +210,22 @@ function init(replay) {
     // % shows the mean throttle of the firing engines (the lit dots show which / how many).
     const thrustN = a.thrust + (b.thrust - a.thrust) * s; // delivered thrust [N]
     const engThr = engineThrottles(a.thr, b.thr, s, rocket.engines.length);
-    let totThr = 0, nFiring = 0;
-    for (let e = 0; e < rocket.engines.length; e++) {
-      totThr += engThr[e];
-      if (engThr[e] > 0.02) nFiring++;
-      rocket.setPlume(e, engThr[e]);
-    }
-    const octFrac = nFiring ? totThr / nFiring : 0; // mean throttle over firing engines (HUD %)
     for (let g = 0; g < V.n_gimbal; g++) {
       const gp = lerpRow(a.gim, b.gim, s, g);
       rocket.setGimbal(g, gp[0], gp[1]);
     }
+    let totThr = 0, nFiring = 0;
+    for (let e = 0; e < rocket.engines.length; e++) {
+      totThr += engThr[e];
+      if (engThr[e] > 0.02) nFiring++;
+      // Delivered per-engine force includes fuel exhaustion and engine failures.
+      const forces = a.engine_force_body && b.engine_force_body;
+      if (forces) {
+        const f = a.engine_force_body[e].map((x, j) => x + (b.engine_force_body[e][j] - x) * s);
+        rocket.setEngineForce(e, f);
+      } else rocket.setPlume(e, thrustN > 0 ? engThr[e] : 0);
+    }
+    const octFrac = nFiring ? totThr / nFiring : 0; // mean throttle over firing engines (HUD %)
     for (let f = 0; f < V.n_fins; f++) rocket.setFin(f, lerpArr(a.fin, b.fin, s, f));
     // Deployment is a discrete physical event, never interpolated before its timestamp.
     rocket.setFinDeployment(a.fin_deployment ?? 1);
@@ -232,7 +237,7 @@ function init(replay) {
     else rocket.setLegs(legsDeployed ? 1 : 0);
 
     // plume light + ground blob (driven by the strongest active engine)
-    const maxThr = engThr.reduce((m, x) => Math.max(m, x), 0);
+    const maxThr = thrustN > 0 ? engThr.reduce((m, x) => Math.max(m, x), 0) : 0;
     plumeLight.intensity = maxThr * 7;
     plumeLight.position.copy(pCur);
     const groundFade = THREE.MathUtils.clamp(alt / 400, 0, 1);
@@ -249,7 +254,8 @@ function init(replay) {
   // OrbitControls stays enabled in EVERY mode, so the user can always rotate + zoom. The mode buttons
   // only re-frame the shot: orbit/chase keep the booster as the look-at target (so the camera follows
   // it), pad anchors the look-at on the droneship (watch the booster fly past from the deck).
-  const PAD_TARGET = new THREE.Vector3(0, 10, 0);
+  const launch = meta.scene?.launch_position;
+  const PAD_TARGET = new THREE.Vector3(launch?.[0] ?? 0, groundY + V.length / 2, launch?.[2] ?? 0);
   const lastPos = new THREE.Vector3(), lastVel = new THREE.Vector3(), camDelta = new THREE.Vector3();
   function updateCamera(pos, vel) {
     lastPos.copy(pos); lastVel.copy(vel);
@@ -271,7 +277,7 @@ function init(replay) {
   function frameCamera(mode) { // set a good initial pose for the mode; the user can then adjust freely
     const p = lastPos;
     if (mode === "pad") {
-      camera.position.set(54, 13, 54); controls.target.copy(PAD_TARGET);
+      camera.position.copy(PAD_TARGET).add(new THREE.Vector3(100, 25, 100)); controls.target.copy(PAD_TARGET);
     } else if (mode === "chase") {
       const back = lastVel.lengthSq() > 1 ? lastVel.clone().normalize() : new THREE.Vector3(0, 1, 0);
       camera.position.copy(p).addScaledVector(back, -34).add(new THREE.Vector3(16, 14, 24)); // up-and-behind
@@ -337,7 +343,14 @@ function init(replay) {
     renderer.render(scene, camera);
   }
   applyFrame(0);
-  controls.target.copy(pCur);
+  lastPos.copy(pCur); lastVel.copy(vCur); frameCamera("orbit");
+  // Explicit opt-in for automated local geometry checks, absent in normal playback.
+  if (new URLSearchParams(location.search).has("inspect")) {
+    window.replayInspection = { scene, rocket, camera, state,
+      seek(t) { state.playing = false; state.t = t; applyFrame(t);
+        lastPos.copy(pCur); lastVel.copy(vCur); frameCamera(state.cam); renderer.render(scene, camera); }
+    };
+  }
   tick();
 }
 
@@ -355,6 +368,9 @@ function buildVehicle(V) {
   group.add(inner);
 
   const L = V.length, R = V.diameter / 2;
+  const joint = V.attached_component?.aft_x ?? 0;
+  const boosterLength = L + joint;
+  const hullBase = V.x_eng + 1.2; // nozzle bells below the shell, exit at configured engine plane
   const white = new THREE.MeshStandardMaterial({ color: 0xe9edf2, metalness: 0.25, roughness: 0.55 });
   const soot = new THREE.MeshStandardMaterial({ color: 0x4a4d55, metalness: 0.35, roughness: 0.7 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15171c, metalness: 0.5, roughness: 0.6 });
@@ -366,10 +382,19 @@ function buildVehicle(V) {
   const hideOnModel = [];
 
   // --- airframe (body spans x: 0 nose .. -L base) ---
-  const body = cyl(R, R, L, white); body.position.x = -L / 2; body.castShadow = true; inner.add(body);
-  const sootBand = cyl(R * 1.003, R * 1.003, L * 0.33, soot); sootBand.position.x = -L * 0.835; inner.add(sootBand);
-  const interstage = cyl(R * 1.004, R * 1.004, L * 0.1, dark); interstage.position.x = -L * 0.05; inner.add(interstage);
-  const base = cyl(R * 1.02, R * 0.96, L * 0.05, dark); base.position.x = -L * 0.975; inner.add(base); // octaweb base ring
+  const body = cyl(R, R, joint - hullBase, white); body.position.x = (joint + hullBase) / 2; body.castShadow = true; inner.add(body);
+  body.name = "booster-body";
+  const sootBand = cyl(R * 1.003, R * 1.003, boosterLength * 0.33, soot); sootBand.position.x = -L + boosterLength * 0.165; inner.add(sootBand);
+  const interstage = cyl(R * 1.004, R * 1.004, boosterLength * 0.1, dark); interstage.position.x = joint - boosterLength * 0.05; inner.add(interstage);
+  if (V.attached_component) {
+    const upper = new THREE.Group(); upper.name = "attached-upper-stack";
+    const capLength = Math.min(6, -joint / 3);
+    const tank = cyl(R, R, -joint - capLength, white);
+    tank.position.x = (joint - capLength) / 2; upper.add(tank);
+    const cap = cyl(0.15, R, capLength, white); cap.position.x = -capLength / 2; upper.add(cap);
+    inner.add(upper); // schematic geometry; no invented separation animation
+  }
+  const base = cyl(R * 1.02, R * 0.96, 1, dark); base.position.x = hullBase + 0.5; inner.add(base);
   hideOnModel.push(body, sootBand, interstage, base);
 
   // --- grid fins: independent folding and steering hinges, driven by recorded state ---
@@ -396,21 +421,20 @@ function buildVehicle(V) {
     finFolds.push(fold);
   }
 
-  // --- engines: 9-engine octaweb PLUME rig. The nozzle bells are the GLB 'm1ds' mesh (9 real Merlins);
-  //     only the flames are procedural (the GLB has none). Layout + sizes measured from falcon9.glb at a
-  //     42 m length-fit: ring radius 1.081 m, bell exit radius 0.33 m. Index 0 = the center landing engine.
+  // Engine count, positions and gimbal mapping come from the plant. Bells are schematic;
+  // delivered forces set the plume direction and intensity, including faults/fuel depletion.
   const engines = [];
-  const fit = L / 42;                                 // measurements were taken at a 42 m fit
-  const RING_R = 1.081 * fit, BELL_R = 0.33 * fit;
-  for (let e = 0; e < 9; e++) {
-    let y = 0, z = 0;
-    if (e > 0) { const th = ((e - 1) / 8) * Math.PI * 2 - Math.PI / 2; y = RING_R * Math.cos(th); z = RING_R * Math.sin(th); }
+  const BELL_R = 0.33 * V.diameter / 3.66;
+  for (let e = 0; e < V.n_engines; e++) {
     const gim = new THREE.Group();      // gimbal pivot at the engine; carries the plume
-    gim.position.set(-L, y, z);          // engine exit plane at the base (x = -L)
+    gim.name = `engine-${e}`;
+    gim.position.fromArray(V.engine_pos[e]);
+    const bell = cyl(BELL_R * 0.45, BELL_R, 0.8, metal);
+    bell.position.x = 0.4; gim.add(bell); // exit at the configured engine plane
     const plume = buildPlume(BELL_R);    // flame mouth sits at the exit, tapers aft (-X), width = GLB bell
     gim.add(plume);
     inner.add(gim);
-    engines.push({ gim, plume, gimbalSlot: e === 0 ? 0 : -1 });
+    engines.push({ gim, plume, gimbalSlot: V.gimbal_idx.indexOf(e) });
   }
 
   // --- landing legs (4, at base; deploy outward on final approach) ---
@@ -422,32 +446,38 @@ function buildVehicle(V) {
     hinge.name = `landing-leg-${i}`;
     hinge.position.set(-L * 0.97, R * 0.9 * Math.cos(psi), R * 0.9 * Math.sin(psi));
     hinge.rotation.x = Math.atan2(Math.sin(psi), Math.cos(psi));
-    const leg = cyl(0.18, 0.12, L * 0.18, dark);
-    leg.position.x = L * 0.09; // along body when stowed
+    const leg = cyl(0.18, 0.12, boosterLength * 0.18, dark);
+    leg.position.x = boosterLength * 0.09;
     hinge.add(leg);
     inner.add(hinge);
     legs.push(hinge);
     hideOnModel.push(hinge); // GLB carries its own landing legs
   }
 
-  // PHOTOREAL glTF (viz/resources/falcon9_landing.glb): isolate the first-stage booster from its display
-  // scene (hide the Dragon capsule + pad scenery), re-fit to length L, and collect the 4 deployed-leg
-  // subtrees (revealed at the leg-deploy trigger). Procedural hull/legs switch off; dynamic fins stay.
-  // Absent file => procedural booster fallback. See viz/README.md.
+  // The first-stage-only GLB must never be stretched to stand in for an attached stack.
+  // Dynamic engines and fins remain authoritative with either hull renderer.
   const glb = { legGroups: [], loaded: false };
-  tryLoadPhotorealModel(inner, hideOnModel, L, glb);
+  if (!V.attached_component) tryLoadPhotorealModel(inner, hideOnModel, L, glb);
 
-  const defLim = V.tvc_deflection_limit || 0.14;
+  const defLim = V.tvc_deflection_max_rad ?? 0.14;
+  const ex = new THREE.Vector3(1, 0, 0), thrustDirection = new THREE.Vector3();
   return {
     group, inner, engines, fins, finFolds,
     setPlume(e, thr) { const p = engines[e].plume;
       p.scale.set(Math.max(thr, 0.001), 0.6 + thr * 0.4, 0.6 + thr * 0.4);
       p.visible = thr > 0.02;
       p.children.forEach((c) => (c.material.opacity = c.userData.base * Math.min(thr * 1.4, 1))); },
-    setGimbal(slot, pitch, yaw) { // tilts the center engine's plume (the GLB bells are a single mesh)
+    setEngineForce(e, force) {
+      thrustDirection.fromArray(force);
+      const magnitude = thrustDirection.length();
+      this.setPlume(e, Math.min(magnitude / V.thrust_vac[e], 1));
+      if (magnitude > 1e-9) engines[e].gim.quaternion.setFromUnitVectors(ex, thrustDirection.normalize());
+    },
+    setGimbal(slot, pitch, yaw) {
       const eng = engines.find((x) => x.gimbalSlot === slot);
-      if (eng) { eng.gim.rotation.z = THREE.MathUtils.clamp(pitch, -defLim, defLim);
-        eng.gim.rotation.y = THREE.MathUtils.clamp(yaw, -defLim, defLim); } },
+      const p = THREE.MathUtils.clamp(pitch, -defLim, defLim), y = THREE.MathUtils.clamp(yaw, -defLim, defLim);
+      if (eng) eng.gim.quaternion.setFromUnitVectors(ex,
+        thrustDirection.set(Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), -Math.sin(p))); },
     setFin(i, delta) { if (fins[i]) fins[i].rotation.y = delta; },
     setFinDeployment(exposure) {
       // The plant has a binary exposure state, not a deployment-duration model. Keep the fin
@@ -510,8 +540,7 @@ function cyl(rTop, rBot, h, mat) {
 // hide the capsule + scenery BY NAME, re-fit only the visible booster to length L (long axis -> body +X,
 // base at x=-L), and collect the deployed-leg parts into `glb.legGroups`, hidden until the leg-deploy
 // trigger reveals them. Static GLB grid fins are hidden; the animated fin rig stays visible.
-// The procedural hull/legs in `hideList` switch off; the 9 plumes stay and
-// overlay the GLB engine bells. On any error (file absent) this no-ops and the procedural booster is kept.
+// The procedural hull/legs switch off; dynamic engine bells/plumes and fins remain.
 function tryLoadPhotorealModel(inner, hideList, L, glb) {
   if (!MODEL.url) return;
   // GLTFLoader sanitizes node names (spaces/dots -> _), so match on a normalized key (alphanumerics only).
@@ -521,7 +550,7 @@ function tryLoadPhotorealModel(inner, hideList, L, glb) {
   // except the body-side "leg cover top") so they can be revealed only at the deploy trigger.
   const DROP = ["dragon", "capsule", "nosecone", "heatshield", "petal", "docking", "idatop", "sdpod",
     "windows", "trunk", "ground", "railing", "sign", "door", "plane", "body",
-    "stagetwo", "fairing", "m1dvac", "sun"]; // last row: also isolates the flight falcon9.glb if swapped back
+    "stagetwo", "fairing", "m1dvac", "sun", "m1ds"]; // dynamic bells follow configured engine geometry
   const isDrop = (n) => DROP.some((k) => norm(n).includes(k));
   const isLegPart = (n) => { const k = norm(n); return k.startsWith("leg") && !k.startsWith("legcovertop"); };
   const isStaticFin = (n) => norm(n).includes("gridfin");
@@ -575,8 +604,8 @@ function tryLoadPhotorealModel(inner, hideList, L, glb) {
 // Builds a real-landing-site backdrop: a physically-based golden-hour sky (three.js Sky/Preetham), a
 // reflective animated ocean (three.js Water), and a procedural autonomous-spaceport drone-ship at the
 // landing target. Image-based lighting is baked from the sky so the booster picks up sky/horizon tones.
-function buildEnvironment(scene, renderer, sun, groundY) {
-  scene.fog = new THREE.FogExp2(0xaab9c8, 0.00012); // sea haze (set before Water so it inherits fog)
+function buildEnvironment(scene, renderer, sun, groundY, site) {
+  scene.fog = site?.kind === "land" ? null : new THREE.FogExp2(0xaab9c8, 0.00012);
 
   // --- sky (Preetham), warm late-afternoon sun (clear enough to read as a real sky) ---
   const sky = new Sky(); sky.scale.setScalar(450000);
@@ -597,6 +626,24 @@ function buildEnvironment(scene, renderer, sun, groundY) {
   const envScene = new THREE.Scene(); envScene.add(sky);
   scene.environment = pmrem.fromScene(envScene).texture;
   scene.add(sky); // re-parent the sky dome into the live scene
+
+  if (site?.kind === "land") {
+    const terrain = new THREE.Mesh(new THREE.PlaneGeometry(2000000, 2000000),
+      new THREE.MeshStandardMaterial({ color: 0x647666, roughness: 1 }));
+    terrain.rotation.x = -Math.PI / 2; terrain.position.y = groundY - 0.1;
+    terrain.name = "land-surface"; terrain.receiveShadow = true; scene.add(terrain);
+    for (const [name, point] of [["launch-pad", site.launch_position], ["landing-target", [0, 0, 0]]]) {
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(30, 30, 0.2, 64),
+        new THREE.MeshStandardMaterial({ color: 0x252c33, roughness: 0.8 }));
+      pad.name = name; pad.position.set(point[0], groundY, point[2]);
+      pad.receiveShadow = true; scene.add(pad);
+      const mark = new THREE.Mesh(new THREE.RingGeometry(15, 15.6, 64),
+        new THREE.MeshBasicMaterial({ color: 0xe6e9dd, side: THREE.DoubleSide }));
+      mark.rotation.x = -Math.PI / 2; mark.position.copy(pad.position); mark.position.y += 0.12;
+      scene.add(mark);
+    }
+    return { water: null, sky };
+  }
 
   // --- reflective ocean ---
   const water = new Water(new THREE.PlaneGeometry(20000, 20000), {
@@ -733,12 +780,15 @@ const PHASE_MARK = { 0: ["Entry Burn", "Reentry"], 1: ["Aero Guidance", "Grid Fi
   2: ["Landing Burn", "Braking"], 3: ["Landing", "Touchdown"] };
 
 function buildHUD(V) {
+  $("vehicleLabel").textContent = V.attached_component ? "Attached launch stack" : "Booster · Stage 1";
+  $("engineLabel").textContent = `${V.n_engines} × main engine`;
+  $("gimbalLabel").textContent = `TVC 1 / ${V.gimbal_idx.length}`;
   // octaweb engine-status ring: 1 center + 8 around, mirroring the real Merlin layout (dots #oct0..#oct8)
   const svg = $("octSvg"), NS = "http://www.w3.org/2000/svg";
   const ring = document.createElementNS(NS, "circle");
   ring.setAttribute("cx", "50"); ring.setAttribute("cy", "50"); ring.setAttribute("r", "30");
   ring.setAttribute("class", "ring"); svg.appendChild(ring);
-  for (let e = 0; e < 9; e++) {
+  for (let e = 0; e < V.n_engines; e++) {
     let cx = 50, cy = 50;
     if (e > 0) { const th = ((e - 1) / 8) * Math.PI * 2 - Math.PI / 2; cx = 50 + 30 * Math.cos(th); cy = 50 + 30 * Math.sin(th); }
     const d = document.createElementNS(NS, "circle");
@@ -757,15 +807,22 @@ function buildHUD(V) {
 // mission timeline: a marker at each phase entry (derived from the replay) plus an END marker
 function buildTimeline(frames, tEnd, phaseNames) {
   const host = $("tlMarkers");
+  host.replaceChildren();
+  let lastLabelPixel = -Infinity;
   const segs = []; let last = null;
   for (const f of frames) { if (f.phase !== last) { segs.push({ t: f.t, phase: f.phase }); last = f.phase; } }
   const add = (t, lbl, sub) => {
     const frac = THREE.MathUtils.clamp(t / Math.max(tEnd, 1e-6), 0, 1);
     const m = document.createElement("div"); m.className = "tlMarker";
     m.style.left = (4 + frac * 92) + "%"; m.dataset.t = t; // 4%..96% track inset
+    m.title = `${lbl}${sub ? " · " + sub : ""} · T+${t.toFixed(2)} s`;
+    const pixel = frac * $("timeline").clientWidth * 0.92;
+    const showLabel = pixel - lastLabelPixel >= 120;
+    if (showLabel) lastLabelPixel = pixel;
     for (const [cls, text] of [["mlbl", lbl], ["msub", sub], ["tick", ""], ["dot", ""]]) {
       if (cls === "msub" && !text) continue;
       const child = document.createElement("div"); child.className = cls;
+      if (!showLabel && (cls === "mlbl" || cls === "msub")) child.style.visibility = "hidden";
       child.textContent = text; m.appendChild(child);
     }
     host.appendChild(m);
@@ -795,7 +852,7 @@ function updateHUD(a, b, s, V, vel, totThr, engThr, frac, thrustN) {
   // ---- phase tag + name ----
   const ph = a.phase, names = V.phase_names || { 0: "Reentry Burn", 1: "Aero Descent", 2: "Powered Brake", 3: "Powered Descent" };
   const col = PHASE_COLOR[ph] || "#a0c8ff";
-  const tag = $("phaseTag"); tag.textContent = names[ph] || ph; tag.style.color = col;
+  const tag = $("phaseTag"); tag.textContent = a.launch_pending ? "PAD HOLD" : (names[ph] || ph); tag.style.color = col;
   $("phaseName").textContent = names[ph] || ph;
 
   // ---- big broadcast readout (km/h, km) ----
@@ -806,9 +863,9 @@ function updateHUD(a, b, s, V, vel, totThr, engThr, frac, thrustN) {
 
   // ---- octaweb engine status ----
   let lit = 0;
-  for (let e = 0; e < 9; e++) {
+  for (let e = 0; e < V.n_engines; e++) {
     const d = $("oct" + e); if (!d) continue;
-    const on = engThr[e] > 0.02; if (on) lit++;
+    const on = thrustN > 0 && engThr[e] > 0.02; if (on) lit++;
     d.classList.toggle("lit", on);
     d.style.opacity = on ? (0.55 + 0.45 * Math.min(engThr[e] * 1.3, 1)).toFixed(2) : "1";
   }

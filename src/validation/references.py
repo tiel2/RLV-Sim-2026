@@ -11,6 +11,7 @@ from scipy.integrate import solve_ivp
 from scipy.spatial.transform import Rotation
 
 G0 = 9.80665
+_CYL_NODES, _CYL_WEIGHTS = np.polynomial.legendre.leggauss(4)
 
 
 def attitude_error(actual, expected):
@@ -33,7 +34,9 @@ def mass_properties(vehicle, total, gas):
         diagonal = np.array(p.I_dry) + fraction * (np.array(p.I_wet) - p.I_dry)
     elif vehicle.massprops_model == "dual_tank":
         tanks = vehicle.tanks
-        propellant = total - p.m_dry - gas
+        attached = getattr(vehicle, "attached_component", None)
+        attached_mass = float(attached.mass) if attached is not None else 0.0
+        propellant = total - p.m_dry - attached_mass - gas
         if propellant < -1e-9 or gas < 0:
             raise ValueError("reference mass must include structure, main propellant, and gas")
         propellant = max(propellant, 0)
@@ -45,10 +48,16 @@ def mass_properties(vehicle, total, gas):
         ]
         centers = np.r_[np.array(tanks.bottom) + heights[:2] / 2, tanks.rcs_gas_x]
         masses = np.r_[liquid, gas]
-        cg = (p.m_dry * p.x_cg_dry + masses @ centers) / total
+        first = p.m_dry * p.x_cg_dry + masses @ centers
+        if attached is not None:
+            first += attached_mass * attached.x_cg
+        cg = first / total
         diagonal = np.array(p.I_dry, dtype=float)
         diagonal[1:] += p.m_dry * (p.x_cg_dry - cg) ** 2
-        nodes, weights = np.polynomial.legendre.leggauss(4)
+        if attached is not None:
+            diagonal += np.array(attached.inertia)
+            diagonal[1:] += attached_mass * (attached.x_cg - cg) ** 2
+        nodes, weights = _CYL_NODES, _CYL_WEIGHTS
         for mass, radius, height, center in zip(masses, radii, heights, centers, strict=True):
             axial_positions = center + height * nodes / 2
             diagonal[0] += mass * radius**2 / 2

@@ -1,0 +1,33 @@
+# Equivalent attached ascent stack. All masses/geometry are provisional assumptions.
+# Body origin at stack nose; booster nose at x=-28 m, engine plane at x=-70 m.
+defaults:
+  - falcon9_octaweb
+  - _self_
+
+geom:
+  length: 70.0
+  x_eng: -70.0
+  fwd_axis: [1.0, 0.0, 0.0] # nose-first ascent; do not reuse for engine-first recovery
+mass:
+  m_dry: 25000.0 # booster structure ONLY; builder adds attached_component
+  m_wet: 545200.0 # entire stack: 25 t + 120 t + 400 t main fuel + 0.2 t RCS
+  x_cg_dry: -58.0
+  x_cg_wet: -45.0 # unused by dual_tank
+  I_dry: [43000.0, 3.7e6, 3.7e6]
+attached_component:
+  aft_x: -28.0 # visualization interface in the same stack-nose body coordinates
+  mass: 120000.0 # upper stage + its unburned propellant + Dragon/payload, held fixed
+  x_cg: -14.0
+  inertia: [194400.0, 7.94e6, 7.94e6] # about attached component's own CG
+tanks:
+  density: [1230.0, 810.0] # assumed densified LOX / RP-1
+  radius: [1.8, 1.8]
+  bottom: [-54.0, -68.0]
+  length: [25.0, 14.0]
+  rcs_gas_x: -58.0
+engines:
+  x_eng: -70.0
+  gimbal_mask: [1, 1, 1, 1, 1, 1, 1, 1, 1] # assumed all-engine steering
+  thrust_vac: 914000.0 # provisional historical-class value, not CRS-11 engine telemetry
+  nozzle_exit_area: 0.68
+  isp: 311.0

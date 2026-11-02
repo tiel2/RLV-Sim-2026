@@ -91,6 +91,8 @@ class PlantState:
 
     key: Array  # (2,) uint32 seed material copied into the native RNG at session creation
     done: Array  # () bool — frozen after termination predicate fires
+    launch_pending: Array = False  # held on a rigid pad until upward acceleration; one-way release
+    liftoff_time: Array = -1.0  # native release epoch; negative means no release occurred
 
 
 # --------------------------------------------------------------------------- #
@@ -156,7 +158,7 @@ class VehicleGeom:
     x_eng: (
         Array  # () engine gimbal point, body-x coord relative to nose-origin [m] (negative = aft)
     )
-    fwd_axis: Array  # (3,) engine-forward aero axis in body frame (= [-1,0,0])
+    fwd_axis: Array  # (3,) aero reference axis: [-1,0,0] recovery or [1,0,0] nose-first ascent
 
 
 @immutable_dataclass

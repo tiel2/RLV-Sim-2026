@@ -2,9 +2,9 @@
 
 [English version](3_project_guide_en.md)
 
-RLV-Sim은 Falcon 9 1단의 재진입·하강·착륙을 모사하고 유도·항법·제어 알고리즘을 교체해 실험하는 연구용 시뮬레이터다. Python은 설정, GNC, 실행 일정, 결과 분석을 담당하고 C++은 6자유도 물리 모델과 수치 적분을 담당한다.
+RLV-Sim은 Falcon 9 계열 기체의 결합체 상승과 1단 재진입·하강·착륙을 구간별로 모사하고 유도·항법·제어 알고리즘을 교체해 실험하는 연구용 시뮬레이터다. 아직 발사부터 착륙까지 연결된 전체 임무는 아니다. Python은 설정, GNC, 실행 일정, 결과 분석을 담당하고 C++은 6자유도 물리 모델과 수치 적분을 담당한다.
 
-이 문서는 2026-10-21의 공통 실행기·지정 입력 개루프 실험·물리 검증 기능까지 반영했다. 기존 폐루프 GNC·Monte Carlo와 함께, 독립적인 초기조건을 쓰는 13개 차량 실험, 핀 전개, 물리량·이벤트 기록, 해석 기준 및 적분 간격 비교를 설명한다. 센서 항법은 아직 구현하지 않았다. 수식은 구현을 설명하기 위한 것이며, 생략한 항이나 공칭 근사를 해당 위치에 명시한다. 수식의 근거는 각 절에 연결한 소스다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 `$...$`, `$$...$$` 및 흐름도를 렌더링할 수 있다.
+이 문서는 2026-11-02의 공통 실행기·지정 입력 개루프 실험·물리 검증 기능까지 반영했다. 기존 폐루프 GNC·Monte Carlo와 함께, 기존 13개 차량 실험과 새 150초 상승 실험, 핀 전개, 물리량·이벤트 기록, 독립 적분·운동량 수지 및 Replay 검사를 설명한다. 개발 순서는 **동역학 구현·검증 → 렌더링 검증 → 가이드 기록 → 이후 실비행 데이터 검증**이다. 센서 항법은 아직 구현하지 않았다. 수식은 구현을 설명하기 위한 것이며, 생략한 항이나 공칭 근사를 해당 위치에 명시한다. 수식의 근거는 각 절에 연결한 소스다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 `$...$`, `$$...$$` 및 흐름도를 렌더링할 수 있다.
 
 ## 목차
 
@@ -24,6 +24,8 @@ RLV-Sim은 Falcon 9 1단의 재진입·하강·착륙을 모사하고 유도·�
 
 차량 물리 실험부터 시작하려면 [개루프 시나리오·초기조건](#prescribed-experiments), [시나리오별 검증 목적](#scenario-verification-purpose), [적분 간격 검사](#convergence-check), [실행 검증 기록](#vehicle-check-records)을 참고한다.
 
+상승·MECO·짧은 무추력 구간의 현재 구현과 검증 결과는 [12.6절](#ascent-physics)에 정리했다.
+
 <a id="overview"></a>
 
 ## 1. 프로젝트 범위와 구현 현황
@@ -32,12 +34,12 @@ RLV-Sim은 Falcon 9 1단의 재진입·하강·착륙을 모사하고 유도·�
 
 | 영역 | 구현 내용 | 현재 상태·해석 |
 |---|---|---|
-| 기체 | `falcon9_stage1` 단일 엔진, `falcon9_octaweb` 9엔진 | 공개 근사값 기반 Falcon 9 1단 모델 |
+| 기체 | `falcon9_stage1` 단일 엔진, `falcon9_octaweb` 9엔진, `falcon9_ascent` 결합체 | 공개 근사값·명시적 가정 기반 모델; 단분리 미구현 |
 | 운동 | 병진·회전, quaternion, 연료 소모, 가변 관성 | C++의 단일 물리 구현 |
 | 공력 | 선형 모델, 해석식 생성 계수표, 파일 기반 계수표, grid fin | 기본 표는 실측 공력 데이터베이스가 아님 |
 | 구동기 | throttle, TVC, fin | 이상·단순화·현실적 모델 선택 |
 | RCS | 개별 노즐의 힘·토크·연료 소모, 3축 12노즐 / roll 전용 4노즐 | 독립적인 PWM / 평균 추력 모델; 기본 할당은 비활성 |
-| 질량 특성 | LOX/RP-1 액체 높이·CG·관성, 별도 RCS 가스 | O/F 2.56, 설정 가능한 원통 형상 |
+| 질량 특성 | LOX/RP-1 액체 높이·CG·관성, 별도 RCS 가스, 상승용 고정 부착 질량 | O/F 2.56, 설정 가능한 원통 형상; 부착 질량은 1단 연료로 소모되지 않음 |
 | 환경 | 고도별 역제곱 중력, 층별 표준대기, 정상풍·난류, 국소 지구 회전 항 | 고정 원점 NED; `inverse_square`·`ussa_poly` 기본 |
 | 연료 출렁임 | 없음, 진자, 스프링–질량 모델 | 2개 횡방향 모드 |
 | 고장 | 엔진 정지·추력 저하, TVC 편향, fin 고착, RCS 노즐 성능 저하 | RCS 고장은 `plant.rcs.thrust_scale`로 별도 지정 |
@@ -49,8 +51,8 @@ RLV-Sim은 Falcon 9 1단의 재진입·하강·착륙을 모사하고 유도·�
 | 구성 변화 | 핀 공력 노출의 0/1 전환 | 순간 전개 근사; 전개 충격·질량·관성 변화 없음 |
 | 실험 | 단일 실행, CPU 병렬 Monte Carlo, 명령 지연 | 초기조건 분산 및 시드 재현성 지원 |
 | 분석 | 궤적, 힘·모멘트·질량 특성, 이벤트, 착륙 판정, 계산 시간 | CSV·JSON·NPZ·그래프; 항법 기록은 해당 모듈 실행 시 생성 |
-| 물리 검증 | 해석 기준 6종, 결정론적 적분 간격 비교 | 구현·수치 일치성 검증; 실비행 데이터 정확도 검증과 구분 |
-| 시각화 | 3D Replay, Frame Studio | 결과 재생과 좌표계 탐색 도구 |
+| 물리 검증 | 해석 기준 6종, 결합 동역학, 적분 간격 비교, 150초 상승 독립 적분·운동량 수지 | 선언한 모델의 구현·수치 일치성 검증; 실비행 정확도 검증과 구분 |
+| 시각화 | 3D Replay, Frame Studio, 상승 결합체·지상 발사대·엔진별 실제 추력 | 기록 상태에 따른 재생; 단분리 애니메이션 없음 |
 
 `gnc/navigation=ekf`는 `NotImplementedError`를 발생시킨다. `IdentityNav`의 선택적 잡음·편향은 상태에 가하는 합성 교란이며 IMU/GNSS/고도계 모델이 아니다. 기본 생성 함수는 잡음 없는 `IdentityNav()`를 반환한다.
 
@@ -464,6 +466,8 @@ I_j=I_{j,dry}+f(I_{j,wet}-I_{j,dry}).
 $$
 
 기본 `dual_tank`는 Module 4 p.13의 O/F 비와 원통 액체 탱크의 질량분포를 사용한다. `m_dry`는 주 추진제와 RCS 가스를 모두 제외한 구조 질량이며, 초기 `scenario.ic.m`과 `m_wet`는 RCS 가스를 포함한 **총질량**이다. 주 추진제 질량은 다음과 같다.
+
+상승 구성은 빌더가 `attached_component`의 고정 질량·CG·관성을 평행축 정리로 합쳐 Plant의 유효 `m_dry`를 만든다. 따라서 아래 식의 `m_dry`는 상승에서는 부착 상단까지 포함하며, 상단 연료를 1단 추진제로 소모하지 않는다. 원래 부품별 설정은 유지한다. 세부 예산은 [12.6절](#ascent-physics)을 참고한다.
 
 $$
 m_p=\max(m-m_{dry}-m_{RCS},0),\qquad
@@ -995,6 +999,8 @@ SCvx에서 `convex_solver`는 LCvx 초기화 solver를 선택한다. SCvx 부분
 
 현재 실행의 종료 사유는 `TOUCHDOWN`, `MAX_STEPS`, `CRASH` 등이다. `FUEL_DEPLETED` enum은 이전 결과와의 호환을 위해 유지하지만, 현재 Plant는 주 연료 고갈 후에도 비행을 계속한다. `fuel_margin`은 RCS 가스를 제외한 주 추진제 잔량이다. 지면 통과 전후 로그 상태를 보간해 접지 성능을 구한다. 이는 물리 적분 자체를 정확한 접촉 사건 시각에서 다시 푸는 것과는 다르다.
 
+`launch_pad=true`인 상승 초기 상태는 별도 지지 상태다. 초기 지면 샘플은 접지 판정에서 제외하고, 해제 전에는 위치·자세·속도·각속도를 고정하며 반력을 기록한다. 해제 후 다시 지면에 도달하면 정상 접지로 처리한다. 발사대에 남은 채 시간 만료한 실행은 착륙 성공이 아니다.
+
 기본 목표가 원점일 때 착륙 지표는:
 
 $$
@@ -1183,9 +1189,9 @@ python scripts/run_single.py plant/actuator=ideal gnc/guidance=scvx \
 
 | 그룹 인자 | 선택 가능한 이름 | 기본값 | 사용 시 확인할 점 |
 |---|---|---|---|
-| `plant/vehicle` | `falcon9_stage1`, `falcon9_octaweb` | `falcon9_stage1` | 단일 엔진 / 9엔진 |
-| `scenario` | `pdg`, `reentry_to_landing`, [개루프 13종](#prescribed-experiments) | `pdg` | 앞의 두 개는 폐루프; 새 시나리오는 지정 입력·물리 설정을 함께 선택 |
-| `plant/aero` | `table`, `linear` | `table` | 기본 table은 해석식 생성 표 |
+| `plant/vehicle` | `falcon9_stage1`, `falcon9_octaweb`, `falcon9_ascent` | `falcon9_stage1` | 단일 엔진 / 9엔진 / 상승 결합체 |
+| `scenario` | `pdg`, `reentry_to_landing`, `ascent`, [기존 개루프 13종](#prescribed-experiments) | `pdg` | 앞의 두 개는 폐루프; 지정 입력 시나리오는 물리 설정을 함께 선택 |
+| `plant/aero` | `table`, `linear`, `ascent` | `table` | 기본 table은 해석식 생성 표; ascent는 별도 nose-first 가정 계수 |
 | `plant/actuator` | `ideal`, `simplified`, `realistic` | `realistic` | 이상 응답 / 선형 지연 / 비선형 제한 포함 |
 | `plant/thrust` | `vacuum`, `sea_level`, `backpressure` | `backpressure` | Plant의 추력 배압 모델 |
 | `plant/slosh` | `none`, `pendulum`, `springmass` | `none` | 출렁임 모델 |
@@ -1537,7 +1543,9 @@ python scripts/benchmark_native.py --help
 
 ### 11.11 지정 입력 시나리오와 초기조건
 
-새 시나리오는 실제 비행을 복원한 자료가 아니라 차량 물리를 관찰하기 위해 설정한 독립 실험이다. 기존 PDG·재진입 사례를 시작 조건으로 사용하지 않는다. 모두 같은 9엔진 기체를 사용하며 구조 질량 25,000 kg, 초기 RCS 가스 200 kg을 총질량에 포함한다. 초기 주 추진제는 `m - 25,200 kg`이다. 엔진을 일부만 켜더라도 기체의 구조 질량을 단일 엔진 모델로 바꾸지 않는다.
+아래 기존 13개 시나리오는 실제 비행을 복원한 자료가 아니라 차량 물리를 관찰하기 위해 설정한 독립 실험이다. 기존 PDG·재진입 사례를 시작 조건으로 사용하지 않는다. 모두 같은 9엔진 기체를 사용하며 구조 질량 25,000 kg, 초기 RCS 가스 200 kg을 총질량에 포함한다. 초기 주 추진제는 `m - 25,200 kg`이다. 엔진을 일부만 켜더라도 기체의 구조 질량을 단일 엔진 모델로 바꾸지 않는다.
+
+추가된 `ascent`는 부착 상단 120,000 kg과 별도 발사 위치를 사용하는 150초 실험이다. 아래 초기조건·질량식과 구분하며, 해당 구성과 독립 검증은 [12.6절](#ascent-physics)을 따른다.
 
 초기 위치는 모두 `r_N=r_E=0`, `r_D=-고도`다. 아래 속도는 NED [m/s], Euler 자세는 roll/pitch/yaw [deg]다. 표의 시간은 접지하지 않았을 때의 최대 실행 시간이다.
 
@@ -1765,6 +1773,87 @@ python scripts/check_vehicle_physics.py --stage all
 
 차량 검증기는 `--stage 1`–`5`와 `--output <directory>`를 지원한다. 실행 결과는 `results/`에 JSON/CSV 판정, NPZ 이력, 설정, 소스 해시·사본으로 저장한다. 결합 검증은 보고서 그림의 PNG/PDF도 생성한다. 생성 결과는 Git에서 제외한다.
 
+<a id="ascent-physics"></a>
+
+### 12.6 상승–MECO–무추력 구간: 물리 검증과 렌더링
+
+**현재 완료한 범위는 결합체의 0–150초 지정 입력 비행이다.** 같은 C++ Plant에서 발사대 해제, 9개 엔진의 realistic throttle/TVC, 질량·CG·관성 변화, 공력, 145초 MECO 명령, 이후 짧은 무추력 비행을 계산한다. MECO는 속도를 순간적으로 바꾸는 사건이 아니라 throttle 목표를 0으로 바꾸는 입력이며, 실제 추력은 구동기 응답에 따라 감소한다. 단분리·뒤집기·부스트백·회수 구간과의 연속 연결은 아직 없다.
+
+| 항목 | 현재 구현·가정 |
+|---|---|
+| 구성 | `scenario=ascent`, `plant/vehicle=falcon9_ascent`, nose-first 상승 공력표 |
+| 질량 예산 | 1단 구조 25,000 + 부착 상단 120,000 + 주 추진제 400,000 + RCS 가스 200 = 545,200 kg |
+| 부착 상단 | 연료·탑재체를 포함하는 고정 등가 질량; 별도 CG·관성, 1단 추진제로 소모되지 않음 |
+| 초기 상태 | 착륙 원점 기준 NED `[14000,-5000,0]` m, 정지·수직 자세, 이미 점화된 엔진 |
+| 지정 입력 | 10–12초 pitch 짐벌 0.002 rad, 50–74초 throttle 0.8, 145초 차단 명령 |
+| 환경·공력 | 고정 국소 NED, 고도별 수직 중력, 층별 대기, 무풍, 핀 수납, slosh 없음 |
+| 데이터 사용 | 계수·질량·조종 입력은 가정값. CRS-11 비교는 기본 비활성, 파라미터 보정은 보류 |
+
+이 값들은 모델 실험 조건이며 CRS-11 실기체 복원값이 아니다. 상세 설정은 [상승 가정 문서](reference/crs11_ascent.md), [기체 YAML](../configs/plant/vehicle/falcon9_ascent.yaml), [입력 YAML](../configs/scenario/ascent.yaml)에 있다.
+
+**검증하는 기본 법칙.** 7.1절의 Newton–Euler 식에 질량 소모와 가변 관성을 함께 적용한다. 비중력 힘을 $\mathbf F_b$, CG 기준 모멘트에 모델의 분사 운동량 유출 항까지 포함한 값을 $\mathbf M_{\rm eff,b}$, 양의 추진제 유출률을 $\dot m_{\rm out}$이라 하면 이 상승 모델은 다음을 만족해야 한다.
+
+$$
+\dot m=-\dot m_{\rm out},\qquad
+m\dot{\mathbf v}_n=m\mathbf g_n+C_{bn}(\mathbf F_b+\mathbf F_{\rm pad,b}),
+$$
+
+$$
+I\dot{\boldsymbol\omega}
+=\mathbf M_{\rm eff,b}+\mathbf M_{\rm pad,b}
+-\boldsymbol\omega\times(I\boldsymbol\omega)-\dot I\boldsymbol\omega.
+$$
+
+엔진 추력에는 배기 운동량에 의한 반력이 이미 포함된다. 추진제 유출이 있는 비행에서 기체의 $m\mathbf v$나 운동에너지를 일정하게 강제하면 안 된다. 적분형 검사는 다음 잔차가 허용값 이내인지 확인한다.
+
+$$
+R_m=m(t)-m(0)+\int_0^t\dot m_{\rm out}\,dt,
+$$
+
+$$
+\mathbf R_p=[m\mathbf v_n]_0^t
+-\int_0^t\{m\mathbf g_n+C_{bn}(\mathbf F_b+\mathbf F_{\rm pad,b})\}\,dt
++\int_0^t\dot m_{\rm out}\mathbf v_n\,dt,
+$$
+
+$$
+\mathbf R_H=[C_{bn}I\boldsymbol\omega]_0^t
+-\int_0^t C_{bn}(\mathbf M_{\rm eff,b}+\mathbf M_{\rm pad,b})\,dt.
+$$
+
+이는 현재 고정 NED·동축 관성 상승 모델의 수지다. 분사 모멘트는 $\mathbf M_{\rm eff,b}$에 이미 들어 있으므로 두 번 더하지 않는다. 질량 분포는 축방향으로 가라앉은 탱크의 준정적 근사이며, 유체 내부 운동이나 상세 배기 유동을 푸는 모델은 아니다.
+
+발사대는 완전 고정 지지 근사다. 지지 중 운동 미분을 0으로 두는 데 필요한 `F_pad_body`, `M_pad_body`를 기록하고 연료·구동기는 계속 적분한다. 자유 상태의 위쪽 가속도가 양수가 되는 native step에서 `launch_pending`을 해제한다. `liftoff`에는 실제 해제 시각과 관측 시각 `detected_at_s`를 구분해 기록한다. 수지 적분도 이 해제 시각을 사용해 불연속 반력을 한 로그 구간 전체로 퍼뜨리지 않는다.
+
+**독립 계산과 결과.** [ascent.py](../src/validation/ascent.py)는 생산용 RHS·질량 함수·공력표 생성 함수를 호출하지 않고 설정 상수에서 힘과 모멘트를 재계산한다. 탱크 질량 분포는 구적법, 자세는 회전행렬, 적분은 DOP853을 사용한다. 명령 경계마다 적분을 나누며, 기준 상대 허용값을 $10^{-12}$에서 $10^{-13}$으로 줄여 기준해 자체의 수렴도 검사한다.
+
+| 150초 전체 이력의 최대 차이 | 측정값 | 허용값 |
+|---|---:|---:|
+| 위치 | $1.00\times10^{-6}$ m | 0.01 m |
+| 속도 | $7.86\times10^{-8}$ m/s | 0.001 m/s |
+| 자세 회전각 | $1.17\times10^{-10}$ rad | $10^{-6}$ rad |
+| 각속도 | $6.28\times10^{-12}$ rad/s | $10^{-6}$ rad/s |
+| 총질량 | $3.22\times10^{-6}$ kg | 0.001 kg |
+
+로그 적분 간격을 0.01 → 0.005초로 줄이면 최대 수지 잔차는 질량 0.09568 → 0.02399 kg, 선운동량 79.05 → 19.82 kg·m/s, 각운동량 63.42 → 15.83 kg·m²/s로 감소했다. 세 잔차 모두 세밀한 로그의 허용값과 감소율 조건을 통과했다. 이 검사는 기록한 하중의 수지 검사이며, 하중 자체의 독립 검증은 위 DOP853 비교가 담당한다. 기준해 차이보다 작은 숫자의 유효 자릿수까지 정확하다는 뜻은 아니다.
+
+**Replay 계약과 검사.** [replay.py](../src/sim/replay.py)는 실제 엔진별 `engine_force_body`, 엔진 위치·짐벌 인덱스, `launch_pending`, 부착 상단과 지상 장면 정보를 내보낸다. [app.js](../viz/app.js)는 엔진 수를 고정하지 않고 각 엔진의 추력 방향과 크기로 노즐·화염을 표시한다. 연료 소진으로 추력이 0이면 throttle 상태가 남아도 화염은 꺼진다. 상승에는 별도의 도식적 결합체를 사용하며, 1단 GLB를 전체 길이로 늘리지 않는다. 단분리는 구현되지 않았으므로 표시하지 않는다.
+
+렌더링 좌표는 기록된 CG 궤적과 자세에 맞춘다. 지면 높이는 발사 시 엔진 평면에 맞추기 위한 **시각적 오프셋**이다. 물리 모델의 지면은 여전히 위치 상태의 고도 0이며, 실제 CG 높이·착륙 다리 접촉·발사대 구조를 계산하는 기능이 아니다. 지상 발사대와 상단 형상도 실제 시설·기체의 정밀 형상 모델이 아니다.
+
+Chrome에서 상승 0·11·147초와 11초 역방향 탐색, 단일 엔진 착륙, 연료 고갈의 총 6개 체크포인트를 검사했다. CG 변환, 엔진 수·위치·추력축, 상단 유무, 핀 상태, 발사대 정렬, 무추력 화염 비표시 및 JavaScript 오류 유무를 확인했다. 2026-11-02 전체 Python 테스트는 **321개 통과**했다. [물리 판정 JSON](verification/ascent_physics_results.json)과 [영문 보고서](verification/physics_implementation_report_en.md#6-ascent-physics-and-rendering-verification)에 결과를 보존했다.
+
+```bash
+python scripts/check_ascent_physics.py
+python scripts/run_single.py scenario=ascent hydra.run.dir=results/ascent_physics_replay
+python scripts/view_replay.py results/ascent_physics_replay
+python -m pytest tests/ -q
+```
+
+브라우저 자동 검사는 별도 Playwright 설치와 Chrome/Chromium이 필요하다. 세 Replay 생성 명령과 검사 명령은 [뷰어 안내](../viz/README.md#ascent-and-rendering-checks)에 있다. 비행 데이터 검증 재개 시에만 `scenario.reference.enabled=true`를 명시한다.
+
+**남은 작업.** 다음 동역학 확장은 단분리다. 부착 질량 제거, CG·관성·공력 변경, 좌표 원점 매핑과 분리 충격 가정을 명시하고 질량·운동량 및 상태 연결을 검증해야 한다. 그 후 자세 기동·부스트백을 연결한다. 실기체 공력계수, 지구 곡률·국소 좌표 근사의 오차 예산, 실비행 비교, 센서·항법은 미완료 항목으로 유지한다.
+
 <a id="limitations"></a>
 
 ## 13. 현재 가정과 구현상 제한
@@ -1788,6 +1877,8 @@ python scripts/check_vehicle_physics.py --stage all
 | 탱크·RCS 형상 | 설정 가능한 가정값; 축방향으로 가라앉은 원통 액체·등가 가스 저장소 |
 | 공력계수 | 기본은 해석식 근사, 풍동·비행 데이터에 의한 식별은 별도 필요 |
 | 접촉 | 지면 도달 후 종료·등급 평가; 착륙 다리 접촉 동역학 없음 |
+| 발사대 | 완전 고정 지지·반력·가속도 기반 해제; 점화 시퀀스·구조 탄성·다점 접촉 없음 |
+| 상승·단분리 | 결합체 상승–MECO–150초까지 독립 검증; 상단 제거·분리 충격·부스트백·전체 임무 연결 미구현 |
 | 재진입 시나리오 | 뒤집기 이후부터 시작하는 재진입·하강 실험; 전체 임무 착륙 검증을 뜻하지 않음 |
 | KPI 목표 | 현재 수평 위치 오차는 원점 기준; 유도 목표 변경 시 함께 검토 필요 |
 | Monte Carlo | worker에서 초기조건 분산을 강제 활성화; 저장된 루트 설정만으로 이 변경을 놓치지 않도록 주의 |
