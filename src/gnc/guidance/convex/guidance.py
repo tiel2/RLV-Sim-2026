@@ -84,6 +84,8 @@ class LcvxGuidance:
         self.phase = int(phase)
         self.N = int(N)
         self.target = tuple(float(x) for x in target)
+        # Phase-specific targets are supplied by the GNC builder. Do not override
+        # them here: LCvx and SCvx must use the scheduler's configured handoff.
         self.theta = np.deg2rad(theta_max_deg) if theta_max_deg is not None else None
         self.gamma = np.deg2rad(gamma_gs_deg) if gamma_gs_deg is not None else None
         self.solver = solver
@@ -117,6 +119,8 @@ class LcvxGuidance:
 
     def initial_memory(self) -> dict:
         return {
+            "_planner_phase_owner": self.phase,  # prevent stale plan reuse across phases
+            "phase_reset_count": 0,
             "ignited": False,
             "plan": None,
             "t_ignite": None,
@@ -141,9 +145,30 @@ class LcvxGuidance:
         }
 
     def _memory(self, memory: dict) -> dict:
+        """Ensure an LCvx plan belongs to the *current* engine/target phase.
+
+        The scheduled guidance dispatcher can retain planner memory while changing
+        POWERED_BRAKE (3 engines, 2 km target) to POWERED_DESCENT (1 engine, ground).
+        A cached, frozen, or expired brake plan is invalid in the landing phase.
+        Retain historical solve logs for diagnostics but reset planner-only state.
+        """
         mem = dict(memory)
-        for key, value in self.initial_memory().items():
+        defaults = self.initial_memory()
+        owner = mem.get("_planner_phase_owner")
+        if owner is not None and int(owner) != self.phase:
+            previous_log = list(mem.get("solve_log", []))
+            reset_count = int(mem.get("phase_reset_count", 0)) + 1
+            # Replace only LCvx-specific entries; preserve scheduler/other metadata.
+            for key, value in defaults.items():
+                if key not in ("solve_log", "phase_reset_count"):
+                    mem[key] = value
+            mem["solve_log"] = previous_log
+            mem["phase_reset_count"] = reset_count
+        for key, value in defaults.items():
             mem.setdefault(key, value)
+        # Tag legacy memory without an owner. This is safe for freshly constructed
+        # runs; don't guess the owner of untagged plans from earlier code versions.
+        mem["_planner_phase_owner"] = self.phase
         return mem
 
     def _bp_kw(self):
@@ -276,6 +301,7 @@ class LcvxGuidance:
         grid_fallback=None,
         terminal_slack=False,
         drag_ref=None,
+        drag_fraction=1.0,
     ):
         """Free-time fuel-optimal descent search used for ignition timing.
 
@@ -289,7 +315,9 @@ class LcvxGuidance:
             src_plan, offset = drag_ref
 
             def drag_seq_fn(tf, n):
-                return self._drag_template(src_plan, offset, float(tf), int(n))
+                return self._drag_template(
+                    src_plan, offset, float(tf), int(n), drag_fraction=drag_fraction
+                )
 
         attempts = []
 
@@ -350,22 +378,80 @@ class LcvxGuidance:
     def _has_drag_template(self) -> bool:
         return self.rho0 > 0.0 and self.drag_cd_s > 0.0
 
-    def _drag_template(self, plan, offset: float, tf: float, n: int):
-        """DESCENDO eq. (21) frozen-coefficient drag template d*_k [1/s] from a previous plan.
+    def _drag_template(
+        self, plan, offset: float, tf: float, n: int, drag_fraction: float = 1.0
+    ):
+        """Frozen linear drag coefficients from a previous trajectory [1/s].
 
-        Sampled at the new grid's node times (``offset`` = elapsed time into the source plan).
-        Returns None when there is no atmosphere (vacuum) or no source plan (SOCP-1 stays
-        drag-free, per DESCENDO)."""
+        Reparameterize the REMAINING source trajectory onto the candidate's
+        normalized time grid. This is important during free-final-time searches:
+        interpolating at literal candidate times otherwise extrapolates the
+        source endpoint (where velocity is often zero) for long candidates,
+        silently suppressing drag on the entire extra tail.
+
+        ``drag_fraction`` applies homotopy / continuation (0 -> requested CdA).
+        Every plan accepted for ignition must reach fraction 1.0.
+        """
         if plan is None or self.drag_cd_s <= 0.0 or self.rho0 <= 0.0:
             return None
-        t_src = np.linspace(0.0, float(plan["tf"]), int(plan["N"]) + 1)
-        t_q = float(offset) + np.linspace(0.0, float(tf), n + 1)[:-1]
+        if not 0.0 <= drag_fraction <= 1.0:
+            raise ValueError("drag_fraction must be between 0 and 1")
+        if not np.isfinite(tf) or tf <= 0.0 or n < 1:
+            raise ValueError("tf and n must describe a positive candidate grid")
+        tf_src = float(plan["tf"])
+        if tf_src <= 0.0:
+            raise ValueError("reference plan duration must be positive")
+        t_src = np.linspace(0.0, tf_src, int(plan["N"]) + 1)
+        t_start = float(np.clip(offset, 0.0, tf_src))
+        # Candidate normalized time -> remaining source trajectory, without
+        # extrapolating a terminal zero-velocity state over arbitrary durations.
+        t_q = t_start + (tf_src - t_start) * np.linspace(0.0, 1.0, n + 1)[:-1]
         alt = np.interp(t_q, t_src, -np.asarray(plan["r"])[:, 2])
         v = np.vstack([np.interp(t_q, t_src, np.asarray(plan["v"])[:, j]) for j in range(3)])
         spd = np.linalg.norm(v, axis=0)
         m = np.interp(t_q, t_src, np.asarray(plan["m"]))
         rho = self.rho0 * np.exp(-np.maximum(alt, 0.0) / float(self.scale_height))
-        return 0.5 * rho * self.drag_cd_s * spd / np.maximum(m, 1.0)
+        d_seq = 0.5 * rho * (self.drag_cd_s * drag_fraction) * spd / np.maximum(m, 1.0)
+        if not np.all(np.isfinite(d_seq)):
+            raise ValueError("nonfinite drag-template coefficient")
+        return d_seq
+
+    def _drag_continuation(self, r0, v0, m0, seed, logged, kind):
+        """Advance from a drag-free seed to the FULL drag coefficient.
+
+        Each successful SOCP becomes the next reference. On an infeasible step,
+        halve the CdA increment; never commit a partial-drag solution as if it
+        represented the configured atmospheric model.
+        """
+        if seed is None or not self._has_drag_template():
+            return seed
+        # SCvx can inherit this class but may override _plan without the LCvx
+        # drag_fraction contract. Preserve its original single-pass behavior.
+        if type(self) is not LcvxGuidance:
+            return logged(kind, lambda: self._plan(r0, v0, m0, drag_ref=(seed, 0.0)))
+        current = seed
+        fraction = 0.0
+        step = 0.25
+        for _ in range(32):
+            if fraction >= 1.0 - 1e-12:
+                return current
+            target_fraction = min(1.0, fraction + step)
+            candidate = logged(
+                kind,
+                lambda source=current, f=target_fraction: self._plan(
+                    r0, v0, m0, drag_ref=(source, 0.0), drag_fraction=f
+                ),
+                target_fraction,
+            )
+            if candidate is None:
+                step *= 0.5
+                if step < 1.0 / 32.0:
+                    return None
+            else:
+                fraction = target_fraction
+                current = candidate
+                step = min(0.25, 1.5 * step)
+        return None  # bound the number of continuation attempts
 
     def _solve_fixed(
         self,
@@ -573,7 +659,7 @@ class LcvxGuidance:
             return self._cutoff(mem)
         return self._track(x_hat, t, mem)
 
-    def _log_solve(self, mem, t, kind, wall_s, plan):
+    def _log_solve(self, mem, t, kind, wall_s, plan, drag_fraction=None):
         """Append every conic attempt made by one guidance operation."""
         attempts = list(getattr(self, "_last_attempts", []))
         if not attempts:
@@ -596,6 +682,7 @@ class LcvxGuidance:
                 {
                     "t": float(t),
                     "kind": kind,
+                    "drag_fraction": drag_fraction,
                     "stage": str(attempt.get("kind", "solve")),
                     "record_type": str(attempt.get("record_type", "solve")),
                     "search_stage": attempt.get("search_stage"),
@@ -626,10 +713,13 @@ class LcvxGuidance:
         if mem["cutoff"] or self._should_cutoff(x_hat):
             return self._cutoff(mem)
 
-        def logged(kind, solve):
+        def logged(kind, solve, drag_fraction=None):
             t0 = time.perf_counter()
             result = solve()
-            self._log_solve(mem, t, kind, time.perf_counter() - t0, result)
+            self._log_solve(
+                mem, t, kind, time.perf_counter() - t0, result,
+                drag_fraction=drag_fraction,
+            )
             return result
 
         if not mem["ignited"]:
@@ -639,12 +729,11 @@ class LcvxGuidance:
                 lambda: self._plan(r0, v0, m0, grid_fallback=self.grid_fallback),
             )
             if new is not None and self._has_drag_template():
-                # DESCENDO SOCP-2 at ignition (N_P=1): re-run the FREE-tf search with the
-                # template from the drag-free seed. A fixed-tf refine at the drag-free tf* can
-                # certify infeasible because the drag-aware feasible window sits elsewhere.
-                socp2 = logged(
-                    "ignite_drag_refine",
-                    lambda: self._plan(r0, v0, m0, drag_ref=(new, 0.0)),
+                # Gradually increase drag and update the trajectory reference
+                # after each feasible SOCP-2 free-time solve; reject partial
+                # continuation if the full configured drag remains infeasible.
+                socp2 = self._drag_continuation(
+                    r0, v0, m0, new, logged, "ignite_drag_refine"
                 )
                 if socp2 is not None:
                     new = socp2
@@ -697,9 +786,8 @@ class LcvxGuidance:
                     # resets the countdown forever and the vehicle hovers instead of flying out.
                     new = logged("reanchor_search", lambda: self._plan(r0, v0, m0))
                     if new is not None and self._has_drag_template():
-                        socp2 = logged(
-                            "reanchor_drag_refine",
-                            lambda: self._plan(r0, v0, m0, drag_ref=(new, 0.0)),
+                        socp2 = self._drag_continuation(
+                            r0, v0, m0, new, logged, "reanchor_drag_refine"
                         )
                         if socp2 is not None:
                             new = socp2
