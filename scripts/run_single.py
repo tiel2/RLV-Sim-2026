@@ -13,7 +13,7 @@ from pathlib import Path
 
 import hydra
 import numpy as np
-from _plotting import plot_episode, plot_physics, plot_plan_tracking
+from _plotting import plot_episode, plot_mission, plot_physics, plot_plan_tracking
 from omegaconf import OmegaConf
 
 from core.seeding import write_manifest
@@ -76,6 +76,7 @@ def main(cfg):
                 "rcs_fuel",
                 "x_cg",
                 "fin_deployment",
+                "configuration",
             )
         },
         **act,
@@ -126,6 +127,7 @@ def main(cfg):
         print(f"replay: {path} ({doc['meta']['n_frames']} frames)")
 
     if cfg.run.save_plots:
+        plot_mission(result, out_dir / "plots")
         plot_physics(physics, out_dir / "plots", reference=reference)
         path = plot_episode(result, out_dir / "plots", title=f"single | {cfg.run.run_id}")
         print(f"plot: {path}")

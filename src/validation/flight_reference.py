@@ -64,6 +64,8 @@ def compare_flight_reference(result, config, *, data_root=None):
         raise ValueError("reference offsets/range must be finite with end > start")
     mask = (rt >= start) & (rt <= end)
     mask &= (rt + offset >= result.t[0]) & (rt + offset <= result.t[-1])
+    if config.get("exclude_initial_sample", False):
+        mask &= rt + offset > result.t[0] + 1e-9
     time = rt[mask]
     if len(time) < 2:
         raise ValueError("insufficient overlapping reference coverage")
@@ -76,12 +78,16 @@ def compare_flight_reference(result, config, *, data_root=None):
         arrays[f"simulation_{key}"] = np.interp(time + offset, result.t, simulated)
         arrays[f"error_{key}"] = arrays[f"simulation_{key}"] - observed[mask]
     events = json.loads((root / "events.json").read_text())
-    windows = {
-        "requested_overlap": (start, end),
-        "early_ascent": (0, events["throttle_down_start"]),
-        "throttle_down": (events["throttle_down_start"], events["throttle_down_end"]),
-        "late_ascent": (events["throttle_down_end"], events["meco"]),
-    }
+    segment = str(config.get("segment", "ascent"))
+    windows = {"requested_overlap": (start, end)}
+    if segment == "ascent":
+        windows.update(
+            early_ascent=(0, events["throttle_down_start"]),
+            throttle_down=(events["throttle_down_start"], events["throttle_down_end"]),
+            late_ascent=(events["throttle_down_end"], events["meco"]),
+        )
+    else:
+        windows[segment] = (start, end)
     metrics = {}
     for phase, (lo, hi) in windows.items():
         selected = (time >= lo) & (time <= hi)
@@ -90,13 +96,28 @@ def compare_flight_reference(result, config, *, data_root=None):
             for key in ("altitude_m", "speed_m_s")
         }
     checkpoints = {}
-    for label, epoch in (("meco_command", events["meco"] + offset), ("final", result.t[-1])):
+    event_names = {
+        "ascent": [("meco_command", "meco")],
+        "entry_burn": [("entry_start", "entry_start"), ("entry_end", "entry_end")],
+        "aero_descent": [("entry_end", "entry_end"), ("landing_start", "landing_start")],
+        "powered_descent": [("landing_start", "landing_start"), ("landing_end", "landing_end")],
+    }
+    epochs = [
+        (label, events[key] + offset)
+        for label, key in event_names.get(segment, [])
+        if start <= events[key] <= end
+    ]
+    epochs += [("initial", float(result.t[0])), ("final", float(result.t[-1]))]
+    for label, epoch in epochs:
+        if epoch < result.t[0] - 1e-9 or epoch > result.t[-1] + 1e-9:
+            continue
         index = int(np.argmin(np.abs(result.t - epoch)))
         if abs(float(result.t[index]) - epoch) > 1e-7:
             continue  # never present a nearby log sample as an exact event state
         aux = result.aux["per_tick"][index]
         checkpoints[label] = {
             "time_s": float(result.t[index]),
+            "reference_time_s": float(result.t[index] - offset),
             **{
                 key: np.asarray(getattr(result, key)[index]).tolist()
                 for key in ("r_ned", "v_ned", "q_bn", "w_body", "m", "throttle_act", "tvc")
@@ -109,6 +130,7 @@ def compare_flight_reference(result, config, *, data_root=None):
     report = {
         "status": "comparison_only",
         "role": str(config.role),
+        "segment": segment,
         "reference_commit": manifest["commit"],
         "source": "stage1_raw.json",
         "conventions": str(config.conventions),
@@ -117,6 +139,15 @@ def compare_flight_reference(result, config, *, data_root=None):
         "altitude_offset_m": height_offset,
         "requested_range_s": [start, end],
         "overlap_range_s": [float(time[0]), float(time[-1])],
+        "simulation_reference_range_s": [float(result.t[0] - offset), float(result.t[-1] - offset)],
+        "initial_sample_excluded": bool(config.get("exclude_initial_sample", False)),
+        "available_overlap_duration_s": float(
+            max(0, min(end, result.t[-1] - offset) - max(start, result.t[0] - offset))
+        ),
+        "comparison_ends_early": bool(result.t[-1] - offset < end - 1e-8),
+        "reference_zero_altitude_samples": int(
+            np.count_nonzero(arrays["reference_altitude_m"] == 0)
+        ),
         "weighting": "trapezoidal time weighting; intervals > 1.1 s excluded; no extrapolation",
         "error_sign": "simulation minus reference",
         "metrics": metrics,
@@ -125,7 +156,9 @@ def compare_flight_reference(result, config, *, data_root=None):
         "limitations": [
             "Timing anchors are prescribed inputs, not independently predicted events.",
             "Altitude datum/speed frame remain assumptions; no acceptance limits assigned.",
-            "Attached-stack coast after MECO is excluded from flight-data scoring.",
+            "Only the requested reference window and actual simulated overlap are scored.",
+            "Initial conditions and prescribed event times are not independent predictions.",
+            "Zero displayed altitude is not an exact touchdown measurement.",
         ],
     }
     return report, arrays
@@ -155,7 +188,7 @@ def write_flight_comparison(result, config, out_dir, *, plot=True):
         for ax in axes.flat:
             ax.grid(alpha=0.25)
             ax.set_xlabel("Reference T+ [s]")
-        fig.suptitle(f"CRS-11 ascent: {config.role} (assumed datum/frame)")
+        fig.suptitle(f"CRS-11 {report['segment']}: {config.role} (assumed datum/frame)")
         fig.tight_layout()
         (out / "plots").mkdir(exist_ok=True)
         fig.savefig(out / "plots/flight_comparison.png", dpi=160)

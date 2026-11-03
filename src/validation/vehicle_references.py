@@ -48,8 +48,10 @@ def environment(cfg, altitude):
         pressure = pb[i] * (
             np.exp(-G0 * dh / (287.05287 * tb[i]))
             if lapse[i] == 0
-            else (temperature / tb[i]) ** (-G0 / (lapse[i] * 287.05287))
+            else max(temperature / tb[i], 1e-6) ** (-G0 / (lapse[i] * 287.05287))
         )
+        # Numerical extrapolation beyond the layered model, matching its declared floor.
+        # This does not establish a physical thermosphere model.
         actual_temperature = max(temperature + a.delta_T, 1)
         rho = a.density_scale * pressure / (287.05287 * actual_temperature)
         sound = np.sqrt(1.4 * 287.05287 * actual_temperature)

@@ -1,0 +1,128 @@
+# Specification/optional reference-analysis recipe; not a runnable Hydra scenario.
+# Experiment and burn durations are engineering choices, independent of reference event windows.
+reference:
+  dataset: crs11
+  max_gap_s: 1.1
+  derivative_spans_s:
+  - 2.0
+  - 4.0
+  - 6.0
+  nominal_span_s: 4.0
+  polynomial_degree: 2
+  component_tolerance_mps: 0.01
+recovery_overrides:
+  plant:
+    vehicle:
+      engines:
+        thrust_vac: 914000.0
+        nozzle_exit_area: 0.68
+      tanks:
+        density:
+        - 1230.0
+        - 810.0
+        radius:
+        - 1.8
+        - 1.8
+        bottom:
+        - -26.0
+        - -40.0
+        length:
+        - 25.0
+        - 14.0
+segments:
+  ascent:
+    base_scenario: ascent
+    start_event: liftoff
+    end_event: meco
+    start_s: 0.0
+    end_s: 145.0
+    mass_kg: 545200.0
+    rcs_fuel_kg: 200.0
+    horizontal_position_m:
+    - 14000.0
+    - -5000.0
+    horizontal_frame: assumed_landing_origin
+    velocity_heading_deg: 45.0
+    attitude: vertical
+    roll_deg: 0.0
+    fin_deployment: 0.0
+    active_engines:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    input_policy: retain_existing_ascent_schedule
+    experiment_duration_s: 150.0
+    burn_duration_s: 145.0
+  entry_burn:
+    base_scenario: entry_burn
+    start_event: entry_start
+    end_event: entry_end
+    start_s: 372.0
+    end_s: 384.0
+    mass_kg: 40000.0
+    rcs_fuel_kg: 200.0
+    horizontal_position_m:
+    - 0.0
+    - 0.0
+    horizontal_frame: segment_start_ground_projection
+    velocity_heading_deg: 0.0
+    attitude: initial_retrograde
+    roll_deg: 0.0
+    fin_deployment: 1.0
+    active_engines:
+    - 0
+    - 1
+    - 5
+    throttle: 0.5
+    input_policy: prescribed_constant_burn_then_cutoff
+    experiment_duration_s: 14.0
+    burn_duration_s: 12.0
+  aero_descent:
+    base_scenario: aero_descent
+    start_event: entry_end
+    end_event: landing_start
+    start_s: 384.0
+    end_s: 429.0
+    mass_kg: 34000.0
+    rcs_fuel_kg: 200.0
+    horizontal_position_m:
+    - 0.0
+    - 0.0
+    horizontal_frame: segment_start_ground_projection
+    velocity_heading_deg: 0.0
+    attitude: initial_retrograde
+    roll_deg: 0.0
+    fin_deployment: 1.0
+    active_engines: []
+    throttle: 0.0
+    input_policy: unpowered_neutral_fins
+    experiment_duration_s: 45.0
+    burn_duration_s: 0.0
+  powered_descent:
+    base_scenario: powered_descent
+    start_event: landing_start
+    end_event: landing_end
+    start_s: 429.0
+    end_s: 462.0
+    mass_kg: 32000.0
+    rcs_fuel_kg: 200.0
+    horizontal_position_m:
+    - 0.0
+    - 0.0
+    horizontal_frame: segment_start_ground_projection
+    velocity_heading_deg: 0.0
+    attitude: initial_retrograde
+    roll_deg: 0.0
+    fin_deployment: 1.0
+    active_engines:
+    - 0
+    throttle: 0.55
+    input_policy: prescribed_constant_burn_then_cutoff
+    experiment_duration_s: 22.0
+    burn_duration_s: 20.0

@@ -1,0 +1,37 @@
+# @package _global_
+# Assumed experiment inputs; preserve the ascent/separation vehicle and fuel budgets.
+defaults:
+  - ascent_separation
+  - _self_
+scenario:
+  name: ascent_boostback
+  input_mode: mission
+  description: Continuous ascent, separation, RCS slew, reserved-fuel boostback and coast.
+  horizon:
+    t_max: 550.0
+    input_dt: 0.02
+    log_dt: 0.2
+  mission:
+    target_ne_m: [0.0, 0.0]
+    interface_altitude_m: 60000.0
+    target_tolerance_m: 10000.0 # experiment diagnostic, not a landing tolerance
+    rcs_duty_quantum: 0.05 # fixed command resolution; unchanged when plant_dt is refined
+    max_rate_rad_s: 0.014
+    max_accel_rad_s2: 0.0007
+    attitude_bandwidth: 0.08
+    burn_bandwidth: 0.2
+    attitude_tolerance_deg: 1.0
+    rate_tolerance_rad_s: 0.0005
+    hold_s: 2.0
+    maneuver_timeout_s: 300.0
+    rcs_reserve_kg: 30.0
+    main_reserve_kg: 4000.0 # experiment reserve, not established recovery fuel demand
+    engines: [0, 1, 5]
+    throttle: 0.7
+    cutoff_mode: target # target | delta_v | duration
+    delta_v_mps: 300.0
+    burn_timeout_s: 35.0
+    burn_abort_angle_deg: 8.0
+    cutoff_timeout_s: 5.0
+    thrust_off_n: 0.000001
+    coast_s: 10.0

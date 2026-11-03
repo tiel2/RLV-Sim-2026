@@ -79,3 +79,43 @@ def test_airborne_aero_timeout_has_no_leg_deployment():
     doc = build_replay_doc(result, bundle, cfg)
     assert doc["meta"]["leg_deploy"]["t"] is None
     assert doc["meta"]["leg_deploy"]["visual_only"] is True
+
+
+def test_rcs_display_preserves_short_burns_sign_and_failed_nozzles():
+    cfg = compose_cfg(["scenario=free_rotation", "scenario.horizon.t_max=0.2"])
+    cfg.scenario.horizon.log_dt = 0.1
+    cfg.scenario.inputs = [
+        {"t": 0, "rcs": [0, 0, 0]},
+        {"t": 0.021, "rcs": [0.25, 0, 0]},
+        {"t": 0.043, "rcs": [-0.25, 0, 0]},
+        {"t": 0.065, "rcs": [0, 0, 0]},
+    ]
+    cfg.plant.rcs.thrust_scale = [0] + [1] * 11
+    bundle, result = run_configured(cfg)
+    doc = build_replay_doc(result, bundle, cfg, max_frames=2)
+    rows = doc["meta"]["rcs_activity"]
+    np.testing.assert_allclose([r["t"] for r in rows], [0, 0.021, 0.043, 0.065, 0.2])
+    assert np.flatnonzero(rows[1]["duty"]).tolist() == [1]  # positive pair, one failed
+    assert np.flatnonzero(rows[2]["duty"]).tolist() == [2, 3]  # opposite pair
+    np.testing.assert_array_equal(rows[3]["duty"], 0)
+    np.testing.assert_allclose(
+        doc["meta"]["vehicle"]["rcs"]["positions"], bundle.params.rcs.positions
+    )
+    # Exhaust must oppose the force directions exported from the physical plant.
+    np.testing.assert_allclose(
+        doc["meta"]["vehicle"]["rcs"]["directions"], bundle.params.rcs.directions
+    )
+
+
+def test_empty_rcs_tank_suppresses_commanded_display_activity():
+    cfg = compose_cfg(
+        ["scenario=free_rotation", "scenario.horizon.t_max=0.1", "scenario.ic.rcs_fuel=0"]
+    )
+    cfg.scenario.inputs = [{"t": 0, "rcs": [1, 1, 1]}]
+    bundle, result = run_configured(cfg)
+    doc = build_replay_doc(result, bundle, cfg)
+    assert all(not any(r["duty"]) for r in doc["meta"]["rcs_activity"])
+    cfg.scenario.ic.rcs_fuel = 5
+    bundle, result = run_configured(cfg)
+    doc = build_replay_doc(result, bundle, cfg)
+    assert any(doc["meta"]["rcs_activity"][-1]["duty"])  # timeout must not invent shutdown

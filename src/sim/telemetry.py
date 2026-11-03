@@ -32,13 +32,30 @@ def write_telemetry(result, out_dir) -> dict[str, Path]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     paths = {}
+    if "mission" in result.aux:
+        path = out / "mission.json"
+        path.write_text(json.dumps(result.aux["mission"], indent=2, allow_nan=False))
+        paths["mission"] = path
+        records = result.aux["mission_records"]
+        if records:
+            path = out / "mission.npz"
+            np.savez_compressed(
+                path,
+                **{
+                    k: np.array([np.nan if row[k] is None else row[k] for row in records])
+                    for k in records[0]
+                },
+            )
+            paths["mission_history"] = path
     timing = out / "timing.json"
     timing.write_text(json.dumps(result.aux["schedule"], indent=2))
     paths["timing"] = timing
     schema = {
         "version": 1,
         "time": "seconds since simulation epoch; native state time, not wall-clock time",
-        "state_frame": "r_ned/v_ned: North-East-Down; altitude=-r_ned[2]",
+        "state_frame": (
+            "active vehicle CG in NED; altitude=-r_ned[2]; separation changes tracked CG"
+        ),
         "attitude": "q_bn=[w,x,y,z], body-to-NED; w_body in body rad/s",
         "state_units": "r:m, v:m/s, m:kg",
         "trajectory": "initial truth, log_dt endpoints, prescribed events, and terminal endpoint",
@@ -54,6 +71,8 @@ def write_telemetry(result, out_dir) -> dict[str, Path]:
             "events": "inputs exact on grid; depletion detection uncertainty is recorded",
             "liftoff": "native release epoch; one plant step uncertainty; detection epoch separate",
             "event_sampling": "configuration is post-event; actuators precede next input",
+            "configuration": "0: initial vehicle; 1: retained booster after separation",
+            "separation": "events.json stores both limits and removed-body state at release",
         },
         "navigation": "synchronous truth/measurement/estimate at every nav update; not log_dt",
         "navigation_errors": "estimate minus truth; attitude is shortest rotation angle in rad",
@@ -143,7 +162,11 @@ def write_physics(result, out_dir):
     events = result.aux.get("events", [])
     (out / "events.json").write_text(json.dumps(events, indent=2))
     metrics = {
-        "execution_status": "ground_contact"
+        "execution_status": (
+            "mission_abort" if result.aux["mission"]["failure"] else "mission_complete"
+        )
+        if result.aux.get("mission", {}).get("completed") or result.termination_reason == 6
+        else "ground_contact"
         if result.landing_class is not None
         else "horizon_reached",
         "input_mode": result.aux.get("input_mode", "closed_loop"),
@@ -153,7 +176,15 @@ def write_physics(result, out_dir):
         "max_dynamic_pressure_pa": float(np.max(arrays["aero_q_dyn"])),
         "max_mach": float(np.max(arrays["mach"])),
         "max_alpha_deg": float(np.rad2deg(np.max(arrays["aero_alpha"]))),
-        "propellant_consumed_kg": float(result.m[0] - result.m[-1]),
+        "propellant_consumed_kg": float(
+            arrays["main_propellant"][0]
+            - arrays["main_propellant"][-1]
+            + arrays["rcs_fuel"][0]
+            - arrays["rcs_fuel"][-1]
+        ),
+        "separated_mass_kg": sum(
+            e["removed"]["m"] for e in events if e["kind"] == "stage_separation"
+        ),
         "final_main_propellant_kg": float(arrays["main_propellant"][-1]),
         "final_rcs_propellant_kg": float(arrays["rcs_fuel"][-1]),
         "final_altitude_m": float(arrays["altitude_m"][-1]),

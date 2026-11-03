@@ -190,3 +190,42 @@ def plot_physics(data, out_dir, reference=None):
         fig.tight_layout()
         fig.savefig(out / "analytical_comparison.png", dpi=120)
         plt.close(fig)
+
+
+def plot_mission(result, out_dir):
+    """Attitude tracking, fuel and projected miss; target projection is diagnostic only."""
+    rows = result.aux.get("mission_records", [])
+    if not rows:
+        return None
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    t = np.array([r["t"] for r in rows])
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8))
+    axes[0, 0].plot(t, np.rad2deg([r["attitude_error_rad"] for r in rows]))
+    axes[0, 0].set(ylabel="attitude error [deg]", title="Quaternion reference tracking")
+    axes[0, 1].plot(t, np.rad2deg([r["rate_rad_s"] for r in rows]), label="actual")
+    axes[0, 1].plot(t, np.rad2deg([np.linalg.norm(r["w_ref"]) for r in rows]), label="reference")
+    axes[0, 1].set(ylabel="angular rate [deg/s]", title="Rate magnitude")
+    axes[0, 1].legend()
+    axes[1, 0].plot(t, [r["main_propellant_kg"] / 1000 for r in rows], label="main [t]")
+    second = axes[1, 0].twinx()
+    second.plot(t, [r["rcs_fuel_kg"] for r in rows], color="tab:orange", label="RCS [kg]")
+    axes[1, 0].set(ylabel="main propellant [t]", title="Separate propellant budgets")
+    second.set_ylabel("RCS propellant [kg]", color="tab:orange")
+    axes[1, 1].plot(
+        t, [np.nan if r["projected_miss_m"] is None else r["projected_miss_m"] / 1000 for r in rows]
+    )
+    axes[1, 1].set(
+        ylabel="projected miss [km]", title="Ballistic interface projection — not landing error"
+    )
+    for ax in axes.flat:
+        ax.set_xlabel("mission time [s]")
+        ax.grid(True)
+        for e in result.aux["events"]:
+            if e["kind"] == "mission_transition":
+                ax.axvline(e["t"], alpha=0.15, color="black")
+    fig.tight_layout()
+    path = out_dir / "mission.png"
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+    return path

@@ -15,8 +15,10 @@ class PrescribedInputs:
     it does not represent hinge dynamics, an impulse, or a change in inertia.
     """
 
-    def __init__(self, rows, params, duration):
+    def __init__(self, rows, params, duration, *, separation=None):
         self.dt = float(params.plant_dt)
+        self.separation = separation
+        separated = False
         self.rows = {}
         shapes = {
             "throttle": (len(params.engines.positions),),
@@ -40,7 +42,7 @@ class PrescribedInputs:
         deployment = 1.0
         previous = -1
         for phase, row in enumerate(rows):
-            unknown = set(row) - {*shapes, "t", "label", "fin_deployment"}
+            unknown = set(row) - {*shapes, "t", "label", "fin_deployment", "separate"}
             if unknown:
                 raise ValueError(f"unknown prescribed input fields: {sorted(unknown)}")
             t = float(row["t"])
@@ -73,14 +75,24 @@ class PrescribedInputs:
                 raise ValueError("fin_deployment must be 0 (stowed) or 1 (deployed)")
             if deployment == 0 and float(params.aero.fin_incremental) > 0.5:
                 raise ValueError("fin stow requires a body aero table excluding neutral fins")
+            separate = row.get("separate", False)
+            if not isinstance(separate, bool):
+                raise ValueError("separate must be boolean")
+            if separate:
+                if separation is None or separated or tick == 0:
+                    raise ValueError("separation requires a model and one noninitial event")
+                separated = True
             self.rows[tick] = {
                 "command": ActuatorCommand(**{k: v.copy() for k, v in current.items()}),
                 "phase": phase,
                 "label": str(row.get("label", f"segment_{phase}")),
                 "fin_deployment": deployment,
+                "separate": separate,
             }
         if not self.rows or next(iter(self.rows)) != 0:
             raise ValueError("prescribed inputs require a first row at t=0")
+        if separation is not None and not separated:
+            raise ValueError("separation model requires a separation input event")
 
     @property
     def phase_names(self):

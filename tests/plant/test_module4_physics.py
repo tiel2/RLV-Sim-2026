@@ -212,3 +212,32 @@ def test_fin_force_is_dissipative_and_body_moment_is_lever_cross_force():
 def test_invalid_physical_parameters_are_rejected(override):
     with pytest.raises(ValueError):
         build_bundle([override])
+
+
+def test_session_clock_preserves_pwm_grid_at_late_epoch():
+    b, s, c = case(["environment/gravity=uniform", "environment.atmosphere.g0=0"])
+    s = s.replace(t=np.array(300.0))
+    session = b.native.create_session(s)
+    c = c.replace(rcs=np.array([0.25, 0, 0]))
+    for k in range(50):
+        state, _ = session.advance(c, 20)
+        assert state["t"] == 300.0 + (k + 1) * 20 * float(b.params.plant_dt)
+    flow = 2 * float(b.params.actuator.rcs_thrust) / (float(b.params.actuator.rcs_isp) * 9.80665)
+    assert float(s.rcs_fuel) - session.snapshot(full=True)["rcs_fuel"] == pytest.approx(
+        0.25 * flow, abs=1e-9
+    )
+
+
+def test_high_altitude_reference_matches_declared_numerical_floor():
+    from conftest import compose_cfg
+
+    from plant.dynamics import build_plant
+    from validation.vehicle_references import _constants, environment
+
+    cfg = compose_cfg(["scenario=ascent_boostback"])
+    plant = build_plant(cfg)
+    expected = environment(_constants(cfg), 280000.0)
+    actual = plant.native.environment_diagnostics(280000.0)
+    for key in ("rho", "a_sound", "pressure"):
+        assert np.isfinite(expected[key])
+        assert actual[key] == pytest.approx(expected[key], rel=1e-12, abs=0)

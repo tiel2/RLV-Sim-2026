@@ -95,13 +95,15 @@ async function boot() {
 // ---------------------------------------------------------------- scene setup
 function init(replay) {
   const meta = replay.meta;
-  const V = { ...meta.vehicle, configuration_events: meta.configuration_events,
-    phase_names: meta.phase_names };
+  const vehicles = (meta.vehicles || [meta.vehicle]).map(v => ({ ...v,
+    configuration_events: meta.configuration_events, phase_names: meta.phase_names,
+    procedural_only: (meta.vehicles?.length ?? 1) > 1 }));
+  let V = vehicles[0];
   const frames = replay.frames;
   $("loader").classList.add("hidden");
 
   const app = $("app");
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
@@ -113,12 +115,12 @@ function init(replay) {
   const scene = new THREE.Scene();
   // sky + ocean + droneship are built in buildEnvironment() below (needs the sun light + renderer)
 
-  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 1000000);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 4000000);
   camera.position.set(70, 60, 90);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   // Damping is off: the follow-cam translates camera.position every frame, and OrbitControls' damped
-  // re-solve of a moving rig produces a visible jitter. The follow has its own 0.15 lerp for smoothing.
+  // re-solve of a moving rig produces a visible jitter. Follow the current pose without delay.
   controls.enableDamping = false;
   controls.maxPolarAngle = Math.PI * 0.9; // allow orbiting UNDER the booster to look up at the engines/legs
   controls.minDistance = 8;
@@ -138,8 +140,9 @@ function init(replay) {
   const groundY = meta.scene?.ground_y ?? -Math.abs(V.x_eng - V.x_cg_dry);
   const env = buildEnvironment(scene, renderer, sun, groundY, meta.scene);
   const traj = buildTrajectory(scene, frames);
-  const rocket = buildVehicle(V);
-  scene.add(rocket.group);
+  const rockets = vehicles.map(v => buildVehicle(v));
+  rockets.forEach((r, i) => { r.group.visible = i === 0; scene.add(r.group); });
+  let rocket = rockets[0], configuration = 0;
 
   // engine glow light (brightens with total throttle)
   const plumeLight = new THREE.PointLight(0xff8a44, 0, 240, 2);
@@ -171,6 +174,18 @@ function init(replay) {
   const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qC = new THREE.Quaternion();
   const pA = new THREE.Vector3(), pB = new THREE.Vector3(), pCur = new THREE.Vector3();
   const vCur = new THREE.Vector3();
+  const rcsHistory = meta.rcs_activity || [];
+
+  function rcsAt(t, fallback) {
+    if (!rcsHistory.length) return fallback || [];
+    let lo = 0, hi = rcsHistory.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (rcsHistory[mid].t <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo ? rcsHistory[lo - 1].duty : [];
+  }
 
   function frameAt(t) {
     // binary search for the segment [i, i+1] containing t
@@ -189,10 +204,19 @@ function init(replay) {
 
   function applyFrame(t) {
     const { a, b, s, i } = frameAt(t);
+    const nextConfiguration = a.configuration ?? 0;
+    if (nextConfiguration !== configuration) {
+      rocket.group.visible = false;
+      configuration = nextConfiguration;
+      rocket = rockets[configuration]; V = vehicles[configuration];
+      rocket.group.visible = true;
+      buildHUD(V);
+    }
     pA.fromArray(a.p); pB.fromArray(b.p);
     pCur.lerpVectors(pA, pB, s);
-    qA.fromArray(a.q); qB.fromArray(b.q);
-    qC.slerpQuaternions(qA, qB, s);
+    // JSON exports round components; SLERP and matrix transforms require unit quaternions.
+    qA.fromArray(a.q).normalize(); qB.fromArray(b.q).normalize();
+    qC.slerpQuaternions(qA, qB, s).normalize();
     vCur.set(
       a.v[0] + (b.v[0] - a.v[0]) * s,
       a.v[1] + (b.v[1] - a.v[1]) * s,
@@ -229,6 +253,9 @@ function init(replay) {
     for (let f = 0; f < V.n_fins; f++) rocket.setFin(f, lerpArr(a.fin, b.fin, s, f));
     // Deployment is a discrete physical event, never interpolated before its timestamp.
     rocket.setFinDeployment(a.fin_deployment ?? 1);
+    const rcsDuties = rcsAt(t, a.rcs_on?.map((on, i) => on * (V.rcs?.thrust_scale[i] ?? 1)));
+    rocket.setRcsActivity(rcsDuties);
+    updateRcsHUD(rcsDuties, V);
 
     // Both hulls follow the same recorded visual event. No hinge dynamics are simulated.
     const alt = a.alt + (b.alt - a.alt) * s;
@@ -268,7 +295,7 @@ function init(replay) {
       // and merely tilts it — OrbitControls recomputes position = target + offset every update, so a
       // fixed camera would just look further down instead of descending. The SHARED delta preserves
       // the camera<->target offset, so the user's zoom level and orbit angle are kept while it follows.
-      camDelta.copy(pos).sub(controls.target).multiplyScalar(0.15);
+      camDelta.copy(pos).sub(controls.target);
       controls.target.add(camDelta);
       camera.position.add(camDelta);
     }
@@ -280,12 +307,26 @@ function init(replay) {
       camera.position.copy(PAD_TARGET).add(new THREE.Vector3(100, 25, 100)); controls.target.copy(PAD_TARGET);
     } else if (mode === "chase") {
       const back = lastVel.lengthSq() > 1 ? lastVel.clone().normalize() : new THREE.Vector3(0, 1, 0);
-      camera.position.copy(p).addScaledVector(back, -34).add(new THREE.Vector3(16, 14, 24)); // up-and-behind
+      // A perpendicular component prevents cancellation when velocity points along the
+      // old fixed offset. Fit the complete body even for the 70 m attached stack.
+      const side = new THREE.Vector3().crossVectors(back, camera.up);
+      if (side.lengthSq() < 0.01) side.set(1, 0, 0);
+      side.normalize();
+      const distance = Math.max(80, V.length * 1.9);
+      camera.position.copy(p).addScaledVector(back, -distance * 0.8)
+        .addScaledVector(side, distance * 0.6);
       controls.target.copy(p);
     } else { // orbit: 3/4 high establishing angle
       camera.position.copy(p).add(new THREE.Vector3(64, 42, 78)); controls.target.copy(p);
     }
     controls.update();
+  }
+
+  function renderCurrent() {
+    // Sky is a background centered on the viewer, never a depth-writing box that
+    // intersects the terrain or is crossed by a high-altitude trajectory.
+    env.sky.position.copy(camera.position);
+    renderer.render(scene, camera);
   }
 
   // ------------------------------------------------------------ controls wiring
@@ -340,15 +381,17 @@ function init(replay) {
     const { pCur, vCur } = applyFrame(state.t);
     updateCamera(pCur, vCur);
     if (env.water) env.water.material.uniforms.time.value += dt; // animate the ocean
-    renderer.render(scene, camera);
+    renderCurrent();
   }
   applyFrame(0);
   lastPos.copy(pCur); lastVel.copy(vCur); frameCamera("orbit");
   // Explicit opt-in for automated local geometry checks, absent in normal playback.
   if (new URLSearchParams(location.search).has("inspect")) {
-    window.replayInspection = { scene, rocket, camera, state,
+    window.replayInspection = { scene, get rocket() { return rocket; }, camera, controls, state,
       seek(t) { state.playing = false; state.t = t; applyFrame(t);
-        lastPos.copy(pCur); lastVel.copy(vCur); frameCamera(state.cam); renderer.render(scene, camera); }
+        updateCamera(pCur, vCur); renderCurrent(); },
+      advance(t) { state.t = t; applyFrame(t); updateCamera(pCur, vCur); renderCurrent(); },
+      setCamera(mode) { $("cams").querySelector(`[data-cam=${mode}]`).click(); renderCurrent(); }
     };
   }
   tick();
@@ -368,6 +411,8 @@ function buildVehicle(V) {
   group.add(inner);
 
   const L = V.length, R = V.diameter / 2;
+  group.userData.length = L;
+  group.userData.rcs = V.rcs;
   const joint = V.attached_component?.aft_x ?? 0;
   const boosterLength = L + joint;
   const hullBase = V.x_eng + 1.2; // nozzle bells below the shell, exit at configured engine plane
@@ -437,6 +482,19 @@ function buildVehicle(V) {
     engines.push({ gim, plume, gimbalSlot: V.gimbal_idx.indexOf(e) });
   }
 
+  // Schematic cold-gas nozzles use physical mounts and exhaust opposite to force.
+  const rcs = (V.rcs?.positions || []).map((position, i) => {
+    const mount = new THREE.Group(); mount.name = `rcs-${i}`;
+    mount.position.fromArray(position);
+    const exhaust = new THREE.Vector3(...V.rcs.directions[i]).normalize().negate();
+    mount.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), exhaust);
+    const nozzle = cyl(0.10, 0.07, 0.20, metal); nozzle.position.x = 0.10;
+    mount.add(nozzle);
+    const plume = buildColdGasPlume(); plume.position.x = 0.20; plume.visible = false;
+    mount.add(plume); inner.add(mount);
+    return { mount, plume };
+  });
+
   // --- landing legs (4, at base; deploy outward on final approach) ---
   const legs = [];
   const nLegs = 4;
@@ -457,12 +515,26 @@ function buildVehicle(V) {
   // The first-stage-only GLB must never be stretched to stand in for an attached stack.
   // Dynamic engines and fins remain authoritative with either hull renderer.
   const glb = { legGroups: [], loaded: false };
-  if (!V.attached_component) tryLoadPhotorealModel(inner, hideOnModel, L, glb);
+  if (!V.attached_component && !V.procedural_only) tryLoadPhotorealModel(inner, hideOnModel, L, glb);
 
   const defLim = V.tvc_deflection_max_rad ?? 0.14;
   const ex = new THREE.Vector3(1, 0, 0), thrustDirection = new THREE.Vector3();
   return {
-    group, inner, engines, fins, finFolds,
+    group, inner, engines, fins, finFolds, rcs,
+    setRcsActivity(duties) {
+      rcs.forEach(({ plume }, i) => {
+        const duty = THREE.MathUtils.clamp(duties[i] || 0, 0, 1);
+        plume.visible = duty > 0;
+        plume.userData.duty = duty;
+        const strength = Math.sqrt(duty);
+        // Deliberately emphasize small duties in the schematic display. The HUD
+        // keeps the recorded numeric duty; exhaust size is not a physical model.
+        plume.scale.setScalar(1.15 + strength * 0.65);
+        plume.children.forEach(puff => {
+          puff.material.opacity = puff.userData.opacity * (0.70 + 0.30 * strength);
+        });
+      });
+    },
     setPlume(e, thr) { const p = engines[e].plume;
       p.scale.set(Math.max(thr, 0.001), 0.6 + thr * 0.4, 0.6 + thr * 0.4);
       p.visible = thr > 0.02;
@@ -507,6 +579,34 @@ function buildPlume(rExit) {
   for (const c of [outer, inner]) { c.geometry.rotateZ(Math.PI / 2); c.position.x = -c.geometry.parameters.height / 2; }
   g.add(outer); g.add(inner);
   return g;
+}
+
+let coldGasTexture;
+function buildColdGasPlume() {
+  if (!coldGasTexture) {
+    const canvas = document.createElement("canvas"); canvas.width = canvas.height = 64;
+    const context = canvas.getContext("2d");
+    const fade = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+    fade.addColorStop(0, "rgba(255,255,255,1)");
+    fade.addColorStop(0.18, "rgba(250,255,255,0.95)");
+    fade.addColorStop(0.5, "rgba(200,240,255,0.65)");
+    fade.addColorStop(1, "rgba(150,220,255,0)");
+    context.fillStyle = fade; context.fillRect(0, 0, 64, 64);
+    coldGasTexture = new THREE.CanvasTexture(canvas);
+    coldGasTexture.colorSpace = THREE.SRGBColorSpace;
+  }
+  const plume = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const opacity = 0.95 - i * 0.09;
+    const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: coldGasTexture,
+      color: 0xffffff, transparent: true, opacity, depthWrite: false, toneMapped: false,
+      fog: false }));
+    puff.position.x = 0.25 + i * 0.90;
+    puff.scale.setScalar(0.65 + i * 0.50);
+    puff.userData.opacity = opacity;
+    plume.add(puff);
+  }
+  return plume;
 }
 
 function gridFin(R, mat) {
@@ -605,10 +705,15 @@ function tryLoadPhotorealModel(inner, hideList, L, glb) {
 // reflective animated ocean (three.js Water), and a procedural autonomous-spaceport drone-ship at the
 // landing target. Image-based lighting is baked from the sky so the booster picks up sky/horizon tones.
 function buildEnvironment(scene, renderer, sun, groundY, site) {
-  scene.fog = site?.kind === "land" ? null : new THREE.FogExp2(0xaab9c8, 0.00012);
+  scene.fog = site?.kind === "land"
+    ? new THREE.Fog(0xb6b9bd, 100000, 1000000)
+    : new THREE.FogExp2(0xaab9c8, 0.00012);
 
   // --- sky (Preetham), warm late-afternoon sun (clear enough to read as a real sky) ---
   const sky = new Sky(); sky.scale.setScalar(450000);
+  sky.name = "sky-background";
+  sky.material.depthWrite = false; sky.material.depthTest = false;
+  sky.renderOrder = -1000;
   const u = sky.material.uniforms;
   u.turbidity.value = SKY.turbidity; u.rayleigh.value = SKY.rayleigh; u.mieCoefficient.value = SKY.mie; u.mieDirectionalG.value = 0.85;
   const sunDir = new THREE.Vector3().setFromSphericalCoords(
@@ -628,7 +733,13 @@ function buildEnvironment(scene, renderer, sun, groundY, site) {
   scene.add(sky); // re-parent the sky dome into the live scene
 
   if (site?.kind === "land") {
-    const terrain = new THREE.Mesh(new THREE.PlaneGeometry(2000000, 2000000),
+    // Put the finite square's corners beyond the view volume and fade distant
+    // terrain before the far clip. High-altitude shots then have a continuous
+    // horizon rather than a visible, clipped triangular corner.
+    // A single two-triangle plane spans both sides of the camera and the far clip.
+    // GPU clipping of those enormous triangles makes the horizon jump between
+    // frames. Subdivide it so clipping stays local as the follow camera moves.
+    const terrain = new THREE.Mesh(new THREE.PlaneGeometry(20000000, 20000000, 64, 64),
       new THREE.MeshStandardMaterial({ color: 0x647666, roughness: 1 }));
     terrain.rotation.x = -Math.PI / 2; terrain.position.y = groundY - 0.1;
     terrain.name = "land-surface"; terrain.receiveShadow = true; scene.add(terrain);
@@ -785,6 +896,7 @@ function buildHUD(V) {
   $("gimbalLabel").textContent = `TVC 1 / ${V.gimbal_idx.length}`;
   // octaweb engine-status ring: 1 center + 8 around, mirroring the real Merlin layout (dots #oct0..#oct8)
   const svg = $("octSvg"), NS = "http://www.w3.org/2000/svg";
+  svg.replaceChildren();
   const ring = document.createElementNS(NS, "circle");
   ring.setAttribute("cx", "50"); ring.setAttribute("cy", "50"); ring.setAttribute("r", "30");
   ring.setAttribute("class", "ring"); svg.appendChild(ring);
@@ -797,11 +909,36 @@ function buildHUD(V) {
     svg.appendChild(d);
   }
   const fb = $("finbars");
+  fb.replaceChildren();
   for (let f = 0; f < V.n_fins; f++) {
     const d = document.createElement("div"); d.className = "finbar";
     d.innerHTML = `<div class="ftrack"><div class="fmid"></div><div class="ffill" id="ff${f}"></div></div><div class="flbl">${f + 1}</div>`;
     fb.appendChild(d);
   }
+  const nozzles = $("rcsNozzles");
+  nozzles.replaceChildren();
+  for (let i = 0; i < (V.rcs?.positions.length ?? 0); i++) {
+    const cell = document.createElement("div"); cell.className = "rcs-nozzle";
+    cell.innerHTML = `${String(i + 1).padStart(2, "0")}<span class="duty"></span>`;
+    nozzles.appendChild(cell);
+  }
+}
+
+function updateRcsHUD(duties, V) {
+  const total = V.rcs?.positions.length ?? 0;
+  const count = duties.filter(duty => duty > 0).length;
+  $("rcsPanel").classList.toggle("active", count > 0);
+  $("rcsState").textContent = total ? (count ? "ON" : "OFF") : "NO DATA";
+  $("rcsCount").textContent = total ? `${count} / ${total} NOZZLES` : "NOZZLES —";
+  $("rcsDuty").textContent = total
+    ? `MAX DUTY ${Math.round(Math.max(0, ...duties) * 100)}%` : "MAX DUTY —";
+  [...$("rcsNozzles").children].forEach((cell, i) => {
+    const duty = THREE.MathUtils.clamp(duties[i] || 0, 0, 1);
+    cell.classList.toggle("active", duty > 0);
+    cell.dataset.duty = duty;
+    cell.title = `RCS nozzle ${i + 1}: ${duty > 0 ? "ON" : "OFF"} · ${Math.round(duty * 100)}% duty`;
+    cell.querySelector(".duty").style.width = `${duty * 100}%`;
+  });
 }
 
 // mission timeline: a marker at each phase entry (derived from the replay) plus an END marker

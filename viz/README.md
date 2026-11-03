@@ -10,7 +10,8 @@ as marker tooltips. The actuator card displays the first gimbal; all gimbals mov
 
 Launch-pad episodes use a schematic land scene at the recorded launch position. Recovery
 retains the ocean/drone-ship scene. Ground/deck alignment is a visual offset to the engine plane,
-not a geometric contact model. Separation is not implemented and is not animated.
+not a geometric contact model. Separation switches the recorded configuration; the
+removed upper body's subsequent flight is not propagated or animated.
 
 Everything is driven by a single `replay.json` exported from the simulator. The viewer runs out of
 the box with the procedural booster (**no licensing strings attached**); drop in a glTF for the
@@ -43,6 +44,98 @@ flag exposes scene objects only for these explicit checks.
 For independent physics verification, run `python scripts/check_ascent_physics.py`.
 The [project guide](../docs/3_project_guide_ko.md#ascent-physics) separates verified model behavior,
 schematic rendering and still-unimplemented full-flight events.
+
+### Separation replay
+
+`ascent_separation` extends the attached ascent with an assumed impulse-free release at
+150 s and retained-booster coast to 160 s. Both configurations use procedural geometry
+so the body origin, engine positions and fin mounts follow the same recorded configuration.
+`meta.vehicles` contains the two configurations; `frame.configuration` selects one.
+The replay contains the left and right limits at the same release timestamp. Binary
+search selects the right limit at the event and interpolation never crosses the CG jump.
+Reverse seeking restores the attached stack. The removed upper body is not propagated
+or shown after release; only its release state is recorded in the event log.
+
+```bash
+python scripts/run_single.py scenario=ascent_separation hydra.run.dir=results/ascent_separation
+python scripts/view_replay.py results/ascent_separation
+# Also uses the three baseline replays generated above:
+python scripts/check_replay_browser.py --browser /opt/google/chrome/chrome \
+  --separation results/ascent_separation/replay.json --output results/visual_checks/separation
+```
+
+The extended browser run checks five separation checkpoints (including reverse seeking)
+and continuity of the retained engine's world position at the event, alongside the six
+baseline checkpoints. See [the guide](../docs/3_project_guide_ko.md#separation-physics).
+
+### Attitude maneuver and boostback replay
+
+`ascent_boostback` continues from separation through rate damping, an RCS maneuver,
+aligned three-engine ignition, actual thrust shutdown and a 10 s coast. Replay uses
+recorded attitude and forces; the timeline exposes each transition. This run completes
+the sequence but misses the approximate return target and stops on the main-propellant
+reserve guard. It is not a complete landing simulation.
+
+```bash
+python scripts/run_single.py scenario=ascent_boostback hydra.run.dir=results/ascent_boostback
+python scripts/view_replay.py results/ascent_boostback
+# Uses the baseline and separation replays above:
+python scripts/check_replay_browser.py --browser /opt/google/chrome/chrome \
+  --separation results/ascent_separation/replay.json \
+  --boostback results/ascent_boostback/replay.json --output results/visual_checks/boostback
+```
+
+The combined browser run checks 28 states/continuity assertions, including RCS on/off,
+reverse seeks, exhaust directions, and chase framing at 1x/8x/32x. It also checks that
+the sky follows the camera without writing terrain depth. See the
+[mission guide](../docs/3_project_guide_ko.md#boostback-physics) for assumptions and results.
+
+### Cold-gas display and camera tracking
+
+RCS nozzles use configured body-frame mounts. Large white puffs with a pale blue halo
+travel opposite to each nozzle's force direction. Their brightness and size emphasize
+even a 5% duty for visibility, with activity averaged over its PWM period so short
+pulses remain visible at normal display rates. Off, failed and fuel-starved nozzles
+stay dark. The actuator card has a dedicated RCS section: an ON/OFF badge, active/total
+nozzle count, maximum recorded duty and a numbered status grid with per-nozzle duty
+bars/tooltips. The numeric values follow the recorded duty without visual amplification.
+The cloud shape and size are illustrative. RCS duty transitions have their own timeline
+and are not interpolated or lost when pose frames are downsampled.
+Browser assertions compare these HUD values to the recorded nozzle activity. They also
+compare rendered pixels with and without the gas sprites at the same state, requiring
+at least 500 clearly changed pixels at both 5% and higher duty in the standard chase view.
+
+New runs export these channels automatically. To add them to an older saved run using
+its `resolved_config.yaml`, `physics.npz` and `actuators.npz`, without rerunning dynamics:
+
+```bash
+python scripts/refresh_replay_rcs.py results/ascent_boostback
+```
+
+Reload the viewer after updating. Legacy JSON files without nozzle metadata still
+load, but cannot show RCS jets until refreshed. The current ascent/landing/depletion,
+separation and boostback regression replays have been refreshed.
+
+Orbit and chase follow the current interpolated CG without position smoothing lag,
+including scrub/reset/backward seeks. Chase initially fits the full vehicle and keeps
+user orbit/zoom adjustments. The sky is camera-centered and does not write depth;
+logarithmic depth and the expanded far plane stabilize distant ground and sky edges.
+The ground extends beyond the viewing volume and fades before the far clip, hiding
+the finite square's corners in high-altitude shots.
+It is subdivided into a 64×64 grid: using just two enormous triangles made the
+horizon jump during chase playback around T+05:36 despite passing static checks.
+
+The temporal background regression renders 181 consecutive frames from 335 to 338 s
+for orbit and chase, then compares a background-only pixel region between frames.
+The optional legacy control reproduces the former two-triangle mesh in the same browser:
+
+```bash
+python scripts/check_replay_background.py --legacy-control
+```
+
+Reports and screenshots go to `results/visual_checks/background_temporal/`. The test
+rejects a jump larger than 25/255 in any RGB channel on over 1% of the sampled background.
+This supplements geometry assertions with a check of visible frame continuity.
 
 ## 1. Get a replay
 
@@ -189,7 +282,7 @@ sit where the physics puts them.
 ## Photoreal glTF model (bundled — loads automatically)
 
 The glTF loader is **already wired** in `app.js` (`tryLoadPhotorealModel`) and the viewer ships with a
-hull, so it loads on start for recovery vehicles; attached stacks use schematic geometry.
+hull, so it loads on start for recovery vehicles; attached stacks and separation runs use schematic geometry.
 With no GLB it falls back to the procedural booster. The bundled
 default is **`viz/resources/falcon9_landing.glb`** — the Forest Katsch *Falcon 9* **landing** scene
 (a first-stage booster with legs, topped by a Dragon 2 capsule on a pad). On start the loader:

@@ -60,9 +60,34 @@ python scripts/check_convergence.py scenario=ascent
 It uses a separately configured attached upper-stage mass and nose-first aerodynamics,
 with no sensors/navigation. The independent physics check covers the full 150 s trajectory
 and open-system mass/momentum balances. Replay shows the attached stack, configured engine
-count and actual thrust directions on a schematic land pad. Stage separation and full-flight
-recovery remain pending. Development proceeds through physics verification, rendering and
+count and actual thrust directions on a schematic land pad. A separate `ascent_separation` experiment releases the upper stack at an assumed 150 s
+and continues the retained booster to 160 s with zero separation impulse. Full-flight
+recovery remains pending. Development proceeds through physics verification, rendering and
 the [project guide](docs/3_project_guide_ko.md#ascent-physics), before flight-data validation.
+```bash
+python scripts/run_single.py scenario=ascent_separation hydra.run.dir=results/ascent_separation
+python scripts/check_separation_physics.py
+python scripts/view_replay.py results/ascent_separation
+```
+
+Separation preserves live actuator and fuel state, transforms the tracked CG, and updates
+mass properties and body aerodynamics. Event records include both limits and the removed
+body at release; only the retained booster is propagated afterward. See the
+[separation guide](docs/3_project_guide_ko.md#separation-physics).
+
+The `ascent_boostback` mission continues the same native state through an RCS attitude
+maneuver, three-engine boostback, actual thrust shutdown and a 10 s coast. It preserves
+the existing 200 kg RCS supply and main propellant budget. The sequence completes, but
+the provisional trajectory **does not meet the return-target criterion**; the main-fuel
+reserve triggers cutoff. `mission.json` distinguishes sequence completion from target
+and landing success. See the [mission guide](docs/3_project_guide_ko.md#boostback-physics).
+
+```bash
+python scripts/run_single.py scenario=ascent_boostback hydra.run.dir=results/ascent_boostback
+python scripts/check_boostback_physics.py
+python scripts/view_replay.py results/ascent_boostback
+```
+
 CRS-11 comparison is disabled by default; the archived comparison tool remains available with
 `scenario.reference.enabled=true`. See [ascent assumptions](docs/reference/crs11_ascent.md).
 
@@ -146,6 +171,21 @@ selecting `gnc/navigation=ekf` raises `NotImplementedError`.
 
 The ordered backlog for ascent, recovery phases, sensor models, and navigation is maintained in
 [Development TODO](docs/TODO.md).
+
+Project 2 selects four independently initialized cases: ascent, entry burn, aerodynamic descent,
+and terminal powered descent. Their [scenario specification](docs/reference/project2_scenario_spec.md)
+records engineering initial conditions, prescribed inputs and physics checks. Run `scenario=project2_ascent`,
+`scenario=project2_entry_burn`, `scenario=project2_aero_descent` or `scenario=project2_powered_descent`
+with `scripts/run_single.py` for trajectories, loads, actuator/propellant histories and replay.
+`python scripts/check_project2_segments.py` checks independent equations, step refinement and body-table
+applicability. The terminal experiment uses 20 s of burn and 2 s of shutdown observation; touchdown is
+not its acceptance criterion. See [physics results](docs/verification/project2_segments/physics_results.md).
+CRS-11 is optional context. Enable `scenario.reference.enabled=true` for a single comparison, or
+pass `--compare-flight` to the checker; RMSE is not a physics acceptance criterion.
+`python scripts/analyze_project2_reference.py` reproduces the optional initial-state source analysis.
+Generated verification records and figures go to ignored `results/verification/`; documentation links
+to those local artifacts become available after running the corresponding commands. Code, authored
+configurations, tests and manual reports remain in the repository.
 
 The existing update schedule, truth/measurement/estimate records, and error statistics remain
 available as infrastructure for this future work. The reference case continues to use identity

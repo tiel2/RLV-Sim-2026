@@ -51,6 +51,8 @@ class TerminationReason(enum.IntEnum):
     FUEL_DEPLETED = 2  # m <= m_dry
     MAX_STEPS = 3  # horizon exhausted (still airborne)
     CRASH = 4  # reached ground but exceeded a structural-survival limit (sink rate / tilt / spin)
+    MISSION_COMPLETE = 5  # configured sequence ended; independent of target/landing success
+    MISSION_ABORT = 6  # mission guard failed; actuator shutdown propagated
 
 
 # --------------------------------------------------------------------------- #

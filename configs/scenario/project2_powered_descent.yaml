@@ -1,0 +1,66 @@
+# @package _global_
+# Independent physics experiment; assumptions in docs/reference/project2_scenario_spec.md.
+# CRS-11 is optional context; enable scenario.reference.enabled explicitly to compare.
+defaults:
+- _project2_recovery
+- _self_
+scenario:
+  name: project2_powered_descent
+  description: Independent prescribed-input powered_descent physics experiment; no
+    flight-matching objective.
+  ic:
+    r_ned:
+    - 0.0
+    - 0.0
+    - -4700.0
+    v_ned:
+    - 142.690878848769
+    - 0.0
+    - 286.06736618355967
+    roll_deg: 0.0
+    pitch_deg: 63.48990273054005
+    yaw_deg: 180.0
+    w_body:
+    - 0.0
+    - 0.0
+    - 0.0
+    m: 32000.0
+    rcs_fuel: 200.0
+    throttle0: 0.0
+    launch_pad: false
+  horizon:
+    t_max: 22.0
+    input_dt: 0.02
+    log_dt: 0.02
+  reference:
+    enabled: false
+    dataset: crs11
+    segment: powered_descent
+    start_s: 429.0
+    end_s: 462.0
+    time_offset_s: -429.0
+    altitude_offset_m: 0.0
+    exclude_initial_sample: true
+    conventions: Assumed equal altitude datum and ground-relative speed; synthetic
+      recovery heading/origin; unverified.
+    role: optional_observable_comparison
+  inputs:
+  - t: 0.0
+    throttle:
+    - 0.55
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    gimbal: 0.0
+    fin: 0.0
+    rcs: 0.0
+    fin_deployment: 1.0
+    label: powered_descent
+  - t: 20.0
+    throttle: 0.0
+    label: cutoff

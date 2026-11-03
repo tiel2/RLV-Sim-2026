@@ -333,6 +333,8 @@ class NativePlant {
         validate_state(state_);
         held_command_ = {state_.throttle, state_.tvc, state_.fin, {0,0,0}};
         initialized_ = true;
+        session_epoch_ = state_.t;
+        session_steps_ = 0;
     }
 
     std::unique_ptr<NativePlant> create_session(py::object state_value) const {
@@ -352,6 +354,7 @@ class NativePlant {
             for (int i=0;i<n_substeps && !state_.done;++i) {
                 const Vec3 wind = update_wind(state_);
                 integrate_once(state_, command, wind);
+                state_.t = session_epoch_ + (++session_steps_) * dt_;
             }
         }
         return observe();
@@ -363,6 +366,55 @@ class NativePlant {
         const Vec3 wind = wind_model_ == "none" ? Vec3{} : add(state_.wind_mean, state_.wind_gust);
         const Aux aux = evaluate(state_, held_command_, wind).aux;
         return py::make_tuple(public_snapshot(state_), aux_dict(aux));
+    }
+
+    void separate_axial_component(const NativePlant& target, double removed_mass,
+                                  double removed_x, const Vec3& removed_inertia,
+                                  double origin_x) {
+        // Instantaneous, impulse-free release. Copy the native state directly: reset()
+        // would lose the wind RNG, held inputs and deployment state.
+        if (!initialized_ || state_.done || state_.launch_pending)
+            throw py::value_error("separation requires an active airborne session");
+        if (mass_model_ != "dual_tank" || target.mass_model_ != "dual_tank" ||
+            !std::isfinite(removed_mass) || removed_mass <= 0 ||
+            !std::isfinite(removed_x) || !std::isfinite(origin_x) ||
+            std::abs(mass_.dry-target.mass_.dry-removed_mass) > 1e-7 ||
+            std::abs(dt_-target.dt_) > 1e-15)
+            throw py::value_error("inconsistent separation mass/model/timestep");
+        for (int i=0;i<3;++i)
+            if (!std::isfinite(removed_inertia[i]) || removed_inertia[i] <= 0 ||
+                mass_.products[i] != 0 || target.mass_.products[i] != 0)
+                throw py::value_error("separation requires positive coaxial principal inertia");
+        if (mass_.cg_lateral != Vec2{} || target.mass_.cg_lateral != Vec2{})
+            throw py::value_error("separation requires axial CGs");
+        const auto [old_cg, old_i] = mass_props(state_.m,state_.rcs_fuel);
+        const double retained_mass = state_.m-removed_mass;
+        if (retained_mass < target.mass_.dry+state_.rcs_fuel-1e-7)
+            throw py::value_error("separation would remove retained propellant");
+        const auto [new_cg, new_i] = target.mass_props(retained_mass,state_.rcs_fuel);
+        const double retained_x = new_cg+origin_x;
+        const Vec3 offset{retained_x-old_cg,0,0};
+        if (std::abs((retained_mass*retained_x+removed_mass*removed_x)/state_.m-old_cg)>1e-8)
+            throw py::value_error("separation CG does not reconstruct attached stack");
+        for(int i=0;i<3;++i) {
+            const double reconstructed = new_i[i]+removed_inertia[i]+(i==0?0:
+                retained_mass*offset[0]*offset[0]+removed_mass*std::pow(removed_x-old_cg,2));
+            if(std::abs(reconstructed-old_i[i])>1e-8*std::max(old_i[i],1.0))
+                throw py::value_error("separation inertia does not reconstruct attached stack");
+        }
+        NativePlant next(target);
+        next.state_=state_;
+        next.state_.m=retained_mass;
+        next.state_.r=add(state_.r,matvec(dcm(state_.q),offset));
+        next.state_.v=add(state_.v,matvec(dcm(state_.q),cross(state_.w,offset)));
+        next.held_command_=held_command_;
+        next.initialized_=true;
+        next.session_epoch_=session_epoch_;
+        next.session_steps_=session_steps_;
+        next.set_fin_deployment(fin_deployment_);
+        next.validate_state(next.state_);
+        next.validate_command(next.held_command_);
+        *this=std::move(next); // commit only after all checks succeed
     }
 
     py::dict snapshot(bool full=false) const {
@@ -534,6 +586,9 @@ class NativePlant {
     State state_;
     Command held_command_;
     bool initialized_{false};
+    // Preserve the exact integration grid across long runs and configuration events.
+    double session_epoch_{};
+    std::uint64_t session_steps_{};
 
     void load(py::object params, py::dict meta) {
         auto g = params.attr("geom");
@@ -1211,6 +1266,9 @@ void bind_native_plant(py::module_& m) {
         .def("create_session", &NativePlant::create_session, py::arg("state"))
         .def("reset", &NativePlant::reset, py::arg("state"))
         .def("set_fin_deployment", &NativePlant::set_fin_deployment, py::arg("value"))
+        .def("separate_axial_component", &NativePlant::separate_axial_component,
+             py::arg("target"), py::arg("removed_mass"), py::arg("removed_x"),
+             py::arg("removed_inertia"), py::arg("origin_x"))
         .def("advance", &NativePlant::advance, py::arg("command"), py::arg("n_substeps"))
         .def("observe", &NativePlant::observe)
         .def("snapshot", &NativePlant::snapshot, py::arg("full")=false)

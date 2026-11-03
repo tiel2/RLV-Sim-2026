@@ -1,0 +1,32 @@
+# @package _global_
+# Assumed experiment timing, not reconstructed CRS-11 separation telemetry.
+defaults:
+  - ascent
+  - _self_
+
+scenario:
+  name: ascent_separation
+  description: Attached ascent, impulse-free separation at 150 s, then 10 s booster coast.
+  horizon:
+    t_max: 160.0
+  separation:
+    impulse_model: none
+    aero:
+      # Exposed first-stage nose; keep +x forward before any flip.
+      # Explicit assumed coefficients, not the engine-first recovery table.
+      coeffs:
+        cd_base: 0.5
+        cd_transonic: 0.4
+        cd_hyper: 0.2
+        xcp_frac_base: 0.70
+        xcp_frac_alpha: 0.0
+  inputs:
+    - {t: 0.0, label: ascent, throttle: 1.0, fin_deployment: 0.0}
+    - t: 10.0
+      label: pitch_kick
+      gimbal: [[0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0], [0.002, 0]]
+    - {t: 12.0, label: gravity_turn, gimbal: 0.0}
+    - {t: 50.0, label: throttle_down, throttle: 0.8}
+    - {t: 74.0, label: full_thrust, throttle: 1.0}
+    - {t: 145.0, label: meco_coast, throttle: 0.0}
+    - {t: 150.0, label: separated_coast, separate: true}

@@ -2,7 +2,9 @@
 
 The first integration milestone is implemented as `scenario=ascent`: a pre-ignited
 attached stack departs the pad, follows prescribed throttle/gimbal commands, receives
-MECO at T+145 s, and propagates to T+150 s. There is no stage-separation event yet.
+MECO at T+145 s, and propagates to T+150 s. This scenario keeps the stack attached. `ascent_separation` extends it with an assumed
+impulse-free release at 150 s and retained-booster coast to 160 s; see the
+[separation guide](../3_project_guide_ko.md#separation-physics).
 The last five seconds exercise cutoff and unpowered propagation of the **attached stack**;
 they are not a reconstruction of the separated first stage.
 
@@ -68,7 +70,7 @@ ground-contact convention.
 structure and the attached component separate in configuration. The builder combines their
 CG and principal inertias with the parallel-axis theorem into an equivalent inert body.
 The attached component includes upper-stage propellant that is **not available to the first-stage engines**.
-It stays fixed until a future separation implementation removes it.
+It stays fixed in `ascent`; `ascent_separation` removes it at the prescribed event.
 
 | Budget / geometry | Assumed value |
 |---|---:|
@@ -132,5 +134,7 @@ The scalar observations cannot uniquely identify all mass, thrust, steering, and
 parameters. Exact launch/landing coordinates, speed frame, altitude datum, and attitude
 evidence remain needed for a geographic reconstruction. Fixed vertical gravity and a flat
 local frame also need an error budget over the simulated range; numerical timestep agreement
-does not validate these assumptions. Next implement separation with mass/configuration
-changes, then connect coast/attitude maneuvers and boostback without resetting trajectory states.
+does not validate these assumptions. The impulse-free separation experiment now covers
+mass/configuration changes and a 10 s retained coast. Next connect attitude maneuvers
+and boostback without resetting trajectory states. Its 150 s release is an experiment
+input, not a resolved CRS-11 separation timestamp.

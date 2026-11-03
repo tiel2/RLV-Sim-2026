@@ -13,7 +13,7 @@ def attach_axial_component(p, component, length):
 
     Component inertia is about its own CG in the same body axes. Configuration keeps
     the two components separate; the existing plant receives their equivalent dry body.
-    Runtime separation is deliberately not represented by this build-time operation.
+    Runtime separation is handled separately by plant.separation and the live native session.
     """
     mass = float(component.mass)
     x = float(component.x_cg)

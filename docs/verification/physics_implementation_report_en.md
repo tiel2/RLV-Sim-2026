@@ -364,10 +364,321 @@ The complete test suite passed **321 tests**. [Physics verdict and source hashes
 Example verified views: [attached stack at launch](figures/ascent_launch.png) and
 [attached-stack coast](figures/ascent_coast.png).
 
-Remaining scope includes separation mass/CG/inertia/aerodynamic changes and impulse assumptions,
-state handoff, flip/boostback and full-flight integration. Settled propellant, simplified jet
+The impulse-free separation and retained-coast extension is recorded in Section 7.
+Remaining scope includes nonzero release impulses, flip/boostback and full-flight integration. Settled propellant, simplified jet
 damping, fixed local NED, vertical gravity, assumed aerodynamic coefficients and schematic
 contact remain explicit model limitations. Sensor/navigation and flight-data validation are deferred.
+
+## 7. Impulse-free Separation and Retained Booster Coast
+
+The `ascent_separation` experiment extends the same native session through assumed
+T+150 s release and a 10 s retained-booster coast. Release timing, attached-component
+properties and post-release aerodynamic coefficients are **Assumed**, not reconstructed
+CRS-11 observations. The existing `ascent` experiment remains attached through 150 s.
+
+### Event model and state mapping
+
+At release, external impulses and separation impulses are zero. Both rigid components
+inherit the attached body's orientation and angular rate. Let $M$, $x_G$, $I$ denote
+pre-release mass, axial CG and inertia; $m_u$, $x_u$, $I_u$ the removed component;
+and $m_b=M-m_u$, $x_b$, $I_b$ the retained booster, with axial coordinates here
+expressed in the old stack frame. The new body origin is at old $x_o=-28$ m,
+so $x_b=x_{G,b}^{new}+x_o$. For $d_i=[x_i-x_G,0,0]^T$ and rotation $C$:
+
+$$
+r_i=r_G+C d_i,\qquad v_i=v_G+C(\omega\times d_i),\qquad
+q_i=q_G,\quad\omega_i=\omega_G.
+$$
+
+The state jump changes the tracked CG, not material-point motion. In particular,
+all retained engine positions and velocities agree across release after translation.
+The native transition verifies reconstruction of the original CG and principal inertia:
+
+$$
+M x_G=m_b x_b+m_u x_u,\qquad
+I=I_b+I_u+\sum_{i\in\{b,u\}}m_i[(d_i^T d_i)\mathbf1-d_i d_i^T].
+$$
+
+The independent audit includes both spin and orbital angular momentum about the old CG:
+
+$$
+\sum_i m_i=M,\qquad \sum_i m_i v_i=Mv_G,
+$$
+$$
+\sum_i\left[C I_i\omega_i+(r_i-r_G)\times m_i(v_i-v_G)\right]=C I\omega_G.
+$$
+
+The retained tank dimensions/densities, main/RCS fuel, engine layout, gimbal slots,
+actuator states/rates, held command, wind/filter state and native RNG are retained.
+The native session is copied directly rather than reconstructed through `reset`.
+The attachment interface becomes the new body origin; structural/tank/engine/fin/RCS
+coordinates translate together. Length changes from 70 to 42 m. The post-release
+nose-first body table has assumed drag parameters 0.5/0.4/0.2 (base/transonic/hyper),
+CP fraction 0.70 and the existing 0–180° / Mach 0–12 domain. This is an explicit
+configuration change, not an empirical aerodynamic validation. Fins remain stowed.
+
+### Independent checks and results
+
+Independent cylinder quadrature verifies both configurations' CG and inertia.
+Nonvertical, rotating release cases exercise transport velocity and orbital angular
+momentum, including zero main propellant. Regression checks reject repeated or pad
+release and unsupported impulse models, preserve actuator/fuel state, and compare
+the event's incoming state against the standalone ascent endpoint.
+
+The 150–160 s reference integrates position, velocity, a rotation matrix and angular
+rate with DOP853, independently evaluated body aerodynamics, gravity and quadrature
+mass properties. It starts from the recorded post-event state; the event mapping is
+checked separately by the two-body balances above. Reference tolerance is refined
+from $10^{-11}$ to $10^{-13}$. Coast thrust is exactly zero. A second complete run
+halves the native timestep from 1 ms to 0.5 ms.
+
+| Quantity | Measured residual / maximum difference | Limit |
+|---|---:|---:|
+| Release mass | 0 kg | 1e-7 kg |
+| Release total centroid | 1.10e-12 m | 1e-8 m |
+| Release linear momentum | 7.36e-9 kg m/s | 1e-5 kg m/s |
+| Release angular momentum | 1.40e-7 kg m²/s | 1e-4 kg m²/s |
+| Release main/RCS propellant | 0 / 0 kg | 1e-7 kg each |
+| Coast position | 1.01e-7 m | 1e-3 m |
+| Coast velocity | 4.55e-10 m/s | 1e-4 m/s |
+| Coast attitude | 1.03e-13 rad | 1e-7 rad |
+| Coast angular rate | 3.69e-18 rad/s | 1e-8 rad/s |
+| Coast mass | 0 kg | 1e-6 kg |
+| Full-run timestep position | 2.22e-6 m | 1e-3 m |
+| Full-run timestep mass | 4.18e-6 kg | 1e-3 kg |
+
+The full-run mass threshold retains the earlier powered-ascent tolerance; the coast
+has a separate constant-mass threshold. All reference refinement differences are
+below one tenth of the corresponding acceptance limit. At release the mass changes
+from 165,854.720264 to 45,854.720264 kg. Remaining main/RCS propellant is
+20,654.720264 / 200 kg. The removed 120,000 kg is excluded from propellant consumption.
+
+The full suite passed **352 tests** on 2 November 2026. Chrome passed **12 checks**:
+the existing six ascent/landing/depletion checkpoints, five separation/reverse-seek
+checkpoints and a material-point continuity check at the exact release boundary.
+Replay records both limits at the same timestamp, selects the post-event configuration
+at release, and never interpolates across the CG/mass jump. The recorded trajectory
+is strictly increasing in time and uses the post-event state at release. Both limits
+and the removed body's release state remain available in `events.json`.
+
+```bash
+python scripts/run_single.py scenario=ascent_separation hydra.run.dir=results/ascent_separation
+python scripts/check_separation_physics.py
+python -m pytest tests/ -q
+python scripts/check_replay_browser.py --browser /opt/google/chrome/chrome \
+  --separation results/ascent_separation/replay.json --output results/visual_checks/separation
+```
+
+The browser command also uses the three existing baseline replays documented in
+[the viewer instructions](../../viz/README.md#ascent-and-rendering-checks).
+[Physics verdict/source hashes](../../results/verification/separation_physics_results.json),
+[browser assertions](../../results/verification/separation_replay_checks.json),
+[before release](../../results/verification/figures/separation_before.png), and [after release](../../results/verification/figures/separation_after.png)
+are retained with this report. The removed body is recorded only at release and is
+not propagated or rendered afterward. Nonzero impulses, inter-body contact, slosh at
+release, closed-loop memory handoff, flip/boostback and full-flight landing remain
+outside this milestone. These checks establish consistency of the assumed model,
+not flight accuracy.
+
+## 8. Attitude Maneuver and Boostback Connection
+
+`scenario=ascent_boostback` continues the same ascent and separation state through
+rate damping, an RCS attitude maneuver, alignment hold, three-engine boostback,
+actual thrust shutdown and 10 s of coast. Propellant, actuator states and the
+retained vehicle configuration are preserved. This is a truth-fed experiment with
+a dedicated supervisor. The sequence completes, but **the return target is not attained**.
+
+The target rotates body +x toward a horizontal velocity correction using the shortest
+quaternion rotation. A constant-current-gravity, drag-free projection to a descending
+60 km interface supplies the correction. For NED down coordinate $r_D$, altitude $h$
+and positive gravity $g$:
+
+$$t_f=\frac{-v_D+\sqrt{v_D^2+2g(-h-r_D)}}{g},\qquad
+\hat{\mathbf r}_{NE}=\mathbf r_{NE}+t_f\mathbf v_{NE}.$$
+
+The desired horizontal velocity is $(\mathbf r_{NE,target}-\mathbf r_{NE})/t_f$.
+Its difference from current velocity determines thrust direction once, after rate
+damping. This direction is held through the burn. The projection is a targeting
+diagnostic, not a verified landing prediction or optimized return trajectory.
+
+The trapezoidal slew limits reference angular speed to 0.014 rad/s and acceleration
+to 0.0007 rad/s². The existing quaternion PD uses live diagonal inertia, with gains
+$K_p=2I\omega_n^2$, $K_d=2(0.9)I\omega_n$, angular-acceleration feedforward and
+gyroscopic compensation. Bandwidth is 0.08 rad/s before ignition and 0.2 rad/s during
+burn/shutdown. Stowed fins receive no authority. TVC allocation uses delivered
+per-engine thrust and current CG lever arms; RCS supplies residual torque. The healthy,
+uncanted symmetric cluster uses engines 0, 1 and 5 at throttle 0.7.
+
+Ignition requires attitude error ≤1° and angular speed ≤0.0005 rad/s for 2 s.
+Guards cover duration, rate, pointing error, interface altitude and propellant reserves.
+Main/RCS reserves are 4,000 / 30 kg, assumptions rather than demonstrated recovery
+requirements. The main guard includes a conservative shutdown-tail allowance and one
+control interval. Target, integrated thrust delta-v and duration cutoff modes are
+supported. Actual thrust must fall to ≤1e-6 N before coast begins.
+
+| Event | Time after launch |
+|---|---:|
+| Separation / rate damping | 150.00 s |
+| Start 123.72° maneuver | 158.94 s |
+| Reference slew complete | 333.18 s |
+| Aligned ignition command | 335.18 s |
+| Main reserve cutoff command | 360.94 s |
+| Actual thrust off | 361.38 s |
+| Coast complete | 371.38 s |
+
+Maximum attitude tracking error is 0.604° and maximum angular speed is 0.014123 rad/s.
+Remaining main/RCS propellant is 4,596.448 / 70.856 kg. The ideal slew estimate is
+120.94 kg of RCS gas, while the complete post-separation run uses 129.144 kg.
+The integrated inertial thrust acceleration has magnitude 1,319.413 m/s.
+Projected miss decreases from 563.76 km at ignition to 279.19 km at actual shutdown,
+outside the 10 km criterion. Long maneuver time and retained fuel budget constrain
+this case. `mission.json` distinguishes sequence completion, guard failure, cutoff
+reason, target success and landing validation. Termination code 5 means sequence
+completion, not landing success; code 6 denotes mission abort.
+
+Verification independently replays recorded commands for four 1 s windows starting
+at damping, maneuver, ignition and shutdown. DOP853 integrates Newton–Euler equations,
+rotation matrices, quadrature mass properties, inertia derivatives, realistic actuator
+states and individual PWM switching boundaries. Each window starts from the recorded
+native state. This verifies local plant dynamics, not an independent controller or
+independent integration of the entire mission. Refining reference tolerance from
+1e-12 to 1e-13 also passes.
+
+| Check | Maximum difference / residual | Limit |
+|---|---:|---:|
+| Independent windows: position | 1.20e-8 m | 1e-4 m |
+| Independent windows: velocity | 1.61e-8 m/s | 1e-5 m/s |
+| Independent windows: mass | 1.57e-7 kg | 1e-3 kg |
+| Full-run RCS mass vs. independent nozzle on-time integral | 1.07e-10 kg | 1e-6 kg |
+| PWM full-run 1 / 0.5 ms position | 1.30e-5 m | 0.1 m |
+| PWM full-run 1 / 0.5 ms mass | 3.93e-6 kg | 0.01 kg |
+| PWM transition-time difference | 0 s | 0.021 s |
+| Averaged-RCS full-run 1 / 0.5 ms position | 1.41e-5 m | 0.1 m |
+
+Native time uses an epoch and integer step count, preserved across separation, to
+avoid floating-point drift changing PWM phase. Physical duty resolution stays at 5%
+of a 20 ms period on both integration grids. Averaged and PWM RCS remain different
+models: position differs by up to 159.56 m and transition timing by 0.12 s. Their
+agreement is not a convergence criterion. Release mass, centroid, linear/angular
+momentum and propellant balances also pass. No energy-consumption verification is added.
+
+The trajectory reaches approximately 275 km. Extrapolation of the existing layered
+atmosphere activates numerical temperature/pressure floors; high-altitude sound speed
+and Mach are not validated physical predictions. Post-separation dynamic pressure peaks
+near 1.57 Pa. Wide-angle aerodynamics, thermospheric atmosphere, local-NED errors,
+actual vehicle data and recovery remain limitations. Numerical agreement establishes
+consistency of the declared model only.
+
+On 2 November 2026, the complete suite passed **363 tests** and Chrome passed **18
+WebGL checks**, including six maneuver/burn/shutdown/reverse-seek checkpoints. The
+viewer normalizes rounded replay quaternions before interpolation and transformation.
+Checks cover attitude, CG, engine layout, actual thrust axes, active plumes and stowed fins.
+
+```bash
+python scripts/run_single.py scenario=ascent_boostback hydra.run.dir=results/ascent_boostback
+python scripts/check_boostback_physics.py
+python -m pytest tests/ -q
+python scripts/check_replay_browser.py --browser /opt/google/chrome/chrome \
+  --separation results/ascent_separation/replay.json \
+  --boostback results/ascent_boostback/replay.json --output results/visual_checks/boostback
+```
+
+Evidence: [physics results/source hashes](../../results/verification/boostback_physics_results.json),
+[browser assertions](../../results/verification/boostback_replay_checks.json),
+[tracking/fuel diagnostics](../../results/verification/figures/boostback_mission.png),
+[maneuver](../../results/verification/figures/boostback_maneuver.png), and [burn](../../results/verification/figures/boostback_burn.png).
+For an optional continuous-recovery extension, establish return feasibility across
+ascent trajectory, maneuver timing and propellant allocation before connecting recovery.
+The selected Project 2 scope instead uses the independent cases below.
+
+## 9. Independent Project 2 Scenarios
+
+This section preserves the initial observation-comparison experiment, including
+the former 35 s terminal run. The current physics-first scope, optional comparison
+and revised terminal duration are recorded in Section 10 below.
+
+On 3 November 2026, four separately initialized prescribed-input cases were added:
+`project2_ascent`, `project2_entry_burn`, `project2_aero_descent`, and
+`project2_powered_descent`. Existing generic scenarios and the connected mission
+experiments remain available. The [scenario specification](../reference/project2_scenario_spec.md)
+separates webcast observations, velocity reconstruction and assumed vehicle/input
+parameters. No parameters were fitted in this implementation step.
+
+The configuration-only ascent reference was extended to support detached booster
+mass properties and exposed neutral fins. Full trajectories use independent
+Newton–Euler equations, matrix attitude, mass quadrature, realistic throttle/TVC
+and DOP853 at rtol 1e−11 and 1e−12. Independent position/velocity/attitude/rate/mass
+limits are 0.01 m / 0.001 m/s / 1e−6 rad / 1e−6 rad/s / 0.001 kg; refinement
+differences must meet one tenth of those limits. All four cases passed. Adjacent
+2/1/0.5 ms native comparisons also passed the declared numerical tolerances.
+CG/inertia, mass bookkeeping, fuel nonnegativity, inactive-engine forces, RCS
+reserve and actual shutdown checks passed. These checks verify the declared
+equations, including their lookup clipping; they do not establish empirical fidelity.
+
+The common comparison tool now handles segment-specific local/reference epochs,
+checkpoints and plot labels, initial-sample exclusion, actual overlap and explicit
+early-termination reporting. It retains gap-aware time weighting and assigns no
+flight-accuracy verdict or prescribed-event score.
+
+| Case / reference T+ window [s] | Altitude RMSE [m] | Scalar-speed RMSE [m/s] |
+|---|---:|---:|
+| Ascent / 0–145 | 10,230.763 | 205.485 |
+| Entry burn / 372–384 | 136.234 | 22.105 |
+| Aerodynamic descent / 384–429 | 648.874 | 59.821 |
+| Terminal powered descent / 429–462 | 878.760 | 48.022 |
+
+The ascent assumptions retain a large discrepancy. Constant terminal throttle
+arrests descent before contact and initiates a climb: the run ends at 1,373.709 m
+altitude after 35 local seconds. Body incidence exceeds the configured 90° domain
+from approximately 30.3 s, reaching 173.322°. Thus the terminal case fails its
+body-aerodynamic applicability check even though the implemented clipped dynamics
+agree numerically. No run reaches touchdown or establishes landing success.
+The altitude datum, speed frame, reconstructed velocity and assumed mass/input
+uncertainties remain limitations. Further input/model review and declared
+calibration/withheld-data choices are required before empirical validation.
+
+The complete suite passed **382 tests**, Ruff passed, and Chrome passed **20
+WebGL state/geometry checks** across initial/middle/final and reverse seeks.
+The [runtime summary](../../results/verification/project2_segments/runtime/summary.json),
+[browser checks](../../results/verification/project2_segments/runtime/browser_checks.json), and
+[detailed results, plots and commands](../../results/verification/project2_segments/runtime_results.md)
+preserve scope, hashes and limitations. Sensor/navigation implementation remains
+future Project 2 work; continuous launch-to-touchdown connection is optional.
+
+## 10. Physics-Experiment Scope and Optional Flight Comparison
+
+The current Project 2 vehicle milestone is to run approximate independent phase
+experiments under documented engineering initial conditions and prescribed inputs.
+Matching CRS-11 or reducing its RMSE is not an acceptance criterion. Webcast data
+provides optional context for scales; it does not provide complete state truth or
+separable navigation-error records. A later scoped comparison remains part of
+Project 2 reporting, and sensor/navigation implementation is deferred by user choice.
+
+All four `project2_*` configurations now set `scenario.reference.enabled=false`.
+The verification runner also omits comparison by default; explicit `--compare-flight`
+enables it, with output separate from the default physics records. Single runs can
+enable `scenario.reference.enabled=true`. Physics acceptance uses independent
+equations, step refinement, mass/actuator checks and body lookup-domain checks,
+and does not use observed-flight errors.
+
+Experiment/burn durations are engineering choices separate from reference event
+windows. Terminal powered descent now burns for 20 s, followed by 2 s of shutdown
+observation. It ends at 1,523.744 m altitude with down velocity +80.761 m/s and
+scalar speed 80.990 m/s, demonstrating deceleration while still descending.
+Maximum body incidence is 0.720°, within its 90° table. Actual terminal thrust is
+zero and main propellant remaining is 3,557.695 kg. Touchdown is not required.
+The earlier 35 s out-of-domain run remains a historical record, not the current
+nominal experiment.
+
+All four current experiments pass the declared-equation, 2/1/0.5 ms numerical and
+body-table checks. Native state/load/propellant histories and physical plots are
+stored alongside independent integrations. Current replays pass 20 WebGL checks;
+the full suite passes 383 tests and Ruff passes. Empirical vehicle accuracy and
+the high-altitude/local-frame approximations remain explicitly unvalidated.
+See the [physics specification](../reference/project2_scenario_spec.md),
+[current physical histories and verdicts](project2_segments/physics_results.md),
+[summary/hashes](../../results/verification/project2_segments/physics/summary.json) and
+[browser checks](../../results/verification/project2_segments/physics/browser_checks.json).
 
 ## Verification Sources
 
@@ -383,3 +694,16 @@ The original cases were evaluated on 21–22 October 2026; ascent additions were
 [verification runner](../../scripts/check_ascent_physics.py), and [regression tests](../../tests/plant/test_ascent_physics.py).
 
 [5] Rendering: [browser assertions](../../scripts/check_replay_browser.py).
+
+[6] Separation: [event/coast references](../../src/validation/separation.py),
+[verification runner](../../scripts/check_separation_physics.py), and
+[release regressions](../../tests/plant/test_separation_physics.py).
+
+[7] Boostback: [supervisor](../../src/gnc/guidance/boostback.py),
+[independent equations](../../src/validation/boostback.py),
+[verification runner](../../scripts/check_boostback_physics.py), and
+[mission regressions](../../tests/sim/test_boostback.py).
+
+[8] Independent Project 2 cases: [verification runner](../../scripts/check_project2_segments.py),
+[scenario/reference regressions](../../tests/sim/test_project2_segments.py), and
+[reference preparation](../../src/validation/segment_spec.py).

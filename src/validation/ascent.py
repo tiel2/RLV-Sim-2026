@@ -10,10 +10,22 @@ from scipy.integrate import cumulative_trapezoid, solve_ivp
 from scipy.spatial.transform import Rotation
 
 from validation.references import G0, attitude_error, mass_properties
-from validation.vehicle_references import _constants, body, body_table, environment, inertia_rate
+from validation.vehicle_references import (
+    _constants,
+    body,
+    body_table,
+    environment,
+    fins,
+    inertia_rate,
+)
 
 
-def reference(cfg, times, *, rtol=1e-10):
+def reference(cfg, times, *, rtol=1e-10, allow_neutral_fins=False):
+    """Prescribed realistic nine-engine dynamics; recovery allows neutral exposed fins.
+
+    Initial state and commands come from configuration, never native output. Reference
+    time samples may end at native contact, but no contact constraint is applied here.
+    """
     cfg = _constants(cfg)
     v, ic = cfg.plant.vehicle, cfg.scenario.ic
     if (
@@ -59,7 +71,7 @@ def reference(cfg, times, *, rtol=1e-10):
         np.zeros(4 * ng),
     ]
     gas = ic.rcs_fuel
-    dry = v.mass.m_dry + v.attached_component.mass
+    dry = v.mass.m_dry + getattr(getattr(v, "attached_component", None), "mass", 0)
     current_u, current_g = np.zeros(n), np.zeros((ng, 2))
     deployment = 1
     result = np.empty((len(times), len(initial)))
@@ -74,10 +86,15 @@ def reference(cfg, times, *, rtol=1e-10):
         if hasattr(row, "gimbal"):
             current_g = np.broadcast_to(row.gimbal, (ng, 2)).copy()
         deployment = getattr(row, "fin_deployment", deployment)
-        if deployment != 0 or not np.allclose(getattr(row, "rcs", 0), 0):
-            raise ValueError("ascent reference requires stowed fins and no RCS firing")
+        if (
+            (deployment != 0 and not allow_neutral_fins)
+            or not np.allclose(getattr(row, "rcs", 0), 0)
+            or not np.allclose(getattr(row, "fin", 0), 0)
+            or (allow_neutral_fins and cfg.plant.aero.fins.incremental)
+        ):
+            raise ValueError("reference requires neutral fins/no RCS and declared fin exposure")
 
-        def rhs(_, y, current_u=current_u, current_g=current_g):
+        def rhs(_, y, current_u=current_u, current_g=current_g, deployment=deployment):
             r, vel, C, w, mass = y[:3], y[3:6], y[6:15].reshape(3, 3), y[15:18], y[18]
             u = y[19 : 19 + n]
             g = y[19 + n : 19 + n + 2 * ng].reshape(ng, 2)
@@ -87,6 +104,11 @@ def reference(cfg, times, *, rtol=1e-10):
             env = environment(cfg, -r[2])
             cg, I = mass_properties(v, mass, gas)
             ae = body(cfg, lookup, C.T @ vel, w, cg, -r[2])
+            fi = (
+                fins(cfg, C.T @ vel, w, np.zeros(4), cg, -r[2])
+                if deployment
+                else dict(force=np.zeros(3), moment=np.zeros(3))
+            )
             duty = np.clip(u, 0, 1)
             ignition = np.clip((duty - e.throttle_min + 0.1) / 0.1, 0, 1)
             ignition = ignition**2 * (3 - 2 * ignition)
@@ -96,8 +118,12 @@ def reference(cfg, times, *, rtol=1e-10):
             thrust = (
                 ignition * np.maximum(duty * e.thrust_vac - env["pressure"] * e.nozzle_exit_area, 0)
             )[:, None] * axes
-            force = thrust.sum(axis=0) + ae["force"]
-            moment = np.cross(positions - [cg, 0, 0], thrust).sum(axis=0) + ae["moment"]
+            force = thrust.sum(axis=0) + ae["force"] + deployment * fi["force"]
+            moment = (
+                np.cross(positions - [cg, 0, 0], thrust).sum(axis=0)
+                + ae["moment"]
+                + deployment * fi["moment"]
+            )
             moment -= flow * (e.x_eng - cg) ** 2 * np.array([0, w[1], w[2]])
             idot = inertia_rate(v, mass, gas, flow, 0)
             wdot = np.linalg.solve(I, moment - np.cross(w, I @ w) - idot * w)
@@ -121,7 +147,7 @@ def reference(cfg, times, *, rtol=1e-10):
                 ddg.ravel(),
             ]
 
-        if k == 0 and rhs(start, initial)[5] >= 0:
+        if k == 0 and getattr(ic, "launch_pad", False) and rhs(start, initial)[5] >= 0:
             raise ValueError("independent ascent reference starts at liftoff, after pad support")
         sol = solve_ivp(
             rhs,

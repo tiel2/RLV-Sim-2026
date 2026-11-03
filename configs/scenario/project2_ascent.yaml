@@ -1,0 +1,46 @@
+# @package _global_
+# Independent physics experiment; assumptions in docs/reference/project2_scenario_spec.md.
+# CRS-11 is optional context; enable scenario.reference.enabled explicitly to compare.
+defaults:
+- ascent
+- _self_
+scenario:
+  name: project2_ascent
+  description: Independent prescribed-input ascent physics experiment; no flight-matching
+    objective.
+  ic:
+    r_ned:
+    - 14000.0
+    - -5000.0
+    - -0.0
+    v_ned:
+    - 0.0
+    - 0.0
+    - 0.0
+    roll_deg: 0.0
+    pitch_deg: 90.0
+    yaw_deg: 45.0
+    w_body:
+    - 0.0
+    - 0.0
+    - 0.0
+    m: 545200.0
+    rcs_fuel: 200.0
+    throttle0: 1.0
+    launch_pad: true
+  horizon:
+    t_max: 150.0
+    input_dt: 0.02
+    log_dt: 0.2
+  reference:
+    enabled: false
+    dataset: crs11
+    segment: ascent
+    start_s: 0.0
+    end_s: 145.0
+    time_offset_s: -0.0
+    altitude_offset_m: 0.0
+    exclude_initial_sample: true
+    conventions: Assumed equal launch/landing altitude datum and ground-relative speed;
+      unverified.
+    role: optional_observable_comparison

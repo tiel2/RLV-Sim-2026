@@ -415,6 +415,7 @@ def run_simulation(
     progress: bool = False,
     record_telemetry: bool = True,
     prescribed=None,
+    mission=None,
 ) -> EpisodeResult:
     """Advance for at most t_max seconds from state0.t on an exact fixed-step grid.
 
@@ -424,6 +425,8 @@ def run_simulation(
     triples. Actuator rows describe each native block and separate requested, delayed, and
     effective endpoint inputs. delay_ticks is always measured in control periods.
     """
+    if mission is not None and prescribed is None:
+        raise ValueError("mission requires a prescribed prefix")
     if prescribed is not None:
         if controller is not None or nav is not None or delay_ticks:
             raise ValueError("prescribed execution uses no GNC, navigation, or command delay")
@@ -441,10 +444,13 @@ def run_simulation(
     if not split and schedule.guidance != schedule.control:
         raise ValueError("independent guidance_dt requires guide/control_allocate methods")
 
+    active_bundle = bundle
+    configuration = 0
     session = bundle.native.create_session(state0)
     if prescribed is not None:
         session.set_fin_deployment(prescribed.rows[0]["fin_deployment"])
     snapshot, aux = session.observe()
+    aux["configuration"] = configuration
     state = SimpleNamespace(**snapshot)
     t0 = float(state.t)
     if not np.isfinite(t0):
@@ -527,13 +533,21 @@ def run_simulation(
             held = requested
             t_command = t_held = float(state.t)
             phase = row["phase"]
+            if row["separate"]:
+                physical_events.append(prescribed.separation.apply(session))
+                active_bundle = prescribed.separation.bundle
+                configuration = 1
             session.set_fin_deployment(row["fin_deployment"])
-            # Configuration changes affect diagnostics at the event epoch, not the pose.
+            # Observe the post-event configuration and any modeled CG state change.
             snapshot, aux = session.observe()
+            aux["configuration"] = configuration
             state = SimpleNamespace(**snapshot)
             if log["t"] and np.isclose(log["t"][-1], state.t, atol=1e-9, rtol=0):
-                aux_log[-1] = {key: np.asarray(value) for key, value in aux.items()}
-                log["phase"][-1] = phase
+                # The trajectory is right-continuous. The event stores both states.
+                for values in log.values():
+                    values.pop()
+                aux_log.pop()
+                _log_step(log, aux_log, state, phase, aux)
             input_events.append(
                 {
                     "t": float(state.t),
@@ -543,6 +557,24 @@ def run_simulation(
                 }
             )
             events["command_release"].append(float(state.t))
+        if mission is not None and configuration == 1 and tick % schedule.control == 0:
+            event_count = len(mission.events)
+            requested = mission.update(state, aux)
+            mission.capture(session, requested)
+            held = _copy_command(requested)
+            phase = mission.phase
+            t_command = t_held = float(state.t)
+            events["control"].append(float(state.t))
+            events["command_release"].append(float(state.t))
+            # Record transitions on their actual control tick, even between log epochs.
+            if len(mission.events) != event_count or mission.complete:
+                if log["t"] and abs(log["t"][-1] - float(state.t)) < 1e-9:
+                    for values in log.values():
+                        values.pop()
+                    aux_log.pop()
+                _log_step(log, aux_log, state, phase, aux)
+            if mission.complete:
+                break
         if prescribed is None and tick % schedule.control == 0:
             if split:
                 act, gnc_mem = controller.control_allocate(cmd, x_hat, gnc_mem, t)
@@ -564,6 +596,7 @@ def run_simulation(
         was_on_pad = bool(getattr(state, "launch_pending", False))
         steps = next_tick - tick
         snapshot, aux = session.advance(held, steps)
+        aux["configuration"] = configuration
         state = SimpleNamespace(**snapshot)
         if was_on_pad and not bool(state.launch_pending):
             physical_events.append(
@@ -622,7 +655,7 @@ def run_simulation(
         log,
         aux_log,
         state,
-        bundle,
+        active_bundle,
         not bool(state.done),
         success_pos_tol,
         success_speed_tol,
@@ -632,7 +665,27 @@ def run_simulation(
         _attach_gnc_aux(result, gnc_mem)
     else:
         result.aux["phase_names"] = prescribed.phase_names
-    result.aux["input_mode"] = "prescribed" if prescribed is not None else "closed_loop"
+    if mission is not None:
+        from gnc.guidance.boostback import PHASES
+
+        result.aux["phase_names"].update(PHASES)
+        physical_events.extend(mission.events)
+        result.aux["mission"] = mission.summary()
+        result.aux["mission_records"] = mission.records
+        result.aux["reference_windows"] = mission.reference_windows
+        if mission.complete and not bool(state.done):
+            result.termination_reason = int(
+                TerminationReason.MISSION_ABORT
+                if mission.failure
+                else TerminationReason.MISSION_COMPLETE
+            )
+    result.aux["input_mode"] = (
+        "mission"
+        if mission is not None
+        else "prescribed"
+        if prescribed is not None
+        else "closed_loop"
+    )
     result.aux["events"] = sorted(input_events + physical_events, key=lambda row: row["t"])
     result.aux["schedule"] = {
         **schedule.metadata(),

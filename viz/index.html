@@ -120,6 +120,23 @@
   .finbar .ffill { position: absolute; left: 3px; right: 3px; top: 50%; height: 0; background: var(--sx-accent);
     border-radius: 1px; }
   .finbar .flbl { font-size: 8px; color: var(--sx-text-micro); margin-top: 3px; }
+  .rcs-panel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sx-hairline); }
+  .rcs-header { display: flex; justify-content: space-between; align-items: center;
+    color: #ecf6ff; font-size: 12px; letter-spacing: 0.12em; }
+  .rcs-header small { color: #a7bdcf; font-size: 9px; letter-spacing: 0.08em; }
+  #rcsState { padding: 4px 9px; border: 1px solid #657584; border-radius: 3px;
+    font-size: 10px; font-weight: 600; color: #a7bdcf; background: rgba(120,145,165,0.08); }
+  .rcs-panel.active #rcsState { color: #efffff; border-color: #8aeaff; background: #185365;
+    box-shadow: 0 0 12px rgba(110,225,255,0.35); }
+  .rcs-summary { display: flex; justify-content: space-between; margin: 9px 0 8px;
+    color: #b7cad9; font-size: 9px; letter-spacing: 0.03em; }
+  .rcs-nozzles { display: grid; grid-template-columns: repeat(6,1fr); gap: 5px; }
+  .rcs-nozzle { position: relative; padding: 5px 0 7px; text-align: center; border-radius: 2px;
+    border: 1px solid #42515e; background: rgba(0,0,0,0.2); color: #8b9eae; font-size: 10px; }
+  .rcs-nozzle.active { color: #fff; border-color: #9befff; background: #206075;
+    box-shadow: 0 0 7px rgba(125,230,255,0.3); }
+  .rcs-nozzle .duty { position: absolute; bottom: 2px; left: 0; height: 2px;
+    background: #c7f7ff; }
 
   /* ============ bottom broadcast band ============ */
   #band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 14px 28px 12px;
@@ -241,6 +258,13 @@
       <div class="subcap">grid fins (δ) · <span id="finState"
         title="Recorded aerodynamic exposure. Deployment switches instantly; hinge travel is not simulated.">DEPLOYED</span></div>
     </div>
+  </div>
+  <div class="rcs-panel" id="rcsPanel" aria-label="RCS actuator status">
+    <div class="rcs-header"><span>RCS <small>COLD GAS</small></span>
+      <span id="rcsState" title="Activity averaged over each PWM period.">OFF</span></div>
+    <div class="rcs-summary"><span id="rcsCount">— NOZZLES</span>
+      <span id="rcsDuty">MAX DUTY —</span></div>
+    <div class="rcs-nozzles" id="rcsNozzles" role="group" aria-label="Individual RCS nozzles"></div>
   </div>
 </div>
 

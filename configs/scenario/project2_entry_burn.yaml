@@ -1,0 +1,66 @@
+# @package _global_
+# Independent physics experiment; assumptions in docs/reference/project2_scenario_spec.md.
+# CRS-11 is optional context; enable scenario.reference.enabled explicitly to compare.
+defaults:
+- _project2_recovery
+- _self_
+scenario:
+  name: project2_entry_burn
+  description: Independent prescribed-input entry_burn physics experiment; no flight-matching
+    objective.
+  ic:
+    r_ned:
+    - 0.0
+    - 0.0
+    - -47500.0
+    v_ned:
+    - 406.9143222137364
+    - 0.0
+    - 1192.7777878156248
+    roll_deg: 0.0
+    pitch_deg: 71.16300328747862
+    yaw_deg: 180.0
+    w_body:
+    - 0.0
+    - 0.0
+    - 0.0
+    m: 40000.0
+    rcs_fuel: 200.0
+    throttle0: 0.0
+    launch_pad: false
+  horizon:
+    t_max: 14.0
+    input_dt: 0.02
+    log_dt: 0.02
+  reference:
+    enabled: false
+    dataset: crs11
+    segment: entry_burn
+    start_s: 372.0
+    end_s: 384.0
+    time_offset_s: -372.0
+    altitude_offset_m: 0.0
+    exclude_initial_sample: true
+    conventions: Assumed equal altitude datum and ground-relative speed; synthetic
+      recovery heading/origin; unverified.
+    role: optional_observable_comparison
+  inputs:
+  - t: 0.0
+    throttle:
+    - 0.5
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.0
+    - 0.0
+    gimbal: 0.0
+    fin: 0.0
+    rcs: 0.0
+    fin_deployment: 1.0
+    label: entry_burn
+  - t: 12.0
+    throttle: 0.0
+    label: cutoff

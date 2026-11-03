@@ -1,0 +1,23 @@
+# @package _global_
+# Shared assumed booster hardware from the Project 2 specification.
+defaults:
+- _prescribed
+- _self_
+plant:
+  vehicle:
+    engines:
+      thrust_vac: 914000.0
+      nozzle_exit_area: 0.68
+    tanks:
+      density:
+      - 1230.0
+      - 810.0
+      radius:
+      - 1.8
+      - 1.8
+      bottom:
+      - -26.0
+      - -40.0
+      length:
+      - 25.0
+      - 14.0
