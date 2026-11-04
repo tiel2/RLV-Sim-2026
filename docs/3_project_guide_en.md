@@ -2,13 +2,39 @@
 
 [Korean version](3_project_guide_ko.md)
 
-**2 November 2026 update:** Attached-stack ascent through MECO/coast now has independent
-150 s dynamics verification, open-system balance checks, pad-reaction diagnostics and
-state-driven rendering. Flight-reference comparison is disabled by default. The updated
-[Korean guide Section 12.6](3_project_guide_ko.md#ascent-physics) and
-[English verification report Section 6](verification/physics_implementation_report_en.md#6-ascent-physics-and-rendering-verification)
-describe the implementation and its limits. The October overview below predates this addition;
-separation, boostback and end-to-end mission integration remain unimplemented.
+**Current Project 2 status, 3 November 2026:** Five independently initialized phases are
+available, all on spherical rotating Earth at an assumed reference latitude of 28.6°:
+
+| Phase | Argument to `scripts/run_single.py` |
+|---|---|
+| Ascent | `scenario=project2_ascent` |
+| Entry burn | `scenario=project2_entry_burn` |
+| Aerodynamic descent | `scenario=project2_aero_descent` |
+| Terminal powered descent | `scenario=project2_powered_descent` |
+| Landing | `scenario=project2_landing` |
+
+```bash
+.venv/bin/python scripts/run_single.py scenario=project2_landing
+.venv/bin/python scripts/view_replay.py --system
+```
+
+The first four are prescribed-input experiments; landing uses LCvx/PD closed-loop control,
+ideal actuators and truth pass-through navigation. The landing planner includes surface
+centrifugal acceleration, with N/E/D position gains [0.1,0.1,1] s⁻² and velocity gains
+[0.6,0.6,4] s⁻¹. The current landing achieves 0.086245 m/s interpolated contact speed and
+0.019430 m position error. All five phase checks, **400 tests**, Ruff and **25 WebGL checks**
+pass. The original `+baseline=pdg` remains a separate fixed-Earth regression.
+
+Attached-stack ascent, impulse-free separation and the connected RCS maneuver/boostback
+experiment are implemented and verified; the latter does not achieve its return target.
+Continuous launch-to-touchdown integration is optional and unqualified. Sensors, INS/EKF
+and final public-flight comparison/reporting remain pending. Use the
+[five-phase specification](reference/project2_scenario_spec.md),
+[current results](verification/project2_segments/physics_results.md),
+[rotating-Earth equations](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification),
+[landing verification](verification/physics_implementation_report_en.md#12-landing-added-as-the-fifth-representative-phase)
+and [TODO](TODO.md) for current scope. The detailed October overview below primarily describes
+the older fixed-Earth cases; historical run counts and results are labeled by their campaign dates.
 
 RLV-Sim is a research simulator for Falcon 9 first-stage reentry, descent, and landing, with interchangeable guidance, navigation, and control algorithms. Python handles configuration, GNC, execution scheduling, and analysis; C++ handles the six-degree-of-freedom physics and numerical integration.
 
@@ -40,13 +66,13 @@ The key distinction is between the **6-DOF Plant**, **3-DOF landing trajectory o
 
 | Area | Implementation | Status and interpretation |
 |---|---|---|
-| Vehicle | Single-engine `falcon9_stage1`, nine-engine `falcon9_octaweb` | Falcon 9 first-stage model based on public approximations |
+| Vehicle | Single-engine `falcon9_stage1`, nine-engine `falcon9_octaweb`, attached `falcon9_ascent` stack | Public approximations; inert attached component, impulse-free separation and retained-booster coast |
 | Motion | Translation, rotation, quaternion, propellant consumption, variable inertia | One physics implementation in C++ |
 | Aerodynamics | Linear model, analytically generated coefficient tables, file-based tables, grid fins | Default tables are not a measured aerodynamic database |
 | Actuators | Throttle, TVC, fins | Ideal, simplified, and realistic models |
 | RCS | Individual nozzle forces, torques, and propellant flow; 12 nozzles for three axes or four for roll only | Independent PWM/averaged-thrust model; allocation disabled by default |
 | Mass properties | LOX/RP-1 liquid heights, CG, inertia, separate RCS gas | O/F 2.56; configurable cylindrical geometry |
-| Environment | Altitude-dependent inverse-square gravity, layered standard atmosphere, steady wind/turbulence, local Earth-rotation terms | Fixed-origin NED; `inverse_square` and `ussa_poly` by default |
+| Environment | Central gravity and full rotating-Earth terms in rotating mode; layered atmosphere, wind/turbulence | Fixed-origin Earth-fixed Cartesian axes aligned with NED; radial altitude/contact. Fixed mode retains flat geometry |
 | Slosh | None, pendulum, spring-mass | Two lateral modes |
 | Faults | Engine shutdown/underperformance, TVC bias, fin lock, RCS nozzle degradation | RCS faults configured separately through `plant.rcs.thrust_scale` |
 | Navigation | `IdentityNav`, navigation template | Truth passthrough; sensors, INS, and EKF not implemented |
@@ -54,10 +80,10 @@ The key distinction is between the **6-DOF Plant**, **3-DOF landing trajectory o
 | Control | Quaternion-error PD | Generates requested body torque |
 | Allocation | Throttle, gimbal, fin, and RCS commands | Nominal-effectiveness allocation with limits |
 | Prescribed-input execution | Open-loop actuator commands specified by a time schedule | Same Plant and loop without constructing GNC or navigation |
-| Configuration changes | Binary fin aerodynamic exposure | Instantaneous deployment approximation; no deployment impulse or mass/inertia change |
+| Configuration changes | Binary fin aerodynamic exposure and impulse-free stage separation | Fin deployment has no hinge/impulse/inertia dynamics; separation updates mass/CG/inertia and the tracked CG |
 | Experiments | Single runs, CPU-parallel Monte Carlo, command delay | Initial-condition dispersion and reproducible seeds |
 | Analysis | Trajectory, forces/moments, mass properties, events, landing assessment, computation time | CSV, JSON, NPZ, plots; navigation logs only when navigation runs |
-| Physics verification | Six analytical checks and deterministic integration-step comparisons | Implementation/numerical verification, distinct from flight-data accuracy validation |
+| Physics verification | Analytical/component checks, independent full-segment integration, timestep comparisons, full Kepler orbits and torque-free rotation | Four prescribed phase checks plus a separate closed-loop landing regression; no empirical flight-accuracy claim |
 | Visualization | 3D Replay, Frame Studio | Result playback and coordinate-frame exploration |
 
 `gnc/navigation=ekf` raises `NotImplementedError`. Optional noise and bias in `IdentityNav` are synthetic state perturbations, not IMU/GNSS/altimeter models. The default builder returns noise-free `IdentityNav()`.
@@ -409,6 +435,13 @@ Main-propellant depletion sets engine thrust and flow to zero. It does not termi
 
 ### 7.1 Translational and rotational motion
 
+The equations below use the historical fixed-Earth case. In rotating mode, `w_body` is
+body relative to the Earth-fixed reference axes; Euler dynamics and jet angular flux use
+the inertial rate `w_body+C_bn.T Omega`. Quaternion propagation uses the relative rate,
+and its derivative equation includes the corresponding rate-transport term. Gravity is
+central, while altitude and contact are radial. See Section 7.6 and the
+[complete equations and verification](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification).
+
 The stored rigid-body state has three position components, three velocity components, four quaternion components, three angular rates, and one mass. Six degrees of freedom describes motion, not a six-element state array.
 
 $$
@@ -673,7 +706,13 @@ $$
 -\boldsymbol\Omega_n\times\left[\boldsymbol\Omega_n\times(\mathbf R_{origin}+\chi\mathbf r_n)\right].
 $$
 
-$\chi$ enables differential centrifugal acceleration, and $\mathbf R_{origin}=[0,0,-R_e]^T$. Inverse-square gravity is purely attractive, so origin centrifugal acceleration is added separately. This is a fixed local NED model, not spherical/ellipsoidal ECEF/LLA propagation.
+Rotating mode requires $\chi=1$ and inverse-square gravity. With
+$\mathbf R_f=\mathbf R_{origin}+\mathbf r_n$, $\mathbf R_{origin}=[0,0,-R_e]^T$,
+gravity is $-\mu\mathbf R_f/\|\mathbf R_f\|^3$ and altitude is $\|\mathbf R_f\|-R_e$.
+Pure gravitation excludes the centrifugal term. These are Earth-fixed Cartesian axes
+aligned with origin NED, equivalent to a constant rotation/translation of ECEF for the
+sphere; they do not follow a moving local vertical. Oblateness/J2, gravity-gradient torque
+and tides are omitted. All five Project 2 scenarios select this rotating model.
 
 ### 7.7 RK4 and termination
 
@@ -844,7 +883,7 @@ The allocator does not receive truth wind, so dynamic pressure uses estimated gr
 
 ### 9.1 Common problem and plan data
 
-Inputs are current position, velocity, total mass, target position, nominal gravity, engine capability, nominal mass remaining after main-propellant depletion, maximum tilt, approach cone, candidate flight times, and node count. `nominal["m_dry"]` is the planning lower bound including structure plus initial RCS gas, distinct from `params.mass.m_dry`. The Plant uses altitude-dependent gravity, but convex guidance currently holds surface gravity from `nominal["gravity_ned"]` constant. The default target is the NED origin, with terminal position at the target and zero velocity.
+Inputs are current position, velocity, total mass, target position, nominal gravity, engine capability, nominal mass remaining after main-propellant depletion, maximum tilt, approach cone, candidate flight times, and node count. `nominal["m_dry"]` is the planning lower bound including structure plus initial RCS gas, distinct from `params.mass.m_dry`. The Plant propagates the selected gravity/rotation model, while convex guidance holds `nominal["gravity_ned"]` constant. In rotating mode this nominal surface frame acceleration includes centrifugal acceleration; it is not the plant's pure gravitation. The planner still omits spatial variation and Coriolis acceleration from its optimized dynamics. The default target is the NED origin, with terminal position at the target and zero velocity.
 
 $$
 \mathbf r_N=\mathbf r_{target},\qquad
@@ -862,7 +901,7 @@ A plan is returned as a dict containing `r`, `v`, `m`, `u`, `sigma`, `thrust`, `
 | `convex_glideslope_deg` | Approach-cone angle from horizontal | 20° |
 | `convex_thrust_rate_max_nps` | Inter-interval thrust-magnitude rate limit | 981,000 N/s |
 | `convex_replan` | Replan after ignition | false |
-| `convex_tracking_k_r`, `convex_tracking_k_v` | Position/velocity tracking gains | 1.0, 4.0 |
+| `convex_tracking_k_r`, `convex_tracking_k_v` | Position/velocity tracking gains; scalar or N/E/D vector | 1.0, 4.0 |
 | `convex_terminal_slack` | Relax terminal error | false; true unsupported by SCvx |
 | `convex_terminal_vz_max_mps` | Allowed sink-speed window instead of rest | null |
 | `scvx_iters`, `scvx_tolerance` | SCvx iteration limit and convergence tolerance | 12, 0.01 |
@@ -1069,7 +1108,9 @@ Assess execution outcome, landing performance, and physics verification separate
 
 Input/configuration events occur at their specified integration-grid epochs. Fuel depletion is detected at observation-block endpoints, so block-size uncertainty is recorded; ground crossing has uncertainty on the order of `plant_dt`. Configuration-event physics diagnostics represent the post-switch state, whereas actuator samples are interval-end values before the next command acts. Follow `telemetry_schema.json` for array timestamp semantics.
 
-`downrange` is horizontal distance from the initial position, $\sqrt{(r_N-r_{N,0})^2+(r_E-r_{E,0})^2}$, not accumulated path length. Ground-relative flight-path angle is $\gamma=\operatorname{atan2}(-v_D,\sqrt{v_N^2+v_E^2})$, positive in climb and `NaN` at rest. `plots/physics.png` shows altitude, horizontal distance, flight-path angle, AoA, dynamic pressure, propellant, CG, and inertia. Analytical checks also generate `plots/validation.png` and applicable analytical-comparison plots. Failed verification exits with code `2` after saving results.
+`downrange` is horizontal distance from the initial position, $\sqrt{(r_N-r_{N,0})^2+(r_E-r_{E,0})^2}$, not accumulated path length. For fixed Earth, ground-relative flight-path angle is $\gamma=\operatorname{atan2}(-v_D,\sqrt{v_N^2+v_E^2})$, positive in climb and `NaN` at rest. `plots/physics.png` shows altitude, horizontal distance, flight-path angle, AoA, dynamic pressure, propellant, CG, and inertia. Analytical checks also generate `plots/validation.png` and applicable analytical-comparison plots. Failed verification exits with code `2` after saving results.
+
+For rotating Earth, altitude is radial and flight-path angle uses the local radial down vector, not the fixed reference D axis. `physics.npz` exports `local_down_ned`, `omega_inertial_body` and the authoritative native altitude. `telemetry_schema.json` records Earth parameters and rate/frame conventions.
 
 Sources: [telemetry.py](../src/sim/telemetry.py), [analytical.py](../src/validation/analytical.py), [_plotting.py](../scripts/_plotting.py).
 
@@ -1792,7 +1833,8 @@ The vehicle verifier accepts `--stage 1`–`5` and `--output <directory>`. Runs 
 | Nominal environment | Allocation uses estimated ground-relative velocity for dynamic pressure and an exponential back-pressure approximation; SCvx also uses reduced aerodynamics relative to the full Plant |
 | Multi-engine allocation | Identical nominal engine parameters, equal thrust distribution, common gimbal commands; no fault-adaptive optimal allocation |
 | Roll | Uncontrolled with the default analytical fin allocation and RCS disabled |
-| Earth model | Altitude-dependent inverse-square gravity, fixed-origin NED, optional Coriolis and origin/differential centrifugal terms; no ECEF/LLA propagation |
+| Earth model | Fixed mode retains flat NED; rotating mode uses spherical central gravity, full rotational acceleration and consistent inertial/relative attitude rates in Earth-fixed Cartesian axes; no oblateness/J2 or gravity-gradient torque |
+| Separation/boostback | Impulse-free separation, retained coast and connected RCS maneuver/boostback are implemented; return target fails in the connected experiment, and full-flight recovery is optional |
 | Tank and RCS geometry | Configurable assumptions; axially settled cylindrical liquid volumes and an equivalent gas reservoir |
 | Aerodynamic coefficients | Analytical approximations by default; identification from wind-tunnel or flight data is a separate task |
 | Contact | Terminates and classifies the run at ground contact; no landing-leg contact dynamics |

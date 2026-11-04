@@ -63,14 +63,16 @@ class PlantState:
     """Full plant state. Rigid-body core + actuator internals + disturbance filters + RNG.
 
     Frames (see core.frames): r_ned/v_ned in NED, q_bn body->NED quaternion (scalar-first),
-    w_body body rates in body frame. Altitude = -r_ned[2].
+    w_body is body relative to the reference axes, expressed in body coordinates.
+    Rotating mode: Earth-fixed origin-NED Cartesian axes, spherical altitude;
+    fixed mode: nonrotating flat NED, altitude = -r_ned[2].
     """
 
     t: Array  # () time [s]
     r_ned: Array  # (3,) position NED [m]
     v_ned: Array  # (3,) velocity NED [m/s]
     q_bn: Array  # (4,) body->NED quaternion [w,x,y,z]
-    w_body: Array  # (3,) angular velocity, body frame [rad/s]
+    w_body: Array  # (3,) body/reference angular velocity in body [rad/s]; not gyro truth
     m: Array  # () total mass [kg]
 
     # Actuator truth states (continuous, integrated in the RHS)
@@ -269,10 +271,11 @@ class WindParams:
 
 @immutable_dataclass
 class EarthRotationParams:
-    """Local-level rotating-Earth terms for the fixed-origin NED plant.
+    """Spherical rotating Earth in fixed-origin Earth-fixed NED-oriented axes.
 
     Pure gravitation is separate from centrifugal acceleration. Rotating mode adds
-    Coriolis, origin centrifugal, and optional origin-relative centrifugal acceleration.
+    Coriolis and full centrifugal acceleration. Central gravity, radial altitude,
+    and inertial-rate Euler dynamics accompany this selection.
     """
 
     enabled: Array  # () 1 for rotating Earth, 0 for fixed Earth

@@ -32,8 +32,8 @@ class LcvxGuidance:
         tf_search_iters: int,
         grid_fallback: bool,
         tilt_max_deg: float,
-        k_r: float,
-        k_v: float,
+        k_r: float | np.ndarray,
+        k_v: float | np.ndarray,
         tf_floor: float,
         landing_cutoff_impact_mps: float,
         terminal_slack: bool,
@@ -61,8 +61,14 @@ class LcvxGuidance:
         self.thrust_rate_max = None if thrust_rate_max_nps is None else float(thrust_rate_max_nps)
         self.tf_search_iters = int(tf_search_iters)
         self.grid_fallback = bool(grid_fallback)
-        self.k_r = float(k_r)
-        self.k_v = float(k_v)
+        # Scalar settings preserve the original common-axis gains. N/E/D gains
+        # allow lateral tracking (which acts through attitude) to run more slowly
+        # than direct vertical thrust tracking.
+        for name, value in (("k_r", k_r), ("k_v", k_v)):
+            gain = np.asarray(value, dtype=float)
+            if gain.shape not in ((), (3,)) or not np.all(np.isfinite(gain)) or np.any(gain < 0):
+                raise ValueError(f"{name} must be a finite nonnegative scalar or N/E/D vector")
+            setattr(self, name, np.broadcast_to(gain, (3,)).copy())
         self.tf_floor = float(tf_floor)
         self.landing_cutoff_impact_mps = float(landing_cutoff_impact_mps)
         self.terminal_slack = bool(terminal_slack)
@@ -378,9 +384,7 @@ class LcvxGuidance:
     def _has_drag_template(self) -> bool:
         return self.rho0 > 0.0 and self.drag_cd_s > 0.0
 
-    def _drag_template(
-        self, plan, offset: float, tf: float, n: int, drag_fraction: float = 1.0
-    ):
+    def _drag_template(self, plan, offset: float, tf: float, n: int, drag_fraction: float = 1.0):
         """Frozen linear drag coefficients from a previous trajectory [1/s].
 
         Reparameterize the REMAINING source trajectory onto the candidate's
@@ -717,7 +721,11 @@ class LcvxGuidance:
             t0 = time.perf_counter()
             result = solve()
             self._log_solve(
-                mem, t, kind, time.perf_counter() - t0, result,
+                mem,
+                t,
+                kind,
+                time.perf_counter() - t0,
+                result,
                 drag_fraction=drag_fraction,
             )
             return result
@@ -732,9 +740,7 @@ class LcvxGuidance:
                 # Gradually increase drag and update the trajectory reference
                 # after each feasible SOCP-2 free-time solve; reject partial
                 # continuation if the full configured drag remains infeasible.
-                socp2 = self._drag_continuation(
-                    r0, v0, m0, new, logged, "ignite_drag_refine"
-                )
+                socp2 = self._drag_continuation(r0, v0, m0, new, logged, "ignite_drag_refine")
                 if socp2 is not None:
                     new = socp2
                 else:

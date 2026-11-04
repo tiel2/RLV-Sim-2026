@@ -3,15 +3,19 @@
 # CRS-11 is optional context; enable scenario.reference.enabled explicitly to compare.
 defaults:
 - ascent
+- override /environment/earth: rotating
 - _self_
+environment:
+  earth:
+    latitude_deg: 28.6 # assumed spherical reference-site latitude, not reconstructed CRS-11 geodesy
 scenario:
   name: project2_ascent
   description: Independent prescribed-input ascent physics experiment; no flight-matching
     objective.
   ic:
     r_ned:
-    - 14000.0
-    - -5000.0
+    - 0.0
+    - 0.0
     - -0.0
     v_ned:
     - 0.0

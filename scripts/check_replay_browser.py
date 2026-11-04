@@ -24,10 +24,10 @@ def main():
     parser.add_argument("--separation", help="optional ascent_separation replay")
     parser.add_argument("--boostback", help="optional ascent_boostback replay")
     parser.add_argument(
-        "--project2-root", type=Path, help="root containing the four Project 2 run folders"
+        "--project2-root", type=Path, help="root containing the five Project 2 run folders"
     )
     parser.add_argument(
-        "--project2-only", action="store_true", help="inspect only the four segment runs"
+        "--project2-only", action="store_true", help="inspect only the five phase runs"
     )
     args = parser.parse_args()
     if args.project2_only and args.project2_root is None:
@@ -62,7 +62,13 @@ def main():
             if args.project2_root:
                 cases.extend(
                     ("project2_" + name, str(args.project2_root / name / "replay.json"))
-                    for name in ("ascent", "entry_burn", "aero_descent", "powered_descent")
+                    for name in (
+                        "ascent",
+                        "entry_burn",
+                        "aero_descent",
+                        "powered_descent",
+                        "landing",
+                    )
                 )
             if args.separation:
                 cases.append(("separation", args.separation))

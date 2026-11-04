@@ -172,13 +172,34 @@ selecting `gnc/navigation=ekf` raises `NotImplementedError`.
 The ordered backlog for ascent, recovery phases, sensor models, and navigation is maintained in
 [Development TODO](docs/TODO.md).
 
-Project 2 selects four independently initialized cases: ascent, entry burn, aerodynamic descent,
-and terminal powered descent. Their [scenario specification](docs/reference/project2_scenario_spec.md)
-records engineering initial conditions, prescribed inputs and physics checks. Run `scenario=project2_ascent`,
-`scenario=project2_entry_burn`, `scenario=project2_aero_descent` or `scenario=project2_powered_descent`
+Project 2 selects **five independently initialized phases**: ascent, entry burn, aerodynamic descent,
+terminal powered descent, and landing. Their [scenario specification](docs/reference/project2_scenario_spec.md)
+records engineering initial conditions, prescribed-input physics checks and the closed-loop landing
+regression. Run `scenario=project2_ascent`,
+`scenario=project2_entry_burn`, `scenario=project2_aero_descent`, `scenario=project2_powered_descent`
+or `scenario=project2_landing`
 with `scripts/run_single.py` for trajectories, loads, actuator/propellant histories and replay.
+The fifth phase is a single-engine closed-loop soft landing from 300 m, with ideal actuation,
+truth pass-through navigation and rotating Earth. It reuses PDG guidance/control, includes
+surface centrifugal acceleration in the planning gravity and uses slower lateral tracking gains.
+The historical `+baseline=pdg` remains a separate fixed-Earth regression.
+
+```bash
+.venv/bin/python scripts/run_single.py scenario=project2_landing
+.venv/bin/python scripts/view_replay.py --system
+```
+
+The same viewer command opens the most recent run of any of the five phases.
+All five cases enable spherical rotating Earth at an assumed reference latitude of 28.6°;
+the ascent origin is the launch point. Stored `r_ned/v_ned` are Earth-fixed Cartesian axes
+aligned with origin NED, with radial altitude/contact. `w_body` is reference-relative;
+`omega_inertial_body` is the rate for future gyro measurements. Run
+`python scripts/check_rotating_earth.py` for full Kepler orbits, inertial energy/momentum,
+torque-free attitude and rotation sensitivity. See [equations and results](docs/verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification).
 `python scripts/check_project2_segments.py` checks independent equations, step refinement and body-table
-applicability. The terminal experiment uses 20 s of burn and 2 s of shutdown observation; touchdown is
+applicability for the four prescribed cases, plus a separate soft-touchdown/bookkeeping regression for
+landing. Use `--scenario landing` to check only landing. The terminal experiment uses 20 s of burn
+and 2 s of shutdown observation; touchdown is
 not its acceptance criterion. See [physics results](docs/verification/project2_segments/physics_results.md).
 CRS-11 is optional context. Enable `scenario.reference.enabled=true` for a single comparison, or
 pass `--compare-flight` to the checker; RMSE is not a physics acceptance criterion.
@@ -211,13 +232,19 @@ models, see [코드 구조와 수학 모델](docs/3_project_guide_ko.md).
 
 ## Verify
 
+Latest verification (2026-11-03, including `project2_landing`): **400 tests**, Ruff,
+all **five phase checks**, and **25 WebGL state/geometry checks** passed. The rotating-Earth
+landing achieved 0.086245 m/s contact speed and 0.019430 m position error. See
+[current results](docs/verification/project2_segments/physics_results.md) and
+[the detailed verification report](docs/verification/physics_implementation_report_en.md#12-landing-added-as-the-fifth-representative-phase).
+
 ```bash
 python -m pip install -e ".[dev,qoco]" # full suite includes Python QOCO comparisons
 python -m pytest tests/ -q
 ruff check src tests scripts
 ```
 
-The physics update was checked on 2026-10-21: **230 tests passed**, and `ruff check src tests`
+Historical regression record from 2026-10-21: **230 tests passed**, and `ruff check src tests`
 passed. The PDG v2 command produced a soft landing at approximately **0.4884 m/s**, with
 **1,417.922 kg** main propellant remaining. The reentry command above continued after main fuel
 exhaustion and reached the ground at approximately **173.5069 m/s** (`crash`, zero main fuel).

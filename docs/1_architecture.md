@@ -194,21 +194,38 @@ the resolved configuration and the implementation version are needed for reprodu
 
 ## Earth model
 
-The state position and velocity are a displacement and derivative in a fixed-origin local NED frame.
-The default `environment/gravity=inverse_square` uses `g(h)=mu/(radius+h)^2`, straight down in
-NED. The body gravity force is `m C_bn.T @ g_ned(h)`; NED integration adds `g_ned(h)` directly.
-`g_ned` in the parameters is surface gravitation, not apparent gravity. Standard gravity for Isp
-conversion remains 9.80665 m/s². `environment/gravity=uniform` is an explicit analytic-test approximation.
+`environment/earth=fixed` preserves the nonrotating flat-NED experiments: altitude `h=-D`,
+and inverse-square gravity straight down. Uniform gravity is available for analytic tests.
 
-`environment/earth=fixed` omits rotation. Selecting `environment/earth=rotating` and setting the site
-latitude adds Coriolis plus centrifugal acceleration at the origin and (optionally) its displacement:
+`environment/earth=rotating` now propagates a **spherical rotating Earth**. State names remain
+`r_ned/v_ned`, but these are Cartesian displacement/velocity in Earth-fixed axes aligned with
+NED at a fixed spherical surface origin. This is a constant rotation and translation of ECEF,
+not a moving local-level frame. Define `R_f=r_ned+[0,0,-radius]` and
+`Omega=rate*[cos(latitude),0,-sin(latitude)]`. Then
 
-`a_rot = -2 omega_ie x v_ned - omega_ie x (omega_ie x (R_origin + chi*r_ned))`,
+`h=norm(R_f)-radius`,
 
-where `R_origin=[0,0,-radius]` and `chi` enables the differential term. Origin centrifugal acceleration
-is no longer hidden in the gravity parameter. These terms execute inside the C++ RK4 stages.
+`dv/dt = C_bn F_body/m - mu R_f/norm(R_f)^3 - 2 Omega x v - Omega x (Omega x R_f)`.
 
-This switch intentionally does not claim spherical/ellipsoidal trajectory propagation. A fixed local
-NED frame has no moving-frame transport rate or Earth-curvature kinematics. Missions for which those
-effects matter need an LLA/ECEF navigation state and ECEF plant propagation, rather than an additional
-correction term in this local plant.
+Altitude, atmosphere, contact, flight-path angle and touchdown vertical follow the spherical
+geometry. Pure gravitation and centrifugal acceleration are separate, with no double counting.
+Both inverse-square gravity and the full differential centrifugal term are required.
+
+`q_bn` maps body to these Earth-fixed axes; `w_body=omega_body/reference` is expressed in body
+coordinates. Euler dynamics use `w_i=w_body+C_bn.T Omega`; the stored-rate derivative includes
+`w_body x (C_bn.T Omega)`, while quaternion kinematics use `w_body`. The inertia-rate and jet
+angular-flux terms use `w_i`. Airflow and aerodynamic rotational damping use Earth-relative rates.
+Native diagnostics export `omega_inertial_body` and `local_down_ned` explicitly. The former is the
+angular-rate truth for a future gyro model; the public `w_body` alone is not gyro truth.
+
+All five `project2_*` phases select rotating Earth at an **assumed** reference latitude 28.6°;
+each has its own surface origin. This is not a reconstructed CRS-11 geographic trajectory.
+The root default and older verification scenarios remain fixed. See
+[rotating-Earth verification](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification).
+The sphere omits oblateness/J2, gravity-gradient torque, tides and precession/nutation. Existing
+GNC laws still have their documented local/flat approximations. The landing planner includes
+surface centrifugal acceleration in its constant nominal gravity, and its N/E tracking gains
+are lower than its vertical gains to account for attitude-mediated lateral thrust. This is a
+local 3-DOF planning approximation, not full rotating-Earth trajectory optimization. Prescribed runs do not
+construct GNC. Replay positions are in the fixed Cartesian axes; its scenery remains a tangent-plane
+visual approximation, not a globe rendering or a contact-geometry verification.

@@ -71,7 +71,11 @@ def compare_flight_reference(result, config, *, data_root=None):
         raise ValueError("insufficient overlapping reference coverage")
     arrays = {"reference_time_s": time, "simulation_time_s": time + offset}
     for key, observed, simulated in (
-        ("altitude_m", np.asarray(raw["altitude"]) * 1000, -result.r_ned[:, 2] + height_offset),
+        (
+            "altitude_m",
+            np.asarray(raw["altitude"]) * 1000,
+            np.array([row["altitude"] for row in result.aux["per_tick"]]) + height_offset,
+        ),
         ("speed_m_s", np.asarray(raw["velocity"]), np.linalg.norm(result.v_ned, axis=1)),
     ):
         arrays[f"reference_{key}"] = observed[mask]

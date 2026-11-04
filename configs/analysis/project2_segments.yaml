@@ -39,9 +39,9 @@ segments:
     mass_kg: 545200.0
     rcs_fuel_kg: 200.0
     horizontal_position_m:
-    - 14000.0
-    - -5000.0
-    horizontal_frame: assumed_landing_origin
+    - 0.0
+    - 0.0
+    horizontal_frame: launch_site_surface_origin
     velocity_heading_deg: 45.0
     attitude: vertical
     roll_deg: 0.0

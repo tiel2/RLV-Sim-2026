@@ -1,0 +1,47 @@
+# @package _global_
+# Independent closed-loop landing; derives from the PDG reference with rotating Earth.
+defaults:
+  - pdg@scenario
+  - override /vehicle_set: falcon9
+  - override /plant/vehicle: falcon9_stage1
+  - override /plant/aero: table
+  - override /plant/actuator: ideal
+  - override /plant/thrust: backpressure
+  - override /plant/slosh: none
+  - override /environment/gravity: inverse_square
+  - override /environment/atmosphere: ussa_poly
+  - override /environment/wind: none
+  - override /environment/earth: rotating
+  - override /fault: none
+  - override /gnc/scheduler: altitude
+  - override /gnc/guidance: lcvx
+  - override /gnc/control: pd
+  - override /gnc/allocation: default
+  - override /gnc/navigation: identity
+  - override /run: single
+  - _self_
+
+seed: 0
+plant_dt: 0.001
+environment:
+  earth:
+    latitude_deg: 28.6 # assumed spherical reference site, as in the other Project 2 cases
+gnc:
+  delay_ticks: 0
+  guidance:
+    convex_replan: false
+    # Horizontal thrust acts through the slower attitude loop; keep its outer
+    # feedback bandwidth below that loop. Retain the original vertical gains.
+    convex_tracking_k_r: [0.1, 0.1, 1.0] # N/E/D [s^-2]
+    convex_tracking_k_v: [0.6, 0.6, 4.0] # N/E/D [s^-1]
+  allocation:
+    rcs_enabled: false
+scenario:
+  name: project2_landing
+  description: Independent closed-loop landing on a rotating spherical Earth, with ideal actuation.
+  input_mode: closed_loop
+  ic:
+    rcs_fuel: 200.0
+    launch_pad: false
+  dispersion:
+    enable: false

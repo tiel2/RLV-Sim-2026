@@ -26,7 +26,9 @@ def plot_episode(result, out_dir: Path, title: str = "episode"):
     out_dir.mkdir(parents=True, exist_ok=True)
     t = result.t
     r, v, w, m = result.r_ned, result.v_ned, result.w_body, result.m
-    alt = -r[:, 2]
+    alt = _aux_series(result, "altitude")
+    if len(alt) != len(t):
+        alt = -r[:, 2]
 
     eul = np.array([euler_from_quat(q) for q in result.q_bn])  # (T,3) roll,pitch,yaw
     fig, ax = plt.subplots(2, 3, figsize=(16, 9))

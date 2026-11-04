@@ -136,6 +136,14 @@ def default_nominal(params, alloc, atmosphere_model: str) -> dict:
         )
         return x_cg_dry + f * (x_cg_wet - x_cg_dry)
 
+    planning_gravity = np.asarray(params.g_ned, dtype=float).copy()
+    if bool(params.earth.enabled):
+        # The plant stores pure gravitation. A local constant-gravity planner in
+        # Earth-fixed axes must also account for the surface centrifugal term.
+        omega = np.asarray(params.earth.omega_ned)
+        origin = np.array([0.0, 0.0, -float(params.gravity.radius)])
+        planning_gravity -= np.cross(omega, np.cross(omega, origin))
+
     return {
         "thrust_vac": thrust_vac_each,  # per-engine (allocation)
         "p_sea": p_sea,
@@ -147,7 +155,7 @@ def default_nominal(params, alloc, atmosphere_model: str) -> dict:
         "m_wet": float(params.mass.m_wet),
         "isp": float(params.engines.isp[0]),
         "g0": 9.80665,  # Standard gravity for Isp conversion, independent of altitude.
-        "gravity_ned": np.asarray(params.g_ned),  # nominal surface gravity for the planner
+        "gravity_ned": planning_gravity,  # nominal surface frame acceleration for the planner
         "mass_cg": mass_cg,
         # Gimbal moment-arm schedule inputs.
         "x_eng": x_eng,

@@ -4,7 +4,15 @@
 
 RLV-Sim은 Falcon 9 계열 기체의 결합체 상승과 1단 재진입·하강·착륙을 구간별로 모사하고 유도·항법·제어 알고리즘을 교체해 실험하는 연구용 시뮬레이터다. 아직 발사부터 착륙까지 연결된 전체 임무는 아니다. Python은 설정, GNC, 실행 일정, 결과 분석을 담당하고 C++은 6자유도 물리 모델과 수치 적분을 담당한다.
 
-이 문서는 2026-11-02의 공통 실행기·지정 입력 개루프 실험·물리 검증 기능까지 반영했다. 기존 폐루프 GNC·Monte Carlo와 함께, 기존 13개 차량 실험과 150초 상승·160초 단분리·연속 자세 전환/부스트백 실험, 핀 전개, 물리량·이벤트 기록, 독립 적분·운동량 수지 및 Replay 검사를 설명한다. 개발 순서는 **동역학 구현·검증 → 렌더링 검증 → 가이드 기록 → 이후 실비행 데이터 검증**이다. 센서 항법은 아직 구현하지 않았다. 수식은 구현을 설명하기 위한 것이며, 생략한 항이나 공칭 근사를 해당 위치에 명시한다. 수식의 근거는 각 절에 연결한 소스다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 `$...$`, `$$...$$` 및 흐름도를 렌더링할 수 있다.
+2026-11-03 기준 Project 2의 대표 phase는 **상승·재진입 연소·공력 하강·최종 동력 하강·착륙의
+5개**다. 앞의 네 사례는 `scenario=project2_*`인 회전지구 지정 입력 실험이고,
+착륙은 `scenario=project2_landing`의 회전지구·이상 구동기·truth 항법 조건에서 폐루프로 접지까지
+실행한다. [다섯 phase 명세와 실행 명령](reference/project2_scenario_spec.md#5-실행과-결과-확인)을
+따르며, 뷰어는 모든 사례에 같은 `scripts/view_replay.py --system`을 사용한다.
+
+이 문서는 2026-11-03의 다섯 대표 phase, 구면 회전지구 및 폐루프 착륙까지 반영했다. 기존 13개 차량 실험·상승·단분리·자세 전환/부스트백은 재사용 가능한 검증 사례로 보존한다. 현재 실행 명령과 검증 범위는 [다섯 phase 명세](reference/project2_scenario_spec.md), 결과는 [현재 결과](verification/project2_segments/physics_results.md), 남은 작업은 [TODO](TODO.md)를 따른다.
+
+센서 기반 항법은 아직 구현하지 않았다. 수식은 구현을 설명하며 생략 항과 근사를 해당 위치에 명시한다. 과거 실행 기록의 수치·테스트 수는 그 검증 시점에 해당하고, 최신 상태는 전체 테스트 400개·다섯 phase 검사·WebGL 25개 통과다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 수식과 도표를 렌더링할 수 있다.
 
 ## 목차
 
@@ -40,7 +48,7 @@ RLV-Sim은 Falcon 9 계열 기체의 결합체 상승과 1단 재진입·하강�
 | 구동기 | throttle, TVC, fin | 이상·단순화·현실적 모델 선택 |
 | RCS | 개별 노즐의 힘·토크·연료 소모, 3축 12노즐 / roll 전용 4노즐 | 독립적인 PWM / 평균 추력 모델; 기본 할당은 비활성 |
 | 질량 특성 | LOX/RP-1 액체 높이·CG·관성, 별도 RCS 가스, 상승용 고정 부착 질량 | O/F 2.56, 설정 가능한 원통 형상; 부착 질량은 1단 연료로 소모되지 않음 |
-| 환경 | 고도별 역제곱 중력, 층별 표준대기, 정상풍·난류, 국소 지구 회전 항 | 고정 원점 NED; `inverse_square`·`ussa_poly` 기본 |
+| 환경 | rotating은 중심중력·전체 자전 항, 층별 대기, 정상풍·난류 | 원점 NED와 정렬한 지구고정 Cartesian 축, 반경 고도·접촉; fixed는 기존 평면 근사 |
 | 연료 출렁임 | 없음, 진자, 스프링–질량 모델 | 2개 횡방향 모드 |
 | 고장 | 엔진 정지·추력 저하, TVC 편향, fin 고착, RCS 노즐 성능 저하 | RCS 고장은 `plant.rcs.thrust_scale`로 별도 지정 |
 | 항법 | `IdentityNav`, 항법 템플릿 | 실제 상태 전달; 센서·INS·EKF는 미구현 |
@@ -403,6 +411,14 @@ flowchart TD
 
 ### 7.1 병진·회전 운동
 
+2026-11-03 추가: 다섯 `project2_*`는 구면 회전지구를 사용한다. 아래 기존 식의 수직 중력·
+각속도 표기는 `earth=fixed` 사례 기준이다. 회전지구에서는 원점에서 NED와 정렬한 지구고정
+Cartesian 축을 사용하고, 중심중력·반경 고도·구면 접촉을 계산한다. 저장 `w_body`는 지구 기준,
+Euler 식의 각속도는 `w_body+C_bn.T Omega`인 관성 기준이다. quaternion은 지구 기준 각속도로
+전파하고 Euler 식에는 두 각속도 사이의 수송 항을 포함한다. 완전한 식과 독립 궤도 검증은
+[영문 보고서 11절](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification)을
+따른다. `omega_inertial_body`가 향후 gyro 측정식에 사용할 회전율 truth다.
+
 강체 부분의 저장 상태는 위치 3개, 속도 3개, quaternion 4개, 각속도 3개, 질량 1개다. 6자유도라는 표현은 운동 자유도를 뜻하며 상태 배열이 6개라는 뜻은 아니다.
 
 $$
@@ -673,7 +689,12 @@ $$
 -\boldsymbol\Omega_n\times\left[\boldsymbol\Omega_n\times(\mathbf R_{origin}+\chi\mathbf r_n)\right].
 $$
 
-$\chi$는 차등 원심 가속도 활성화 값이고 $\mathbf R_{origin}=[0,0,-R_e]^T$다. 역제곱 중력은 순수 인력이므로 원점 원심 가속도도 별도로 더한다. 이 모델은 고정 국소 NED 모델이며 구면·타원체 지구의 ECEF/LLA 전파를 구현한 것은 아니다.
+회전 모드는 $\chi=1$과 역제곱 중심중력을 요구한다. $\mathbf R_{origin}=[0,0,-R_e]^T$,
+$\mathbf R_f=\mathbf R_{origin}+\mathbf r_n$일 때 중력은
+$-\mu\mathbf R_f/\|\mathbf R_f\|^3$, 고도는 $\|\mathbf R_f\|-R_e$다. 중력은 순수 인력이므로
+원심 가속도와 중복 합산하지 않는다. 축은 원점 NED와 정렬한 지구고정 Cartesian 축이며,
+구면에서 ECEF의 일정 회전·병진 표현과 동등하다. 이동하는 local NED, 타원체/J2 모델은 아니다.
+접지 판정과 수직 속도·기울기·비행경로각에는 해당 위치의 반경 방향을 사용한다.
 
 ### 7.7 RK4와 종료
 
@@ -844,7 +865,7 @@ RCS를 활성화하면 주 제어기의 실현 토크를 제외한 잔여 토크
 
 ### 9.1 공통 문제와 계획 데이터
 
-입력은 현재 위치·속도·총질량, 목표 위치, 공칭 중력, 엔진 능력, 주 추진제 소진 후 남는 공칭 질량, 최대 기울기, 접근 원뿔, 비행 시간 후보와 노드 수다. `nominal["m_dry"]`는 구조 질량에 초기 RCS 가스를 더한 계획용 하한이며, `params.mass.m_dry`와 의미가 다르다. Plant는 고도별 중력을 사용하지만 현재 볼록 유도는 `nominal["gravity_ned"]`의 지표면 중력을 고정값으로 사용한다. 기본 목표는 NED 원점이며, 기본 종단 조건은 목표 위치와 정지다.
+입력은 현재 위치·속도·총질량, 목표 위치, 공칭 중력, 엔진 능력, 주 추진제 소진 후 남는 공칭 질량, 최대 기울기, 접근 원뿔, 비행 시간 후보와 노드 수다. `nominal["m_dry"]`는 구조 질량에 초기 RCS 가스를 더한 계획용 하한이며, `params.mass.m_dry`와 의미가 다르다. Plant는 선택한 중력·자전 모델을 전파하고, 볼록 유도는 `nominal["gravity_ned"]`를 고정값으로 사용한다. 회전지구에서는 이 명목값에 표면 원심 가속도를 포함한다. 유도 최적화는 여전히 공간 변화·코리올리 가속도를 직접 포함하지 않는 국소 3-DOF 근사다. 기본 목표는 NED 원점이며, 기본 종단 조건은 목표 위치와 정지다.
 
 $$
 \mathbf r_N=\mathbf r_{target},\qquad
@@ -862,7 +883,7 @@ $$
 | `convex_glideslope_deg` | 수평면 기준 접근 원뿔 각도 | 20° |
 | `convex_thrust_rate_max_nps` | 구간 간 추력 크기 변화율 제한 | 981,000 N/s |
 | `convex_replan` | 점화 후 재계획 | false |
-| `convex_tracking_k_r`, `convex_tracking_k_v` | 위치·속도 추적 이득 | 1.0, 4.0 |
+| `convex_tracking_k_r`, `convex_tracking_k_v` | 위치·속도 추적 이득; scalar 또는 N/E/D 벡터 | 1.0, 4.0 |
 | `convex_terminal_slack` | 종단 오차 완화 | false; SCvx는 true 미지원 |
 | `convex_terminal_vz_max_mps` | 정지 대신 허용 하강 속도 창 | null |
 | `scvx_iters`, `scvx_tolerance` | SCvx 반복 제한·수렴 허용치 | 12, 0.01 |
@@ -1279,8 +1300,8 @@ python scripts/run_single.py plant/actuator=ideal gnc/guidance=scvx \
 | `gnc.guidance.convex_glideslope_deg` | `20.0` | 수평면 기준 접근 원뿔 각도 [deg] |
 | `gnc.guidance.convex_replan` | `false` | 점화 후 유도 호출에서 재계획 허용 |
 | `gnc.guidance.convex_thrust_rate_max_nps` | `981000.0` | 노드 간 추력 크기 변화율 상한 [N/s]; null로 해제 |
-| `gnc.guidance.convex_tracking_k_r` | `1.0` | 위치 추적 피드백 이득 |
-| `gnc.guidance.convex_tracking_k_v` | `4.0` | 속도 추적 피드백 이득 |
+| `gnc.guidance.convex_tracking_k_r` | `1.0` | 위치 추적 피드백 이득 [s⁻²]; scalar 또는 N/E/D 벡터 |
+| `gnc.guidance.convex_tracking_k_v` | `4.0` | 속도 추적 피드백 이득 [s⁻¹]; scalar 또는 N/E/D 벡터 |
 | `gnc.guidance.convex_drag_cd` | LCvx `1.0` | LCvx 계획용 항력 계수; SCvx 그룹에는 없음 |
 | `gnc.guidance.convex_drag_scale` | SCvx `1.0` | SCvx 계획 항력 배율; LCvx 그룹에는 없음 |
 | `gnc.guidance.scvx_iters` | SCvx `12` | SCvx 반복 제한 |
@@ -1856,7 +1877,10 @@ python -m pytest tests/ -q
 
 브라우저 자동 검사는 별도 Playwright 설치와 Chrome/Chromium이 필요하다. 세 Replay 생성 명령과 검사 명령은 [뷰어 안내](../viz/README.md#ascent-and-rendering-checks)에 있다. 비행 데이터 검증 재개 시에만 `scenario.reference.enabled=true`를 명시한다.
 
-**남은 작업.** 12.8절의 연결 실험에서 확인된 귀환 성능 부족을 검토하고, 가능한 임무 조건을 정한 뒤 재진입으로 연결한다. 실기체 공력계수, 지구 곡률·국소 좌표 근사의 오차 예산, 실비행 비교, 센서·항법은 미완료 항목으로 유지한다.
+**범위와 남은 작업.** 이 절의 기존 `scenario=ascent`는 비회전 평면 모델의 검증 기록이다.
+현재 대표 상승 `scenario=project2_ascent`는 구면 회전지구를 사용하며 [현재 명세](reference/project2_scenario_spec.md)를 따른다.
+12.8절에서 확인된 귀환 성능 부족의 해결과 재진입 연결은 선택적인 전체 임무 확장이다.
+실기체 공력계수의 타당성·구면 지구의 생략 효과에 대한 불확실성, 실비행 비교, 센서·항법은 남아 있다.
 
 <a id="separation-physics"></a>
 
@@ -1955,7 +1979,7 @@ python -m pytest tests/ -q
 
 RCS 현황판은 별도 영역의 **ON/OFF 배지**, 작동/전체 노즐 수, 최대 듀티, 노즐별 번호·표시등·듀티 막대를 제공한다. 분사 효과는 흰색 중심과 옅은 푸른 외곽을 키우고 밝게 하여 낮은 듀티도 눈에 띄게 표현한다. 분사 크기·밝기는 시각적 강조이며 현황판의 수치는 기록된 듀티를 그대로 표시한다. 실제 PWM 주기 안의 순간 ON/OFF 대신 주기 평균 사용 여부를 나타낸다. 5% 듀티와 높은 듀티에서 분사 효과를 켠/끈 화면의 픽셀 차이를 비교하고, 현황판과 기록의 일치·역탐색을 포함한 브라우저 검사 **28개**가 통과했다. [검사 결과](../results/verification/replay_rcs_visibility_results.json), [현황판과 분사](../results/verification/figures/replay_rcs_dashboard.png), [5% 듀티 화면](../results/verification/figures/replay_rcs_low_duty.png)을 확인할 수 있다.
 
-[물리 판정 JSON](../results/verification/boostback_physics_results.json), [브라우저 검사](../results/verification/boostback_replay_checks.json), [추종·연료 진단 그림](../results/verification/figures/boostback_mission.png), [영문 보고서 8절](verification/physics_implementation_report_en.md#8-attitude-maneuver-and-boostback-connection)에 근거를 보존한다. 2026-11-03에 정리한 Project 2 범위는 구간별 독립 시나리오다. 상승·재진입 연소·공력 하강·최종 동력 하강을 `project2_ascent`, `project2_entry_burn`, `project2_aero_descent`, `project2_powered_descent`로 구현했다. [물리 실험 명세](reference/project2_scenario_spec.md)와 [현재 결과](verification/project2_segments/physics_results.md)에 초기조건·가정·운동 이력을 기록한다. 현재 목적은 지정 입력에 대한 물리 응답 확인이며 CRS-11 비교는 기본 OFF, 선택 분석이다. 최종 동력 하강은 20초 연소와 2초 정지 관찰로 하강 중 감속·정지를 공력표 범위 안에서 확인하며 착륙 성공은 요구하지 않는다. 네 사례는 독립 DOP853/시간 간격/공력표 검사를 통과했고, 브라우저 20개 검사와 전체 테스트 383개도 통과했다. 이 부스트백 실험은 기존 검증 사례로 유지하며, 복귀 가능성 확보와 실제 종료 상태의 재진입 연결은 선택 확장으로 둔다. 센서 항법은 이후 구현하지만 Project 2 최종 완료에는 필요하다. 현재 우선순위와 완료 기준은 [개발 TODO](TODO.md)에 정리한다.
+[물리 판정 JSON](../results/verification/boostback_physics_results.json), [브라우저 검사](../results/verification/boostback_replay_checks.json), [추종·연료 진단 그림](../results/verification/figures/boostback_mission.png), [영문 보고서 8절](verification/physics_implementation_report_en.md#8-attitude-maneuver-and-boostback-connection)에 근거를 보존한다. 현재 Project 2는 상승·재진입 연소·공력 하강·최종 동력 하강·착륙의 다섯 독립 phase를 다룬다. 모두 `scenario=project2_<phase>`로 실행하고 구면 회전지구를 사용한다. 착륙은 `scenario=project2_landing`의 LCvx/PD 폐루프이며 이상 구동기·truth 항법을 사용한다. 유도 명목 중력에 표면 원심 효과를 포함하고 N/E/D 추종 이득을 분리했으며, 접지 속도 0.086245 m/s로 연착륙했다. 앞의 네 지정 입력 사례는 독립 DOP853·시간 간격·공력표 검사, 착륙은 별도 접지 회귀를 통과했다. 최신 전체 테스트는 400개, 브라우저 검사는 25개다. [명세](reference/project2_scenario_spec.md)와 [현재 결과](verification/project2_segments/physics_results.md)에 초기조건·가정·검증 범위를 기록한다. 이 부스트백 실험은 기존 검증 사례로 유지하며, 복귀 가능성 확보와 전 비행 연결은 선택 확장이다. 센서·항법·추정 오차 분석과 최종 공개 비행자료 비교·보고서는 남아 있다. [개발 TODO](TODO.md)의 완료 기준을 따른다.
 
 <a id="limitations"></a>
 
@@ -1976,7 +2000,7 @@ RCS 현황판은 별도 영역의 **ON/OFF 배지**, 작동/전체 노즐 수, �
 | 공칭 환경 | 할당 동압은 지상 상대 추정 속도, 배압은 지수 근사; SCvx도 전체 Plant 공력의 축약 모델 |
 | 다중 엔진 할당 | 동일 엔진 공칭값·균등 추력 분배·공통 짐벌 명령; 고장 적응 최적 할당은 없음 |
 | Roll | 기본 해석식 fin 할당과 RCS 비활성에서는 roll 무제어 |
-| 지구 모델 | 고도별 역제곱 중력, 고정 원점 NED, 선택적 Coriolis·원점/차등 원심 항; ECEF/LLA 전파 아님 |
+| 지구 모델 | fixed는 기존 평면 NED; rotating은 원점-NED로 표현한 지구고정 Cartesian 구면 모델, 중심중력·전체 자전 항·일관된 각속도 전파; 타원체/J2·중력경사 토크 없음 |
 | 탱크·RCS 형상 | 설정 가능한 가정값; 축방향으로 가라앉은 원통 액체·등가 가스 저장소 |
 | 공력계수 | 기본은 해석식 근사, 풍동·비행 데이터에 의한 식별은 별도 필요 |
 | 접촉 | 지면 도달 후 종료·등급 평가; 착륙 다리 접촉 동역학 없음 |

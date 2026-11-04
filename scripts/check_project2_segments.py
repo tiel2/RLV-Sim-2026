@@ -1,4 +1,4 @@
-"""Verify independent prescribed-input physics experiments.
+"""Check five representative phases: four prescribed experiments and PDG landing.
 
 Run run_single.py scenarios separately for full telemetry/replay exports. This checker
 uses independent equations and shared-grid step refinement. Webcast comparison is
@@ -30,7 +30,7 @@ from validation.flight_reference import write_flight_comparison
 from validation.references import mass_properties
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ("ascent", "entry_burn", "aero_descent", "powered_descent")
+CASES = ("ascent", "entry_burn", "aero_descent", "powered_descent", "landing")
 REFERENCE_LIMITS = {"r_ned": 0.01, "v_ned": 0.001, "w_body": 1e-6, "q_bn": 1e-6, "m": 0.001}
 STEP_LIMITS = {
     "position_m": 0.1,
@@ -40,6 +40,92 @@ STEP_LIMITS = {
     "dynamic_pressure_pa": 10.0,
     "terminal_time_s": 0.005,
 }
+
+
+def verify_landing(cfg, out):
+    """Check the rotating-Earth landing without applying prescribed-input tests.
+
+    This is a touchdown/physics-bookkeeping regression, not the independent DOP853
+    and fixed-command refinement assessment used for the other four experiments.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "resolved_config.yaml").write_text(OmegaConf.to_yaml(cfg, resolve=True))
+    bundle, actual = run_configured(cfg, record_telemetry=False)
+    p = physics_arrays(actual)
+    diagnostics = dict(
+        final_altitude_m=float(p["altitude_m"][-1]),
+        final_speed_mps=float(p["speed_mps"][-1]),
+        final_main_propellant_kg=float(p["main_propellant"][-1]),
+        landing_speed_mps=float(actual.landing_speed),
+        landing_position_error_m=float(actual.landing_position_error),
+        landing_tilt_deg=float(np.rad2deg(actual.landing_tilt)),
+        quaternion_norm_error=float(np.max(abs(np.linalg.norm(actual.q_bn, axis=1) - 1))),
+        mass_bookkeeping_error_kg=float(
+            np.max(
+                abs(
+                    actual.m
+                    - float(bundle.params.mass.m_dry)
+                    - p["main_propellant"]
+                    - p["rcs_fuel"]
+                )
+            )
+        ),
+    )
+    domain = bool(
+        np.all(np.rad2deg(p["aero_alpha"]) <= cfg.plant.aero.grid.alpha_max_deg + 1e-8)
+        and np.all(p["mach"] <= cfg.plant.aero.grid.mach_max)
+    )
+    checks = dict(
+        finite_state=bool(
+            all(
+                np.all(np.isfinite(getattr(actual, key)))
+                for key in ("t", "r_ned", "v_ned", "q_bn", "w_body", "m")
+            )
+        ),
+        touchdown=actual.landing_class is not None,
+        soft_landing=actual.landing_class == "soft" and bool(actual.success),
+        contact_before_horizon=bool(actual.t[-1] < cfg.scenario.horizon.t_max),
+        quaternion=diagnostics["quaternion_norm_error"] <= 1e-12,
+        mass_bookkeeping=diagnostics["mass_bookkeeping_error_kg"] <= 0.001,
+        propellant_nonnegative=bool(
+            np.min(p["main_propellant"]) >= 0 and np.min(p["rcs_fuel"]) >= 0
+        ),
+        no_mass_creation=bool(np.max(np.diff(actual.m)) <= 1e-8),
+        body_lookup_domain=domain,
+    )
+    report = dict(
+        status="passed" if all(checks.values()) else "failed",
+        scope="rotating-Earth closed-loop PDG soft-touchdown and physics-bookkeeping regression",
+        checks=checks,
+        diagnostics=diagnostics,
+        model_applicability=dict(body_lookup_domain_met=domain, empirical_vehicle_validated=False),
+        independent_reference=dict(
+            status="not_applied",
+            reason="closed-loop landing regression; "
+            "the prescribed nine-engine reference is inapplicable",
+        ),
+        experiment_completed=bool(actual.landing_class is not None),
+        landing_assessed=actual.landing_class is not None,
+        landing_success=bool(actual.success),
+        landing_class=actual.landing_class,
+        termination_reason=int(actual.termination_reason),
+        flight_comparison_status="not_applicable",
+        configuration=dict(
+            scenario=str(cfg.scenario.name),
+            earth=str(cfg.environment.earth.model),
+            actuator=str(cfg.plant.actuator.model),
+            navigation="truth pass-through",
+        ),
+    )
+    (out / "verification.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+    np.savez_compressed(out / "physics.npz", **p)
+    plot_physics(p, out / "plots")
+    plot_episode(actual, out / "plots", title="Project 2 landing | PDG closed loop")
+    print(
+        f"landing: {report['status']} ({actual.landing_class}, {actual.landing_speed:.6f} m/s)",
+        flush=True,
+    )
+    return report, None
 
 
 def verify(cfg, out, *, compare_flight=False):
@@ -136,7 +222,8 @@ def verify(cfg, out, *, compare_flight=False):
         checks=checks,
         diagnostics=diagnostics,
         independent_reference=dict(
-            method="full segment, configuration-only matrix DOP853; neutral fins",
+            method="full segment, configuration-only matrix DOP853; inertial-frame propagation "
+            "for rotating Earth; neutral fins",
             rtol=[1e-11, 1e-12],
             errors=errors,
             refinement_errors=stability,
@@ -196,11 +283,18 @@ def main():
     summaries = {}
     with initialize_config_dir(config_dir=str(ROOT / "configs"), version_base=None):
         for name in args.scenario or CASES:
-            cfg = compose(config_name="config", overrides=[f"scenario=project2_{name}"])
-            cfg.scenario.reference.enabled = bool(args.compare_flight)
-            report, comparison = verify(cfg, args.output / name, compare_flight=args.compare_flight)
+            if name == "landing":
+                cfg = compose(config_name="config", overrides=["scenario=project2_landing"])
+                report, comparison = verify_landing(cfg, args.output / name)
+            else:
+                cfg = compose(config_name="config", overrides=[f"scenario=project2_{name}"])
+                cfg.scenario.reference.enabled = bool(args.compare_flight)
+                report, comparison = verify(
+                    cfg, args.output / name, compare_flight=args.compare_flight
+                )
             summaries[name] = dict(
                 verification_status=report["status"],
+                verification_scope=report["scope"],
                 model_applicability=report["model_applicability"],
                 final_altitude_m=report["diagnostics"]["final_altitude_m"],
                 landing_assessed=report["landing_assessed"],
@@ -213,12 +307,13 @@ def main():
     sources = [ROOT / "src/native/plant.cpp", Path(__file__)]
     sources += sorted((ROOT / "src/validation").glob("*.py"))
     sources += sorted((ROOT / "src/sim").glob("*.py"))
+    sources += sorted((ROOT / "src/gnc").rglob("*.py"))
     sources += sorted((ROOT / "configs").rglob("*.yaml"))
     summary = dict(
         status="passed"
         if all(s["verification_status"] == "passed" for s in summaries.values())
         else "failed",
-        scope="physics implementation, numerical agreement and declared body-table applicability",
+        scope="five phases: four prescribed physics/numerical checks and closed-loop PDG landing",
         optional_flight_comparison=bool(args.compare_flight),
         selected_cases=list(summaries),
         complete_demonstration_set=set(summaries) == set(CASES),

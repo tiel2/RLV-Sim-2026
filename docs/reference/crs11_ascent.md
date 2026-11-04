@@ -1,5 +1,11 @@
 # CRS-11 ascent configuration and assumptions
 
+This document describes the original **fixed-Earth `scenario=ascent` verification case**.
+The selected Project 2 ascent is now `scenario=project2_ascent`, with rotating spherical Earth
+and the launch point as its zero horizontal origin; see the
+[current five-phase specification](project2_scenario_spec.md). The older assumed landing-origin
+offsets and historical results below remain specific to the original case.
+
 The first integration milestone is implemented as `scenario=ascent`: a pre-ignited
 attached stack departs the pad, follows prescribed throttle/gimbal commands, receives
 MECO at T+145 s, and propagates to T+150 s. This scenario keeps the stack attached. `ascent_separation` extends it with an assumed
@@ -8,7 +14,7 @@ impulse-free release at 150 s and retained-booster coast to 160 s; see the
 The last five seconds exercise cutoff and unpowered propagation of the **attached stack**;
 they are not a reconstruction of the separated first stage.
 
-Current priority is physics verification → rendering → project-guide documentation.
+The original milestone followed physics verification → rendering → project-guide documentation.
 Flight-data validation and parameter fitting are deferred, and comparison is disabled by
 default. The [reference-data contract](crs11_flight_reference.md) remains available for that
 later work. Independent dynamics results are in

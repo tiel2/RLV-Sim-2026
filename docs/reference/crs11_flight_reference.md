@@ -100,10 +100,13 @@ conditions using the available observations. Use the following distinction:
 | Additional estimates / assumptions | Heading, horizontal position, body attitude/rates, mass/inertia, remaining propellant, throttle/gimbal/fin histories and aerodynamic parameters need separate evidence or documented assumptions and sensitivity analysis. |
 | Simulation truth | The state propagated by the declared plant model, used later to generate synthetic sensors and assess navigation error. It is not measured CRS-11 flight truth. |
 
-The [four-scenario specification](project2_scenario_spec.md) records the boundary
+The [five-phase specification](project2_scenario_spec.md) records the boundary
 observations, proposed initial states/inputs, processing sensitivity and planned
 verification criteria. Its [analysis recipe](../../configs/analysis/project2_segments.yaml)
 is separate from runnable scenario YAML; it does not change existing experiments.
+Those boundary observations and the recipe cover the four prescribed experiments. The fifth
+phase, `scenario=project2_landing`, has an independent engineering initialization at 300 m;
+no corresponding CRS-11 landing window or observed complete initial state is assigned to it.
 
 Public-source check on 2026-11-03: the original
 [Telemetry-Data documentation](https://github.com/shahar603/Telemetry-Data) and its

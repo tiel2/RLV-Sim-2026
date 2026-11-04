@@ -73,6 +73,24 @@ def test_pd_controller_fills_tau_and_opposes_error():
     assert np.allclose(tau, 1.0e5 * e, atol=1e-6)
 
 
+def test_rotating_planner_surface_gravity_matches_stationary_plant_acceleration():
+    from plant.dynamics import ic_from_scenario
+
+    cfg = compose_cfg(["scenario=project2_landing"])
+    bundle = build_bundle(["scenario=project2_landing"])
+    state = bundle.make_initial_state(ic_from_scenario(cfg.scenario, 0)).replace(
+        r_ned=np.zeros(3), v_ned=np.zeros(3)
+    )
+    off = ActuatorCommand(
+        throttle=np.zeros(1), gimbal=np.zeros((1, 2)), fin=np.zeros(4), rcs=np.zeros(3)
+    )
+    derivative, _ = bundle.native.rhs(state, off, np.zeros(3))
+    controller = build_gnc(cfg, bundle.params)
+    np.testing.assert_allclose(controller.nominal["gravity_ned"], derivative[2], atol=1e-13)
+    assert not np.allclose(controller.nominal["gravity_ned"], bundle.params.g_ned)
+    assert controller.nominal["g0"] == 9.80665  # Isp conversion keeps standard gravity
+
+
 def test_pd_gains_are_per_axis_inertia_scaled():
     """Gains are per-axis (3-vectors) sized from inertia so ζ≈0.7 on BOTH the soft roll
     axis (Ixx) and the stiff pitch/yaw axes (Iyy=Izz), not a single scalar that critically damps

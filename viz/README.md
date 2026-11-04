@@ -17,6 +17,31 @@ Everything is driven by a single `replay.json` exported from the simulator. The 
 the box with the procedural booster (**no licensing strings attached**); drop in a glTF for the
 photoreal hull (see below).
 
+## Current Project 2 phases
+
+All five representative phases use rotating Earth. Select one argument below with the shared
+runner, then open the most recent result using the same viewer command:
+
+| Phase | Runner argument |
+|---|---|
+| Ascent | `scenario=project2_ascent` |
+| Entry burn | `scenario=project2_entry_burn` |
+| Aerodynamic descent | `scenario=project2_aero_descent` |
+| Terminal powered descent | `scenario=project2_powered_descent` |
+| Landing | `scenario=project2_landing` |
+
+```bash
+.venv/bin/python scripts/run_single.py scenario=project2_landing
+.venv/bin/python scripts/view_replay.py --system
+```
+
+The first four use prescribed inputs; landing uses closed-loop LCvx/PD with ideal actuators and
+truth navigation. Physics propagates spherical altitude/contact, but terrain/ocean scenery remains
+a tangent-plane visual approximation. The current five replays pass 25 WebGL pose/actuator checks;
+these do not verify physical globe rendering or landing-leg contact. See the
+[scenario specification](../docs/reference/project2_scenario_spec.md) and
+[current results](../docs/verification/project2_segments/physics_results.md).
+
 ## Ascent and rendering checks
 
 Generate the three regression replays with the same native build:

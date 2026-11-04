@@ -1,5 +1,13 @@
 # Verification of the Physical Model Implementation in the RLV Simulator
 
+**Current scope (2026-11-03):** Five independent representative phases use rotating spherical
+Earth. The current landing entry point is `scenario=project2_landing`; Sections
+[11](#11-spherical-rotating-earth-verification) and
+[12](#12-landing-added-as-the-fifth-representative-phase) describe rotating-frame mechanics and
+landing qualification. Latest checks: **400 tests**, Ruff, five phase checks and **25 WebGL checks**
+passed. Sections 1–10 and their dated counts preserve earlier verification campaigns; their
+fixed-Earth assumptions and earlier terminal-descent conditions do not define the current five-phase set.
+
 **Abstract.** The physical model implementation of a reusable launch vehicle simulator was verified against analytical solutions and independently integrated reference models. The assessment covered rigid-body motion, variable mass properties, propulsion, aerodynamic loads, grid fins, reaction-control thrusters, and actuator dynamics. All evaluated cases satisfied their numerical acceptance criteria. At a 1 ms integration step, the largest position and attitude discrepancies across four coupled six-degree-of-freedom cases were $1.02\times10^{-9}$ m and $1.50\times10^{-11}$ rad, respectively. These results establish agreement with the specified mathematical models within the evaluated conditions; validation against measured vehicle behavior was outside the scope.
 
 ## 1. Model Definition
@@ -647,6 +655,9 @@ future Project 2 work; continuous launch-to-touchdown connection is optional.
 
 ## 10. Physics-Experiment Scope and Optional Flight Comparison
 
+This section records the four-prescribed-experiment milestone before the rotating-Earth and
+fifth-phase landing extensions in Sections 11–12.
+
 The current Project 2 vehicle milestone is to run approximate independent phase
 experiments under documented engineering initial conditions and prescribed inputs.
 Matching CRS-11 or reducing its RMSE is not an acceptance criterion. Webcast data
@@ -679,6 +690,187 @@ See the [physics specification](../reference/project2_scenario_spec.md),
 [current physical histories and verdicts](project2_segments/physics_results.md),
 [summary/hashes](../../results/verification/project2_segments/physics/summary.json) and
 [browser checks](../../results/verification/project2_segments/physics/browser_checks.json).
+
+## 11. Spherical Rotating-Earth Verification
+
+The mechanics below remain the current rotating model. The 397-test/20-WebGL counts at
+the end of this section belong to its four-prescribed-phase milestone; Section 12 records
+the latest five-phase landing checks and 400-test/25-WebGL results.
+
+On 2026-11-03 the rotating option was extended from local translational corrections to
+spherical central gravity, radial altitude/contact and consistent Earth-relative attitude
+dynamics. All four `project2_*` experiments now select this model. Older fixed-Earth
+experiments retain their previous equations. Their historical results above are unchanged;
+the current rotating-phase results are in [the phase report](project2_segments/physics_results.md).
+
+### 11.1 Frame and equations
+
+The reference axes are Earth-fixed Cartesian axes aligned with NED at a spherical surface
+origin. They do not follow the vehicle. Thus the existing state names are compatible with
+an affine ECEF representation without adding a moving-local-level transport rate. Let
+$\mathbf R_f=\mathbf r+[0,0,-R_e]^T$ and
+$\boldsymbol\Omega=\Omega_e[\cos\phi,0,-\sin\phi]^T$. The origin latitude is **geocentric**
+for this sphere; the assumed 28.6° in the four independent phase experiments is not a
+reconstructed flight site. The origin and initial horizontal coordinates of ascent are
+now the launch point, rather than the earlier assumed landing-origin offset.
+
+$$
+h=\|\mathbf R_f\|-R_e,\qquad
+\dot{\mathbf v}=C\mathbf F_b/m
+-\mu\mathbf R_f/\|\mathbf R_f\|^3
+-2\boldsymbol\Omega\times\mathbf v
+-\boldsymbol\Omega\times(\boldsymbol\Omega\times\mathbf R_f).
+$$
+
+Pure gravitation excludes centrifugal acceleration. The atmosphere uses radial height,
+and the air co-rotates with Earth when the prescribed wind is zero. Contact uses the
+spherical surface, not the reference tangent plane. Flight-path angle and contact
+speed/tilt use the local radial vertical. Incomplete centrifugal settings or uniform
+gravity are rejected in rotating mode.
+
+The quaternion maps body to the reference axes. Stored $\boldsymbol\omega$ is body relative
+to those axes, expressed in body coordinates. Define
+$\boldsymbol\omega_i=\boldsymbol\omega+C^T\boldsymbol\Omega$. Then
+
+$$
+\dot C=C[\boldsymbol\omega]_\times,\qquad
+\dot{\boldsymbol\omega}=I^{-1}\left(\mathbf M_{CG}
+-\boldsymbol\omega_i\times I\boldsymbol\omega_i
+-\dot I\boldsymbol\omega_i\right)
++\boldsymbol\omega\times(C^T\boldsymbol\Omega).
+$$
+
+Jet angular flux also uses $\boldsymbol\omega_i$; local aerodynamic rates use
+$\boldsymbol\omega$. Pad reactions include the torque needed to rotate the changing
+inertia with Earth. Diagnostics expose `omega_inertial_body`, `local_down_ned` and Earth
+metadata, preventing a future gyro model from confusing reference-relative rates with
+inertial rates. Recorded-load balances transform velocity, force and spin momentum to
+an inertial frame; a burning-ascent check confirms residual reduction with finer sampling.
+
+The distinction between inertial and planet-relative angular rates is also explicit in
+[JSBSim's official acceleration implementation](https://github.com/JSBSim-Team/jsbsim/blob/master/src/models/FGAccelerations.cpp).
+The reference here was implemented independently from configuration constants and rotation
+matrices, not by invoking JSBSim or production force/frame helpers.
+
+### 11.2 Orbital and rotational checks
+
+`scripts/check_rotating_earth.py` runs circular and eccentricity-0.2 elliptical orbits
+from 400 km perigee, with equatorial/inclined planes and reference latitudes 0°, 28.6°,
+−37° and 89°. Native propagation covers a full revolution (approximately 5,545 or 7,749 s)
+at both 1 and 0.5 s steps. The independent trajectory solves Kepler's equation in a
+fixed inertial plane. The comparison includes the velocity transformation
+$\mathbf V_i=Q(\mathbf v+\boldsymbol\Omega\times\mathbf R_f)$, not merely rotated velocity.
+Two-body conic propagation is the same physical test problem described in the
+[JPL SPICE two-body documentation](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html);
+SPICE itself is not called by this checker.
+
+At 0.5 s, across all four cases:
+
+| Quantity | Maximum observed error/drift | Acceptance limit |
+|---|---:|---:|
+| Inertial position vs Kepler solution | 1.080×10⁻⁶ m | 0.005 m |
+| Inertial velocity vs Kepler solution | 1.115×10⁻⁹ m/s | 1×10⁻⁵ m/s |
+| Relative specific orbital energy drift | 1.741×10⁻¹⁴ | 1×10⁻¹⁰ |
+| Relative orbital angular-momentum drift | 8.871×10⁻¹⁵ | 1×10⁻¹⁰ |
+| Initially inertially fixed attitude drift | 2.411×10⁻¹⁴ rad | 1×10⁻⁹ rad |
+
+All four 1 s runs also pass their stated limits. Full orbits traverse positive reference
+D coordinates without false tangent-plane contact. These are unusually small numerical
+errors for smooth, unperturbed test problems, not estimates of real-Earth accuracy.
+
+A 120 s torque-free test uses asymmetric inertia and nonzero products of inertia. Native
+quaternions/rates are transformed to the inertial frame and compared to separate matrix
+Euler/DOP853 propagation. Maximum attitude/rate errors are 1.454×10⁻¹² rad and
+3.239×10⁻¹³ rad/s. Relative spin angular-momentum and rotational-energy drifts are
+1.947×10⁻¹⁴ and 2.892×10⁻¹⁴. Component tests additionally cover five latitudes including
+both poles, spherical contact, radial touchdown metrics and rotating pad reaction torque.
+
+### 11.3 Phase verification and rotation sensitivity
+
+The independent phase reference now integrates **geocentric inertial** position,
+velocity, orientation matrices and angular rates. Only its outputs are transformed
+back to the stored reference state. All four full-phase comparisons, reference-tolerance
+refinement, 2/1/0.5 ms agreement and body-table checks pass. Maximum native/reference
+position and velocity differences are 3.083×10⁻⁶ m and 4.229×10⁻⁷ m/s.
+
+To isolate rotation from curvature, the sensitivity comparison retains the same spherical
+model, initial **Earth-relative** state and inputs, setting only the rotation rate to zero.
+These are different inertial initial states, as appropriate for comparing the same pad/
+ground-relative experiment on rotating and nonrotating planets.
+
+| Phase | Maximum position difference | Final radial-altitude change | Final ground-speed change |
+|---|---:|---:|---:|
+| Ascent | 4,029.162 m | +1,700.807 m | −9.408 m/s |
+| Entry burn | 15.467 m | +2.547 m | −0.395 m/s |
+| Aero descent | 82.750 m | +6.935 m | −0.050 m/s |
+| Powered descent | 5.070 m | +3.898 m | −0.357 m/s |
+
+These differences include the coupled attitude, jet-flux, aerodynamic and translational
+response under prescribed inputs. They are not a universal correction or observed flight
+error. No inputs were retuned. Generated evidence, NPZ histories, phase settings, figures
+and source hashes are in `results/verification/rotating_earth/`; full phase evidence is in
+`results/verification/project2_segments/physics/`.
+
+The validated scope is a uniformly rotating **spherical central-gravity model**. Oblateness/
+J2, gravity-gradient torque, tides, precession/nutation, empirical aerodynamics and high-altitude
+atmosphere fidelity are outside this verification. Fixed-origin Cartesian geometry is valid
+globally for the sphere; existing GNC laws and replay terrain retain their documented local/
+tangent-plane approximations. WebGL pose checks do not validate spherical scenery/contact.
+
+After this change the complete regression suite passes **397 tests**, Ruff passes, and the
+four regenerated Project 2 replays pass **20 WebGL state/geometry checks**. Reproduce with:
+
+```bash
+.venv/bin/python scripts/check_rotating_earth.py
+.venv/bin/python scripts/check_project2_segments.py
+.venv/bin/python -m pytest tests/ -q
+.venv/bin/ruff check src tests scripts
+```
+
+## 12. Landing Added as the Fifth Representative Phase
+
+The selected Project 2 set now contains ascent, entry burn, aerodynamic descent, terminal
+powered descent, and **landing**. The first four retain the prescribed rotating-Earth
+experiments verified above. Landing is now selected with `scenario=project2_landing` and
+also uses rotating Earth at the assumed latitude 28.6°. It reuses PDG's independent
+300 m altitude, 25 m/s downward velocity, 29,500 kg mass, single engine, ideal actuation,
+truth pass-through navigation and LCvx/PD architecture. The original `+baseline=pdg`
+remains a separate fixed-Earth regression; the five cases are not connected into a mission.
+
+Simply enabling rotation exposed two closed-loop shortcomings: the planner's nominal
+gravity omitted surface centrifugal acceleration, and common-axis tracking gains allowed
+lateral errors to grow through the slower attitude-mediated thrust response. The shared
+GNC builder now includes the surface centrifugal term in the planner's constant gravity
+when Earth rotates. Tracking accepts either the original scalar gains or N/E/D vectors.
+The new landing configuration uses position gains [0.1,0.1,1] s⁻² and velocity gains
+[0.6,0.6,4] s⁻¹, preserving the original vertical gains. No physical model, initial fuel
+budget or success threshold was relaxed. The planner remains a local constant-gravity
+3-DOF approximation; the plant propagates the full declared rotating-sphere dynamics.
+
+`check_project2_segments.py` includes all five cases. The landing branch checks actual
+soft touchdown, configured success limits, finite states, quaternion norm, nonnegative
+propellant, mass bookkeeping and the body lookup domain. Its assessment is explicitly
+separate from the configuration-only prescribed-input DOP853 and timestep comparisons;
+those comparisons are not claimed for the closed-loop landing case. Flight-data comparison
+is not assigned to this engineering landing initialization.
+
+The current run reaches contact at approximately 17.468 s, with interpolated contact speed
+0.086245 m/s, tilt 0.055317°, position error 0.019430 m and 1,378.823 kg main propellant.
+Both `landing_class=soft` and `success=true` hold. The native terminal sample is slightly
+below the surface and has speed 0.084560 m/s and 1,378.778 kg main propellant; contact
+KPIs are interpolated, as defined in the shared runner. An additional [1,−1] m lateral
+position and [0.1,−0.1] m/s lateral velocity perturbation also lands softly, at 0.140369 m/s
+with 0.098386 m position error. These are scoped regression cases, not a general robustness claim.
+
+All five phase checks pass, the full suite passes **400 tests**, Ruff passes and the five
+replays pass 25 WebGL checks. A test also compares the planner's nominal gravity to the
+native stationary surface acceleration, while standard gravity for Isp remains 9.80665 m/s².
+The rotation-sensitivity runner now includes landing and compares only shared epochs through
+17.1 s because its rotating and zero-spin cases reach contact at different times. It uses the
+same initial Earth-relative state and controller settings; closed-loop commands need not match.
+This does not qualify realistic-actuator landing, sensor navigation or landing-leg impact
+dynamics. See [the five-phase specification](../reference/project2_scenario_spec.md)
+and [current results](project2_segments/physics_results.md).
 
 ## Verification Sources
 

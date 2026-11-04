@@ -8,10 +8,20 @@ from gnc.guidance.base import thrust_aligned_quat, upright_quat
 from sim.loop import _finalize
 
 
-def _result(v_ned, q_bn, *, speed_tol=5.0, tilt_tol_deg=15.0, main_propellant=None):
+def _result(
+    v_ned,
+    q_bn,
+    *,
+    speed_tol=5.0,
+    tilt_tol_deg=15.0,
+    main_propellant=None,
+    position=None,
+    rotating=False,
+):
+    position = np.zeros(3) if position is None else np.asarray(position)
     log = {
         "t": [0.1],
-        "r_ned": [np.zeros(3)],
+        "r_ned": [position],
         "v_ned": [np.asarray(v_ned, float)],
         "q_bn": [np.asarray(q_bn, float)],
         "w_body": [np.zeros(3)],
@@ -22,8 +32,15 @@ def _result(v_ned, q_bn, *, speed_tol=5.0, tilt_tol_deg=15.0, main_propellant=No
         "fin": [np.zeros(4)],
     }
     # A ground-level sample alone can now be a launch-pad state; this fixture is contact.
-    state = SimpleNamespace(r_ned=np.zeros(3), m=110.0, done=True)
-    bundle = SimpleNamespace(params=SimpleNamespace(mass=SimpleNamespace(m_dry=100.0)))
+    state = SimpleNamespace(r_ned=position, m=110.0, done=True)
+    bundle = SimpleNamespace(
+        params=SimpleNamespace(
+            mass=SimpleNamespace(m_dry=100.0),
+            earth=SimpleNamespace(enabled=rotating, omega_ned=np.zeros(3)),
+            gravity=SimpleNamespace(radius=6371000.0),
+        ),
+        meta={"earth_model": "rotating" if rotating else "fixed"},
+    )
     aux = {} if main_propellant is None else {"main_propellant": main_propellant}
     return _finalize(log, [aux], state, bundle, False, 10.0, speed_tol, tilt_tol_deg)
 
@@ -59,3 +76,17 @@ def test_rcs_gas_is_not_counted_as_main_engine_fuel_margin():
     assert result.fuel_margin == 0.0
     assert result.violation_flags["fuel"]
     assert not result.success
+
+
+def test_spherical_contact_uses_local_vertical_for_speed_and_tilt():
+    angle = np.deg2rad(30.0)
+    R = 6371000.0
+    position = R * np.array([np.sin(angle), 0.0, 1 - np.cos(angle)])
+    down = np.array([-np.sin(angle), 0.0, np.cos(angle)])
+    result = _result(
+        0.5 * down, thrust_aligned_quat(-down, np.pi), position=position, rotating=True
+    )
+    assert result.landing_class == "soft"
+    assert abs(result.landing_speed_vertical - 0.5) < 1e-12
+    assert result.landing_speed_horizontal < 1e-12
+    assert result.landing_tilt < 1e-7

@@ -35,6 +35,8 @@ def test_runtime_initial_states_and_overrides_match_authored_specification():
         cfg = compose_cfg([f"scenario=project2_{name}"])
         expected = spec["segments"][name]
         assert cfg.scenario.input_mode == "prescribed"
+        assert cfg.environment.earth.model == "rotating"
+        assert cfg.environment.earth.latitude_deg == 28.6
         assert cfg.scenario.horizon.t_max == expected["simulation_duration_s"]
         assert OmegaConf.to_container(cfg.scenario.ic) == expected["proposed_initial_state"]
         assert cfg.scenario.reference.time_offset_s == -expected["reference_window_s"][0]
@@ -110,3 +112,54 @@ def test_powered_descent_demonstrates_deceleration_shutdown_inside_aero_domain()
     assert max(float(a["aero_alpha"]) for a in result.aux["per_tick"]) < np.deg2rad(90)
     assert result.aux["per_tick"][-1]["thrust_mag"] == 0
     assert result.landing_class is None
+
+
+def test_rotating_ascent_open_system_balances_refine_in_inertial_frame():
+    from validation.ascent import balances
+
+    cfg = short_config("ascent")
+    cfg.scenario.horizon.t_max = 2.0
+    residuals = []
+    for interval in (0.02, 0.01):
+        cfg.scenario.horizon.log_dt = interval
+        _, result = run_configured(cfg, record_telemetry=False)
+        residuals.append(balances(result))
+    for key in ("linear_momentum_kg_m_s", "angular_momentum_kg_m2_s"):
+        assert residuals[1][key] < 0.4 * residuals[0][key], residuals
+
+
+def test_fifth_phase_is_rotating_earth_project2_landing(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    from check_project2_segments import CASES as SELECTED_CASES
+    from check_project2_segments import verify_landing
+
+    assert SELECTED_CASES == (*CASES, "landing")
+    cfg = compose_cfg(["scenario=project2_landing"])
+    report, comparison = verify_landing(cfg, tmp_path)
+    assert comparison is None  # no fabricated CRS-11 landing comparison
+    assert report["status"] == "passed", report
+    assert report["landing_class"] == "soft" and report["landing_success"]
+    assert report["independent_reference"]["status"] == "not_applied"
+    assert report["configuration"]["scenario"] == "project2_landing"
+    assert report["configuration"]["earth"] == "rotating"
+    assert cfg.environment.earth.latitude_deg == 28.6
+    assert report["configuration"]["actuator"] == "ideal"
+    assert cfg.scenario.ic.r_ned == [0.0, 0.0, -300.0]
+
+    # The versioned historical reference retains its own nonrotating configuration.
+    baseline = compose_cfg(["+baseline=pdg"])
+    assert baseline.environment.earth.model == "fixed"
+    assert baseline.scenario.name == "pdg"
+
+
+def test_rotating_landing_remains_soft_with_small_lateral_initial_error():
+    cfg = compose_cfg(
+        [
+            "scenario=project2_landing",
+            "scenario.ic.r_ned=[1,-1,-300]",
+            "scenario.ic.v_ned=[0.1,-0.1,25]",
+        ]
+    )
+    _, result = run_configured(cfg, record_telemetry=False)
+    assert result.landing_class == "soft" and result.success
+    assert result.landing_position_error < 0.5

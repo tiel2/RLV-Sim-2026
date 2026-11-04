@@ -259,6 +259,7 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
     }
     return {
         "meta": {
+            "earth": result.aux.get("earth"),
             "frame": "viz=[North,Up,East]; q=[x,y,z,w] body->viz",
             "scenario": str(cfg.scenario.name),
             "guidance": (

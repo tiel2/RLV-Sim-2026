@@ -45,7 +45,7 @@ convex_terminal_pos_weight: 100.0 # exact-penalty W (slack mode only)
 convex_terminal_vel_weight: 100.0
 
 # Tracking + engine cutoff.
-convex_tracking_k_r: 1.0
+convex_tracking_k_r: 1.0 # scalar or N/E/D vector [s^-2]; k_v is [s^-1]
 convex_tracking_k_v: 4.0
 landing_cutoff_impact_mps: 0.0 # disabled: the planned terminal state is not rescued by early cutoff
 

@@ -1,5 +1,7 @@
-# Rotating Earth: Coriolis + origin centrifugal + optional differential centrifugal.
-# Gravity is pure gravitation, configured separately.
+# Spherical rotating Earth: central gravity + full Coriolis/centrifugal terms.
+# r_ned is Cartesian displacement in Earth-fixed axes aligned with origin NED.
+# Altitude/contact use geocentric radius; w_body is body relative to these axes.
+# Requires inverse_square gravity and include_differential_centrifugal=true.
 # A site latitude is mandatory; silently assuming the equator would be physically misleading.
 model: rotating
 latitude_deg: ???

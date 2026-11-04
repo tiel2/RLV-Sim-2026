@@ -2,7 +2,11 @@
 # Shared assumed booster hardware from the Project 2 specification.
 defaults:
 - _prescribed
+- override /environment/earth: rotating
 - _self_
+environment:
+  earth:
+    latitude_deg: 28.6 # assumed independently at each segment origin
 plant:
   vehicle:
     engines:

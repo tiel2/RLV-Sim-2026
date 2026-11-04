@@ -1,7 +1,8 @@
 """Native coordinate-frame and quaternion transforms.
 
 Conventions:
-* navigation is NED (North, East, Down), with altitude ``-z``;
+* navigation axes are NED at the fixed origin. With rotating Earth they are
+  Earth-fixed Cartesian axes; local vertical and radial altitude vary with position;
 * body ``+x`` points toward the nose, ``+y`` right, and ``+z`` down when level;
 * ``q_bn = [w, x, y, z]`` is scalar-first Hamilton and maps body coordinates to NED;
 * every ``dcm_<source>_to_<destination>`` maps source coordinates to destination coordinates;

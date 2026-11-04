@@ -270,7 +270,7 @@ struct Aux {
     Vec throttle_eff, rcs_on, engine_forces;
     double rcs_mdot{}, main_propellant{}, rcs_fuel{}, fin_deployment{1.0};
     Vec3 inertia{}, m_fin{};
-    Vec3 gravity_ned{}, gravity_body{}, f_rcs{}, m_rcs{};
+    Vec3 gravity_ned{}, gravity_body{}, f_rcs{}, m_rcs{}, local_down{}, omega_inertial{};
     Vec3 f_aero{}, f_fin{}, thrust{}, moment{}, a_coriolis{}, a_centrifugal{}, v_air_body{};
     Vec3 force_total{}, moment_cg{}, idot{}, pad_force{}, pad_moment{};
     bool launch_pending{};
@@ -810,6 +810,19 @@ class NativePlant {
         return out;
     }
 
+    Vec3 geocentric(const Vec3& r) const {
+        return add(r,Vec3{0,0,-gravity_model_.radius});
+    }
+
+    double altitude(const Vec3& r) const {
+        if(!earth_.enabled)return -r[2];
+        const double radius=gravity_model_.radius;
+        const double distance=norm(geocentric(r));
+        if(!(distance>0.0)||!std::isfinite(distance))throw std::runtime_error("invalid geocentric position");
+        // Rationalized norm-minus-radius avoids cancellation close to the surface.
+        return (dot(r,r)-2*radius*r[2])/(distance+radius);
+    }
+
     Vec3 gravity(double h) const {
         if(!gravity_model_.inverse_square)return gravity_;
         const double radius=gravity_model_.radius+h;
@@ -1104,8 +1117,14 @@ class NativePlant {
                        bool constrain_pad=true) const {
         RhsResult out; Aux& aux=out.aux; Derivative& d=out.d;
         aux.t=s.t;
-        aux.altitude=-s.r[2]; const auto [rho,sound]=atmosphere(aux.altitude); aux.rho=rho;
+        aux.altitude=altitude(s.r); const auto [rho,sound]=atmosphere(aux.altitude); aux.rho=rho;
         const Mat3 rotation=dcm(s.q); const auto [xcg,inertia]=mass_props(s.m,s.rcs_fuel); aux.x_cg=xcg;
+        // Public rates are body relative to the Earth-fixed reference axes. Euler's
+        // angular-momentum equation and exhaust angular flux use inertial body rates.
+        const Vec3 omega_earth_body=transpose_matvec(rotation,earth_.omega_ned);
+        const Vec3 omega_inertial=add(s.w,omega_earth_body);
+        aux.omega_inertial=omega_inertial;
+        aux.local_down=earth_.enabled?mul(-1.0/norm(geocentric(s.r)),geocentric(s.r)):Vec3{0,0,1};
         const Mat3 full{inertia[0],mass_.products[0],mass_.products[1],mass_.products[0],inertia[1],mass_.products[2],mass_.products[1],mass_.products[2],inertia[2]};
         const Vec3 velocity_body=transpose_matvec(rotation,sub(s.v,wind));
         aux.v_air_body=velocity_body; aux.mach=norm(velocity_body)/sound;
@@ -1135,17 +1154,20 @@ class NativePlant {
         aux.mdot=eng.mdot+rcs.mdot;
         const Vec3 non_force=add(add(add(eng.force,aero.force),fins.force),rcs.force);
         const double nozzle=geometry_.x_eng-xcg;
-        const Vec3 jet{0,-eng.mdot*nozzle*nozzle*s.w[1],-eng.mdot*nozzle*nozzle*s.w[2]};
+        const Vec3 jet{0,-eng.mdot*nozzle*nozzle*omega_inertial[1],-eng.mdot*nozzle*nozzle*omega_inertial[2]};
         const Vec3 non_moment=add(add(add(eng.moment,aero.moment),fins.moment),add(rcs.moment,jet));
         const Vec3 idot=inertia_rate(s.m,s.rcs_fuel,eng.mdot,rcs.mdot);
-        const Vec3 iw=matvec(full,s.w), idotw{idot[0]*s.w[0],idot[1]*s.w[1],idot[2]*s.w[2]};
+        const Vec3 iw=matvec(full,omega_inertial), idotw{idot[0]*omega_inertial[0],idot[1]*omega_inertial[1],idot[2]*omega_inertial[2]};
         const Vec3 lateral{0,mass_.cg_lateral[0],mass_.cg_lateral[1]};
-        const Vec3 wdot_non=solve3(full,sub(sub(add(non_moment,mul(-1.0,cross(lateral,non_force))),cross(s.w,iw)),idotw));
+        const Vec3 rate_transport=cross(s.w,omega_earth_body);
+        const Vec3 wdot_non=add(solve3(full,sub(sub(add(non_moment,mul(-1.0,cross(lateral,non_force))),cross(omega_inertial,iw)),idotw)),rate_transport);
         const Vec3 attach{slosh_.x_attach-xcg,0,0};
-        const Vec3 attach_acc=add(div(non_force,s.m),add(cross(wdot_non,attach),cross(s.w,cross(s.w,attach))));
+        const Vec3 attach_acc=add(div(non_force,s.m),add(cross(sub(wdot_non,rate_transport),attach),cross(omega_inertial,cross(omega_inertial,attach))));
         const SloshResult sl=slosh(s,attach_acc,xcg);
         const Vec3 total_force=add(non_force,sl.force), total_moment=add(non_moment,sl.moment);
-        aux.gravity_ned=gravity(aux.altitude);
+        aux.gravity_ned=earth_.enabled
+            ? mul(-gravity_model_.mu/std::pow(norm(geocentric(s.r)),3),geocentric(s.r))
+            : gravity(aux.altitude);
         aux.gravity_body=transpose_matvec(rotation,mul(s.m,aux.gravity_ned));
         Vec3 frame_acceleration=aux.gravity_ned;
         if (earth_.enabled) {
@@ -1161,7 +1183,7 @@ class NativePlant {
         d.r=s.v;
         d.v=add(frame_acceleration,div(matvec(rotation,total_force),s.m));
         d.q=qdot(s.q,s.w);
-        d.w=solve3(full,sub(sub(add(total_moment,mul(-1.0,cross(lateral,total_force))),cross(s.w,iw)),idotw));
+        d.w=add(solve3(full,sub(sub(add(total_moment,mul(-1.0,cross(lateral,total_force))),cross(omega_inertial,iw)),idotw)),rate_transport);
         d.m=-eng.mdot-rcs.mdot; Derivative ad=actuator_derivatives(s,c);
         d.tvc=std::move(ad.tvc);d.tvc_rate=std::move(ad.tvc_rate);d.throttle=std::move(ad.throttle);
         d.fin=std::move(ad.fin);d.fin_rate=std::move(ad.fin_rate);d.rcs_fuel=-rcs.mdot;d.slosh=sl.derivative;
@@ -1170,7 +1192,7 @@ class NativePlant {
         aux.idot=idot; aux.launch_pending=s.launch_pending;aux.liftoff_time=s.liftoff_time;
         if(s.launch_pending && constrain_pad){
             aux.pad_force=transpose_matvec(rotation,mul(-s.m,d.v));
-            aux.pad_moment=mul(-1.0,aux.moment_cg);
+            aux.pad_moment=sub(add(cross(omega_inertial,iw),idotw),aux.moment_cg);
             d.r={};d.v={};d.q={};d.w={};
         }
         aux.thrust_mag=norm(eng.force);aux.f_aero=aero.force;aux.f_fin=fins.force;aux.thrust=eng.force;aux.moment=total_moment;
@@ -1183,8 +1205,11 @@ class NativePlant {
         const double gas_cap=std::max(state.rcs_fuel,0.0)/dt_, sample_time=state.t;
         // Release once upward free acceleration is available. While held, the pad
         // supplies rigid-body reaction forces/torques; fuel and actuators still evolve.
-        if(state.launch_pending && evaluate(state,command,wind,main_cap,gas_cap,sample_time,false).d.v[2]<0.0){
-            state.launch_pending=false;state.liftoff_time=state.t;
+        if(state.launch_pending){
+            const auto free=evaluate(state,command,wind,main_cap,gas_cap,sample_time,false);
+            if(dot(free.d.v,free.aux.local_down)<0.0){
+                state.launch_pending=false;state.liftoff_time=state.t;
+            }
         }
         const auto rhs=[&](const State& value){
             auto result=evaluate(value,command,wind,main_cap,gas_cap,sample_time);
@@ -1203,7 +1228,7 @@ class NativePlant {
         state.rcs_fuel=std::max(state.rcs_fuel,0.0);
         state.m=std::max(state.m,mass_.dry+state.rcs_fuel);
         // Fuel exhaustion cuts thrust, not the vehicle's subsequent ballistic trajectory.
-        state.done=!state.launch_pending && state.r[2]>=0.0;
+        state.done=!state.launch_pending && altitude(state.r)<=0.0;
         return base.aux;
     }
 
@@ -1234,6 +1259,7 @@ class NativePlant {
         d["a_coriolis_ned"]=array(a.a_coriolis);d["a_centrifugal_ned"]=array(a.a_centrifugal);d["v_air_body"]=array(a.v_air_body);
         d["aero_q_dyn"]=a.q_dyn;d["aero_cd"]=a.cd;d["aero_cl"]=a.cl;d["aero_x_cp"]=a.x_cp;d["aero_static_margin"]=a.static_margin;
         d["gravity_ned"]=array(a.gravity_ned);d["F_gravity_body"]=array(a.gravity_body);
+        d["local_down_ned"]=array(a.local_down);d["omega_inertial_body"]=array(a.omega_inertial);
         d["F_rcs_body"]=array(a.f_rcs);d["M_rcs_body"]=array(a.m_rcs);
         d["rcs_thruster_on"]=array(a.rcs_on);d["rcs_mdot"]=a.rcs_mdot;
         d["main_propellant"]=a.main_propellant;d["rcs_fuel"]=a.rcs_fuel;

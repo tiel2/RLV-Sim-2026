@@ -52,11 +52,14 @@ def write_telemetry(result, out_dir) -> dict[str, Path]:
     paths["timing"] = timing
     schema = {
         "version": 1,
+        "earth": result.aux.get("earth"),
         "time": "seconds since simulation epoch; native state time, not wall-clock time",
         "state_frame": (
-            "active vehicle CG in NED; altitude=-r_ned[2]; separation changes tracked CG"
+            "active CG in fixed-origin NED-oriented Cartesian axes; fixed Earth: h=-D; "
+            "rotating sphere: h=norm(r+[0,0,-R])-R; native altitude diagnostic is authoritative"
         ),
-        "attitude": "q_bn=[w,x,y,z], body-to-NED; w_body in body rad/s",
+        "attitude": "q_bn=[w,x,y,z], body-to-reference; w_body=body/reference in body rad/s; "
+        "omega_inertial_body is gyro angular-rate truth",
         "state_units": "r:m, v:m/s, m:kg",
         "trajectory": "initial truth, log_dt endpoints, prescribed events, and terminal endpoint",
         "physics": {
@@ -151,6 +154,16 @@ def physics_arrays(result):
     if ticks:
         for key in set.intersection(*(set(row) for row in ticks)) - {"t"}:
             arrays[key] = np.stack([row[key] for row in ticks])
+        if "altitude" in arrays:
+            arrays["altitude_m"] = arrays["altitude"].copy()
+        if "local_down_ned" in arrays:
+            down_speed = np.sum(result.v_ned * arrays["local_down_ned"], axis=1)
+            lateral = np.linalg.norm(
+                result.v_ned - down_speed[:, None] * arrays["local_down_ned"], axis=1
+            )
+            arrays["flight_path_angle_rad"] = np.where(
+                speed > 1e-9, np.arctan2(-down_speed, lateral), np.nan
+            )
     return arrays
 
 

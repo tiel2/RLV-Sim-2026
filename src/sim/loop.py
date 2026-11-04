@@ -132,7 +132,9 @@ def _finalize(log, aux_log, final_state, bundle, hit_max, pos_tol, speed_tol, ti
     fin_act = np.stack(log["fin"])
 
     # Pad samples at t=0 (or while waiting for release) are not touchdown.
-    alt = -r[:, 2]
+    from plant.earth import altitude, down_direction
+
+    alt = altitude(r, bundle.params)
     td = len(alt) - 1  # terminal native contact, or horizon endpoint if no contact
 
     # interpolate the state to the EXACT ground crossing alt=0: the logged ``td`` is
@@ -150,10 +152,12 @@ def _finalize(log, aux_log, final_state, bundle, hit_max, pos_tol, speed_tol, ti
 
     landing_position_error = float(np.linalg.norm(r_td[:2]))
     landing_speed = float(np.linalg.norm(v_td))
-    landing_speed_vertical = float(abs(v_td[2]))  # sink rate
-    landing_speed_horizontal = float(np.linalg.norm(v_td[:2]))  # lateral
+    down = down_direction(r_td, bundle.params)
+    vertical = float(v_td @ down)
+    landing_speed_vertical = abs(vertical)
+    landing_speed_horizontal = float(np.linalg.norm(v_td - vertical * down))
     landing_rate = float(np.linalg.norm(w_td))  # spin at contact
-    landing_tilt = _tilt_from_vertical(q_td)
+    landing_tilt = float(np.arccos(np.clip(-dcm_from_quat(q_td)[:, 0] @ down, -1, 1)))
     fuel_margin = m_td - float(bundle.params.mass.m_dry)
     # RCS gas cannot be burned by the main engine. Use the native main-propellant
     # budget rather than counting the separate gas reserve as landing fuel.
@@ -213,7 +217,14 @@ def _finalize(log, aux_log, final_state, bundle, hit_max, pos_tol, speed_tol, ti
         w_body=w,
         m=m,
         phase=phase,
-        aux={"per_tick": aux_log},
+        aux={
+            "per_tick": aux_log,
+            "earth": {
+                "model": bundle.meta["earth_model"],
+                "radius_m": float(bundle.params.gravity.radius),
+                "omega_reference_rad_s": np.asarray(bundle.params.earth.omega_ned).tolist(),
+            },
+        },
         termination_reason=reason,
         touchdown_index=td,
         landing_position_error=landing_position_error,

@@ -28,6 +28,7 @@ from core.interfaces import (
 )
 from core.seeding import fold_in, rng_from_seed, seed_value, seed_words
 from plant import aero_data
+from plant.earth import altitude
 from plant.mass_properties import attach_axial_component, dual_tank_properties
 
 _MASS_EPS = 1e-3  # m_dry tolerance for fuel-depletion predicate
@@ -236,6 +237,12 @@ def build_params(cfg) -> tuple[PlantParams, dict]:
     if not np.isfinite(rotation_rate) or rotation_rate < 0.0:
         raise ValueError("environment.earth.rotation_rate_rad_s must be finite and non-negative")
     earth_enabled = earth_model == "rotating"
+    if earth_enabled and (
+        str(grav.model) != "inverse_square" or not bool(e.include_differential_centrifugal)
+    ):
+        raise ValueError(
+            "rotating Earth requires inverse_square gravity and full centrifugal terms"
+        )
     latitude_rad = np.deg2rad(latitude_deg)
     omega_ned = (
         rotation_rate * np.array([np.cos(latitude_rad), 0.0, -np.sin(latitude_rad)])
@@ -279,6 +286,8 @@ def build_params(cfg) -> tuple[PlantParams, dict]:
         "atmosphere_model": atm.model,
         "wind_model": w.model,
         "earth_model": earth_model,
+        "earth_radius_m": float(grav.radius),
+        "reference_latitude_deg": latitude_deg,
         "slosh_model": s.model,
         "massprops_model": v.massprops_model,
         "n_fins": nf,
@@ -450,7 +459,7 @@ def initial_state(ic, params: PlantParams) -> PlantState:
         raise ValueError("initial mass exceeds configured wet capacity")
     launch_pending = bool(ic.get("launch_pad", False))
     if launch_pending and (
-        abs(float(ic["r_ned"][2])) > 1e-9
+        abs(float(altitude(ic["r_ned"], params))) > 1e-9
         or np.linalg.norm(ic["v_ned"]) > 1e-9
         or np.linalg.norm(ic.get("w_body", [0.0, 0.0, 0.0])) > 1e-9
     ):
@@ -507,7 +516,7 @@ def termination_reason(final_state: PlantState, params: PlantParams, hit_max_ste
     """Classify why an episode ended (post-processing)."""
     import numpy as np
 
-    h = float(-np.asarray(final_state.r_ned)[2])
+    h = float(altitude(final_state.r_ned, params))
     m = float(np.asarray(final_state.m))
     if h <= 1e-3 and bool(final_state.done):
         return int(TerminationReason.TOUCHDOWN)
