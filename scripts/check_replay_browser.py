@@ -85,6 +85,37 @@ def main():
                 url = f"http://127.0.0.1:{server.server_port}/viz/index.html"
                 page.goto(f"{url}?inspect&replay=/{path.relative_to(ROOT).as_posix()}")
                 page.wait_for_function("window.replayInspection !== undefined", timeout=30000)
+                observed = replay.get("flight_reference")
+                assert page.locator("#flightReference").count() == 0
+                if observed:
+                    overlay = page.evaluate(
+                        """reference => {
+                        const group = window.replayInspection.scene
+                            .getObjectByName('flight-reference-altitude');
+                        const expected = reference.segments.filter(s => s.length >= 2);
+                        const issues = [];
+                        if (!group || group.children.length !== expected.length)
+                            return {issues:['overlay segments']};
+                        group.children.forEach((line, i) => {
+                            const vertices = line.geometry.attributes.position;
+                            if (vertices.count !== expected[i].length) issues.push('vertices');
+                            for (let j=0; j<vertices.count; j++) {
+                                const actual = [vertices.getX(j),vertices.getY(j),vertices.getZ(j)];
+                                if (actual.some((v,k) => v !== Math.fround(expected[i][j].p[k])))
+                                    issues.push('observation coordinates');
+                            }
+                            if (!line.material.isLineDashedMaterial) issues.push('line style');
+                        });
+                        return {issues, segments:group.children.length};
+                        }""",
+                        observed,
+                    )
+                    assert not overlay["issues"], overlay
+                    reports.append({"case": name + "_observations", **overlay})
+                else:
+                    assert page.evaluate(
+                        "!window.replayInspection.scene.getObjectByName('flight-reference-altitude')"
+                    )
                 if name == "landing":
                     page.wait_for_function(
                         "window.replayInspection.rocket.hasGlbLegs()", timeout=30000

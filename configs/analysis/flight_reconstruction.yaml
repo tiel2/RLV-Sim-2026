@@ -1,0 +1,56 @@
+# Revision 2: authored before bounded search, after the failed before campaign.
+# These are reconstruction assumptions, not flight measurements or confidence intervals.
+version: 2
+date: '2026-11-07'
+landing:
+  epoch_s: 452.485
+  initial_altitude_m: 300.0
+  lookback_s: 6.0
+  method: constant_vertical_fraction_of_integrated_observed_speed
+  altitude_envelope_m: 100.0
+  envelope_sensitivity_m: [50.0, 100.0, 150.0]
+  envelope_role: engineering_display_tolerance_not_sensor_error_bound
+  vertical_fraction_bounds: [0.0, 1.0]
+  nominal_selection: midpoint_of_feasible_interval_before_simulation
+  heading_deg: 0.0
+  target: forward_constant_deceleration_distance_v_horizontal_times_height_over_v_down
+  target_role: assumed_engineering_target_not_observed_LZ1
+  coordinate_origin: engineering_landing_target_on_spherical_surface
+  pointing_cone_deg: 15.0
+  controller_gains: inherited_unchanged
+  actuator: ideal_inherited_scope_only
+mass:
+  common_booster_dry_kg: 25000.0
+  rcs_fuel_kg: 200.0
+  coupling: carry_actual_terminal_total_mass_and_rcs_fuel_to_next_recovery_phase
+  note: position_velocity_attitude_remain_independently_observation_initialized
+search:
+  optimizer: Powell
+  ascent_max_evaluations: 80
+  recovery_max_evaluations: 60
+  xtol: 0.001
+  ftol: 0.001
+  objective: equal_phase_mean_of_existing_normalized_altitude_speed_mse
+  comparison_policy: configs/analysis/public_flight_comparison.yaml
+  initialization_masks: unchanged_global_six_second_support_exclusions
+  invalid_candidate: reject_horizon_fuel_or_body_table_violation
+  selection: lowest_objective_among_physically_screened_evaluations
+  ascent:
+    initial: [1.0, 0.8, 1.0, 0.002]
+    bounds: [[0.75, 1.0], [0.4, 1.0], [0.7, 1.0], [0.0, 0.01]]
+    parameters: [initial_throttle, throttle_down, late_throttle, pitch_kick_rad]
+    fixed_mass_kg: 545200.0
+  recovery:
+    initial: [40000.0, 0.5, 0.55]
+    bounds: [[38000.0, 40000.0], [0.4, 0.6], [0.4, 0.6]]
+    parameters: [entry_initial_mass_kg, entry_throttle, powered_throttle]
+    aero_mass_bounds_kg: [32000.0, 38000.0]
+    powered_mass_bounds_kg: [30000.0, 35000.0]
+    landing_mass_bounds_kg: [28000.0, 32000.0]
+    fin_angle_rad: 0.0
+fixed:
+  observation_times_and_values: unchanged
+  comparison_time_and_altitude_offsets: unchanged
+  engine_count_thrust_isp_and_hardware_limits: unchanged
+  arbitrary_noise_injection: false
+  common_aerodynamic_coefficients: unchanged

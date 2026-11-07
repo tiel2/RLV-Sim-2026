@@ -44,6 +44,10 @@ def error_statistics(time, error, *, max_gap_s=1.1):
 
 def compare_flight_reference(result, config, *, data_root=None):
     """Explicit offsets/conventions are recorded assumptions, never fitted here."""
+    if config.get("policy") is not None:
+        from validation.flight_comparison_policy import compare_policy_reference
+
+        return compare_policy_reference(result, config, data_root=data_root)
     if config.dataset != "crs11":
         raise ValueError(f"unsupported flight reference {config.dataset!r}")
     root = (
@@ -171,6 +175,7 @@ def compare_flight_reference(result, config, *, data_root=None):
 def write_flight_comparison(result, config, out_dir, *, plot=True):
     report, arrays = compare_flight_reference(result, config)
     out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
     (out / "flight_comparison.json").write_text(json.dumps(report, indent=2, allow_nan=False))
     np.savez_compressed(out / "flight_comparison.npz", **arrays)
     if plot:
@@ -182,8 +187,26 @@ def write_flight_comparison(result, config, out_dir, *, plot=True):
             (("altitude_m", "Altitude [km]", 1000), ("speed_m_s", "Speed [m/s]", 1))
         ):
             # Point observations avoid visually connecting the raw-data gap.
-            axes[row, 0].plot(time, arrays[f"reference_{key}"] / scale, ".", ms=1, label="Webcast")
-            axes[row, 0].plot(time, arrays[f"simulation_{key}"] / scale, label="Simulation")
+            eligible = arrays.get(f"{key}_score_eligible", np.ones(len(time), dtype=bool))
+            axes[row, 0].plot(
+                time[eligible],
+                arrays[f"reference_{key}"][eligible] / scale,
+                ".",
+                ms=2,
+                label="Scored webcast",
+            )
+            if np.any(~eligible):
+                axes[row, 0].plot(
+                    time[~eligible],
+                    arrays[f"reference_{key}"][~eligible] / scale,
+                    "x",
+                    ms=2,
+                    color="0.65",
+                    label="Excluded / no overlap",
+                )
+            axes[row, 0].plot(
+                time, arrays[f"simulation_{key}"] / scale, ".", ms=1, label="Simulation"
+            )
             axes[row, 0].set_ylabel(label)
             axes[row, 0].legend()
             axes[row, 1].plot(time, arrays[f"error_{key}"] / scale, ".", ms=1)

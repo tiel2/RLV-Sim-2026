@@ -1,0 +1,35 @@
+# P4: fixed before evaluation. These are engineering probes, NOT measured CRS-11 bounds.
+version: 1
+date: '2026-11-07'
+nominal: results/verification/public_flight_comparison/reconstruction_20261107/final
+selection: frozen_P3_candidates_no_refitting_or_success_selection
+mass_handoff: carry_total_mass_and_rcs_gas_through_all_recovery_cases
+initialization: independently_initialized_kinematics_with_fixed_landing_target
+probes:
+  speed_mps: 0.2777777777777778
+  direction_deg: 1.0
+  pitch_deg: 1.0
+  initial_mass_fraction: 0.01
+  thrust_fraction: 0.02
+  drag_fraction: 0.10
+  wind_north_mps: 8.0
+rationale:
+  speed_mps: one_km_per_hour_display_unit_probe_not_verified_OCR_error
+  direction_deg: local_one_degree_identifiability_probe_not_flight_bound
+  pitch_deg: local_one_degree_unobserved_attitude_probe_not_flight_bound
+  initial_mass_fraction: local_one_percent_budget_probe_not_mass_estimate
+  thrust_fraction: truth_only_two_percent_force_scale_existing_fault_model_no_flow_change
+  drag_fraction: ten_percent_body_and_fin_drag_coefficients_no_lift_or_guidance_change
+  wind_north_mps: existing_configs/environment/wind/steady.yaml_magnitude_with_both_signs
+  observation: comparison_only_offsets_no_raw_data_change_no_best_offset_selection
+observation_probes:
+  altitude_datum_m: [-50.0, 50.0]
+  time_offset_s: [-0.033, 0.033]
+combinations:
+  - {name: heavier_lower_thrust, mass: 1, thrust: -1}
+  - {name: lighter_higher_thrust, mass: -1, thrust: 1}
+landing_actuator_probe: realistic_with_existing_parameters_no_retuning
+numerical_limits:
+  landing_input_replay: {r_ned: 0.01, v_ned: 0.001, w_body: 0.000001, q_bn: 0.000001, m: 0.001}
+  reference_refinement_fraction: 0.1
+not_identified: [sensor_noise, slosh, wind_profile, source_speed_frame, true_target, actual_commands]

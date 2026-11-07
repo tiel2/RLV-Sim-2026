@@ -140,6 +140,7 @@ function init(replay) {
   const groundY = meta.scene?.ground_y ?? -Math.abs(V.x_eng - V.x_cg_dry);
   const env = buildEnvironment(scene, renderer, sun, groundY, meta.scene);
   const traj = buildTrajectory(scene, frames);
+  buildFlightReference(scene, replay.flight_reference, frames);
   const rockets = vehicles.map(v => buildVehicle(v));
   rockets.forEach((r, i) => { r.group.visible = i === 0; scene.add(r.group); });
   let rocket = rockets[0], configuration = 0;
@@ -866,6 +867,29 @@ function buildTrajectory(scene, frames) {
   flown.setDrawRange(0, 1);
   scene.add(line);
   return { setProgress(i) { flown.setDrawRange(0, Math.max(2, i + 1)); } };
+}
+
+// Optional observed-altitude projection. Neither pose nor playback time comes from observations.
+function buildFlightReference(scene, reference, frames) {
+  if (!reference || reference.kind !== "observed_altitude_on_simulated_horizontal_position") {
+    return;
+  }
+  const group = new THREE.Group();
+  group.name = "flight-reference-altitude";
+  const size = new THREE.Box3().setFromPoints(frames.map(f => new THREE.Vector3(...f.p)))
+    .getSize(new THREE.Vector3()).length();
+  for (const segment of reference.segments) {
+    if (segment.length < 2) continue;
+    const geometry = new THREE.BufferGeometry().setFromPoints(segment.map(s => new THREE.Vector3(...s.p)));
+    const line = new THREE.Line(geometry, new THREE.LineDashedMaterial({
+      color: 0xffbd62, dashSize: Math.max(1, size / 3000), gapSize: Math.max(.5, size / 6000),
+      transparent: true, opacity: .95, depthTest: false, fog: false,
+    }));
+    line.computeLineDistances();
+    line.renderOrder = 5;
+    group.add(line);
+  }
+  scene.add(group);
 }
 
 // ---------------------------------------------------------------- HUD
