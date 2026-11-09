@@ -1,0 +1,17 @@
+# Research-demo sensor and navigation parameters (assumed, not flight specifications).
+imu_accel_sigma: 0.08           # m/s^2 per nav sample
+imu_gyro_sigma_deg: 0.025      # deg/s per nav sample
+accel_bias: [0.025, -0.02, 0.035]  # m/s^2 fixed injected truth bias
+gyro_bias_deg: [0.005, -0.006, 0.004] # deg/s fixed injected bias
+gnss_pos_sigma: 2.5             # m, per axis
+gnss_vel_sigma: 0.15            # m/s, per axis
+gnss_dropout: 0.03             # Bernoulli loss per scheduled measurement
+gnss_period: 0.1               # seconds, 10 Hz
+radar_sigma: 0.5                # m
+radar_period: 0.05             # seconds, 20 Hz
+radar_range: 1500.0            # m above flat terrain
+gnss_outage_start: -1.0         # set both e.g. 65 and 75 for outage test
+gnss_outage_end: -1.0
+seed_offset: 0
+law:
+  _target_: gnc.navigation.synthetic_eskf.build

@@ -1160,7 +1160,8 @@ python scripts/run_single.py scenario=entry_burn
 python scripts/view_replay.py
 ```
 
-If `.venv` does not exist, create it with `python3 -m venv .venv` before activation. After activation, `python` below refers to the project environment. Without activation, replace it with `./.venv/bin/python`. `[dev]` includes pytest and ruff; `python -m pip install -e .` is sufficient for ordinary execution. Use `python -m pip install -e ".[dev,qoco]"` for the Python QOCO comparison path in LCvx. QOCO for native SCvx is bundled in the C++ extension.
+If `.venv` does not exist, create it with `python3 -m venv .venv`
+ before activation. After activation, `python` below refers to the project environment. Without activation, replace it with `./.venv/bin/python`. `[dev]` includes pytest and ruff; `python -m pip install -e .` is sufficient for ordinary execution. Use `python -m pip install -e ".[dev,qoco]"` for the Python QOCO comparison path in LCvx. QOCO for native SCvx is bundled in the C++ extension.
 
 | Purpose | Command |
 |---|---|
