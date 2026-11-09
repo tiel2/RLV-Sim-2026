@@ -1,181 +1,102 @@
-# CRS-11 flight reference
+# CRS-11 공개 관측과 비교 기준
 
-Selected on 2026-11-02; scope updated on 2026-11-03 as optional background for
-independently initialized Project 2 physics experiments in [TODO](../TODO.md).
-Current scenarios use engineering inputs and do not seek to reconstruct CRS-11.
-Comparison is disabled by default and RMSE is not a physics acceptance criterion.
-When explicitly comparing, use stage-1 webcast altitude and speed over the selected window.
-The archive covers an RTLS (return-to-launch-site) flight, but a continuous
-launch-to-touchdown reconstruction is an optional extension. Reference selection
-does not complete initial-state reconstruction or flight-data validation.
-The provisional ascent → MECO → attached-stack coast scenario is available; see
-the [ascent specification](crs11_ascent.md) for its assumptions and unresolved conventions.
+`flight_reconstructed_*`는 CRS-11 관측에 맞춰 초기조건과 제한된 입력을 정한 다섯 독립 실행이다. 최종 설정·결과·실행 명령은 [통합 보고서](../verification/public_flight_comparison_report_ko.md)에 있다. 기존 `project2_*` 물리 실험은 별도이며 비행 비교가 기본적으로 꺼져 있다.
 
-## Source and reproducibility
+## 자료와 출처
 
-Source: [shahar603/Telemetry-Data](https://github.com/shahar603/Telemetry-Data),
-commit `b245d3b81aa36b7941ec10f3f4b508999d106a6d`.
-The source describes telemetry extracted from public SpaceX launch webcasts, not onboard
-sensor logs. Its launch catalogue identifies the CRS-11 analysed stage as stage 1.
+[Telemetry-Data의 고정 버전](https://github.com/shahar603/Telemetry-Data/tree/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON)을 사용한다. 로컬 [manifest](../../data/reference/crs11/manifest.json)에 원본 URL·크기·SHA-256을 기록하고, 원본과 [라이선스](../../data/reference/crs11/LICENSE)를 보존했다.
 
-The [local snapshot](../../data/reference/crs11/manifest.json) records upstream paths,
-commit-pinned download URLs, file sizes, SHA-256 hashes, and retrieval date.
-Upstream data, README, launch catalogue, and [Unlicense](../../data/reference/crs11/LICENSE)
-are preserved byte for byte. `stage1 raw.json` is locally named `stage1_raw.json`.
-Generated audit output is separate from the upstream files.
-
-| File | Content | Use |
-|---|---|---|
-| [stage1_raw.json](../../data/reference/crs11/stage1_raw.json) | 13,489 samples, T+0–464.630 s; time [s], speed [m/s], altitude [km] | Primary altitude/speed observations |
-| [analysed.json](../../data/reference/crs11/analysed.json) | 465 samples, T+0–464 s at 1 s spacing; calculated trajectory channels | Auxiliary trend comparison only |
-| [events.json](../../data/reference/crs11/events.json) | Named event times [s], rounded to the nearest second according to the upstream README | Prescribed timing inputs, with their role recorded |
-| [stages.json](../../data/reference/crs11/stages.json) | Beginning of stage-specific webcast telemetry | Stage attribution; not a physical separation event |
-
-Reproduce the offline integrity/structure checks and quality flags from the repository root:
-
-```bash
-python3 scripts/check_flight_reference.py
-```
-
-The command writes [quality_report.json](../../data/reference/crs11/quality_report.json).
-It does not clean data, reconstruct missing measurements, or certify flight-model accuracy.
-
-## Selected phase sequence and event roles
-
-The reference flight follows ascent → cutoff → separation/coast/attitude maneuver →
-boostback → coast → reentry burn → aerodynamic descent → landing burn → touchdown.
-Boostback is part of this RTLS mission; reproducing every phase or connecting the
-phases is not required for the selected Project 2 scenario set. Select independent
-comparison windows with documented initial states and local-to-reference time mapping.
-Separation and maneuver timing still require additional evidence.
-
-| Event | T+ [s] | Role in the initial prescribed-input reconstruction |
-|---|---:|---|
-| Throttle-down start/end | 50 / 74 | Timing anchors; throttle magnitudes remain unknown |
-| Max-Q | 65 | Comparison landmark if predicted independently; not a phase trigger |
-| MECO | 145 | Prescribed ascent cutoff |
-| Boostback start/end | 161 / 211 | Prescribed burn window |
-| Apogee | 248 | Comparison landmark if predicted independently; not a phase trigger |
-| Entry burn start/end | 372 / 384 | Prescribed burn window |
-| Landing burn start/end | 429 / 462 | Prescribed burn window; end is not an exact touchdown measurement |
-| Stage separation / fin deployment | Unavailable | Obtain separately; do not substitute `stages.json` or MECO |
-
-These are reference markers for selecting comparison windows, not an implemented
-CRS-11 engine schedule. Existing generic engineering scenarios are not automatically
-reconstructions of these windows. If an event is prescribed, matching its time is not
-independent validation. A condition-triggered model may compare its predicted event
-time with this reference.
-
-### Independent comparison windows
-
-| Segment | Approximate reference T+ [s] | Evidence / limits |
-|---|---:|---|
-| Powered ascent | 0–145 | Altitude and scalar-speed observations through the MECO marker. |
-| Cutoff / short coast, including separation and attitude activity | 145–161 | Altitude/speed coverage; no exact separation or flip timing/state. |
-| Boostback burn | 161–211 | Burn markers and altitude/speed observations; no per-engine throttle, thrust or attitude telemetry. |
-| Post-boostback coast | 211–372 | Includes ascent to and descent from apogee; apogee marker is 248 s. |
-| Entry burn | 372–384 | Burn markers and altitude/speed observations. |
-| Aerodynamic descent | 384–429 | Between entry-burn end and landing-burn start; fin state/history is not supplied. |
-| Terminal descent / landing burn | 429–462 | Burn markers and altitude/speed observations; 462 s is not an exact touchdown measurement. |
-
-Raw observations continue to 464.630 s. Coverage within a window does not supply
-the full 6-DOF state, mass, propellant, actuator state or configuration needed to
-initialize a simulation. Reconstruct or assume those inputs explicitly. Source
-event times are rounded and should not be mixed with preflight planned times as
-though they were one measured timeline. The table partitions the reference for
-analysis; individual scenarios may use a shorter window or include adjacent events.
-
-## Public observations, reconstructed states and simulation truth
-
-The four Project 2 physics experiments (ascent, entry burn, aerodynamic descent and
-terminal powered descent) use documented engineering initial conditions. Their
-current values were partly inspired by this archive, but may be changed within
-physical constraints. For a later claimed flight reconstruction, constrain initial
-conditions using the available observations. Use the following distinction:
-
-| Category | Available evidence / treatment |
+| 파일 | 내용과 사용 범위 |
 |---|---|
-| Webcast observations | Time, altitude, scalar speed and named event markers in the preserved archive; retain extraction/rounding and convention limitations. |
-| Reconstructed quantities | Vertical/horizontal speed magnitudes and flight-path angle may be estimated from altitude/speed under explicit frame assumptions and suitable smoothing. They are derived estimates, not independent measurements or a complete NED velocity. |
-| Additional estimates / assumptions | Heading, horizontal position, body attitude/rates, mass/inertia, remaining propellant, throttle/gimbal/fin histories and aerodynamic parameters need separate evidence or documented assumptions and sensitivity analysis. |
-| Simulation truth | The state propagated by the declared plant model, used later to generate synthetic sensors and assess navigation error. It is not measured CRS-11 flight truth. |
+| `stage1_raw.json` | 실제 비행 웹캐스트의 시간[s]·고도[km]·총속력[m/s]. 13,489행, T+0–464.630 s. 직접 비교에 사용 |
+| `analysed.json` | 1초 간격의 파생량 465행. 수직·수평 속도, 가속도, 경로각 등은 독립 계측이 아니므로 상태 truth로 사용하지 않음 |
+| `events.json` | 초 단위 반올림 event. 구간 선택의 근거이며 지정한 event 시각의 일치는 독립 검증이 아님 |
+| `stages.json` | stage별 표시 자료의 시작. 실제 단 분리 시각을 뜻하지 않음 |
 
-The [five-phase specification](project2_scenario_spec.md) records the boundary
-observations, proposed initial states/inputs, processing sensitivity and planned
-verification criteria. Its [analysis recipe](../../configs/analysis/project2_segments.yaml)
-is separate from runnable scenario YAML; it does not change existing experiments.
-Those boundary observations and the recipe cover the four prescribed experiments. The fifth
-phase, `scenario=project2_landing`, has an independent engineering initialization at 300 m;
-no corresponding CRS-11 landing window or observed complete initial state is assigned to it.
+자료는 실제 비행의 방송 숫자를 추출한 것이며, 기체 센서 원시 로그나 설계 nominal trajectory가 아니다. 자세·각속도·수평 위치·질량·제어 명령·정확한 접지 상태는 확보하지 못했다. 외란·센서·방송 처리의 개별 영향도 분리할 수 없다. [취득 과정과 확인 범위](crs11_data_provenance_ko.md)에 근거를 정리했다.
 
-Public-source check on 2026-11-03: the original
-[Telemetry-Data documentation](https://github.com/shahar603/Telemetry-Data) and its
-successor [Launch Dashboard API documentation](https://github.com/shahar603/Launch-Dashboard-API)
-describe webcast observations and calculated trajectory channels. Their documented
-channels do not provide a measured complete 6-DOF CRS-11 state, mass/fuel history or
-actuator/sensor log. No such complete truth dataset was identified in this check;
-this is not a claim that no additional data exists elsewhere. The API documentation
-was inspected for provenance/fields; its live service was not used to replace or
-extend the pinned local archive.
+## 구간과 시간 기준
 
-In `analysed.json`, `angle` is a derived velocity/flight-path angle, not body pitch;
-`q` denotes the aerodynamic-pressure channel, not a quaternion. Preserve the unit
-and derivation caveats below. Parameters estimated from a comparison window belong
-to calibration; validate on separately declared withheld data or independent evidence.
+[비교 정책](../../configs/analysis/public_flight_comparison.yaml)은 다음 구간을 사용한다. 앞의 네 구간은 `[시작, 끝)`, 착륙은 마지막 표본까지 포함하며 공유 경계의 표본은 뒤 구간에 속한다.
 
-## Quality and uncertainty
+| 구간 | 발사 후 시간 [s] | 원본 행 수 | 초기화 자료 제외 후 관측 가능 시간: 고도 / 속력 [s] |
+|---|---|---:|---:|
+| 상승 | 0–145 | 4,248 | 135.635 / 143.643 |
+| 재진입 연소 | 372–384 | 318 | 5.939 / 5.939 |
+| 공력 하강 | 384–429 | 1,327 | 38.939 / 38.939 |
+| 최종 동력 하강 | 429–452.485 | 683 | 17.418 / 17.418 |
+| 착륙 | 452.485–464.630 | 354 | 4.672 / 12.112 |
 
-- Raw timestamps are strictly increasing. The largest interval is 1.302 s between
-  T+70.870 and 72.172 s. Mark missing coverage; do not bridge it silently when resampling.
-- Approximately 30 samples per second describe extraction cadence, not independent
-  measurements or the original instrument/display update rate. Quantization, repeated
-  display values, extraction errors, and timing latency require consideration.
-- Derived vertical speed exceeds total speed by more than 0.01 m/s at 52 analysed epochs.
-  At T+462 s, total speed is 4.282 m/s while vertical speed is −6.053 m/s. These flags
-  indicate that the channels must not be assembled directly into a truth state vector.
-  The 0.01 m/s threshold is an audit setting, not an uncertainty estimate.
-- Derived downrange ends at −6.534 km. Establish its definition and sign before comparison;
-  it is not automatically distance to the landing target or the simulator's unsigned
-  horizontal displacement from its initial position.
-- The source does not supply numerical measurement uncertainty. Event rounding alone
-  contributes up to about 0.5 s, with additional extraction/timing errors unquantified.
-  Do not assign sensor-grade error bars or exact touchdown speed from the displayed zeros.
-- Derived acceleration, angle, and `q` need their computation and conventions checked
-  before quantitative use. The upstream README labels aerodynamic pressure with `N`;
-  do not silently treat this unit label as a verified pressure definition.
+실제 오차 계산에는 위 시간 중 시뮬레이션도 존재하는 부분만 사용한다. 초기조건 추정에 사용하기 전의 가용 시간·제외 행 수는 [관측 품질 보고서](../../results/verification/public_flight_comparison/observations/observation_quality.json)에 보존했다.
+
+착륙 시작은 연소 시작 이후 첫 `0 < 고도 ≤ 300 m` 표본인 T+452.485 s다. 표시 고도 300 m, 속력 76.111 m/s이며 직전 표본은 400 m다. 이는 표시 전환으로 정한 분석 경계로, 정밀한 300 m 통과 시각은 아니다. 464.630 s는 자료의 마지막 시각이며 실제 접지 시각이 아니다.
+
+원본 event의 주요 시각은 스로틀 감소 50–74 s, MECO 145 s, boostback 161–211 s, 정점 248 s, 재진입 연소 372–384 s, 착륙 연소 429–462 s다. 정수 반올림의 ±0.5 s는 전체 시각 오차 한계가 아니며, 462 s를 정확한 접지로 사용하지 않는다. boostback·coast는 이번 다섯 비교 구간에 포함하지 않는다.
 
 ## Comparison contract
 
-1. Preserve raw observations and keep preprocessing/masks in separate artifacts. Use
-   stage-1 data explicitly rather than a generic file that could mix stages on other missions.
-2. Align the simulated launch epoch with T+0. Convert altitude from km to m. Resolve
-   the source altitude datum before comparing with `-r_ned[2]` in the landing frame;
-   record any datum offset. Resolve the speed reference frame before comparing with
-   `norm(v_ned)`. Do not silently fit time/height offsets to minimize validation error.
-3. Compare only overlapping, valid coverage. Interpolate the simulated trajectory to
-   observation epochs; do not extrapolate observations or invent data across gaps.
-   Record sampling/weighting so dense repeated webcast samples do not imply extra evidence.
-4. Report altitude and speed error histories, bias, RMSE, and maximum absolute error per
-   phase, together with coverage and preprocessing. Report event-time errors only for
-   events predicted independently. Define acceptance limits after assessing uncertainty.
-5. Treat attitude, angular rate, propellant, aerodynamic loads, and actuator histories as
-   simulation diagnostics unless an independent measurement is obtained. Webcast telemetry
-   is not IMU/GNSS truth for validating INS/EKF performance.
-6. If parameters are fitted to CRS-11, call those results calibration. Freeze parameters
-   before evaluating a separately selected flight or withheld interval. Record the split
-   before fitting; another mission must be audited before adopting it as a holdout.
-
-## Inputs still needed
-
-| Classification | Current evidence / remaining task |
+| 항목 | 적용 규칙 |
 |---|---|
-| Known as published observations | Stage-1 altitude, scalar speed, timestamps, and named event times, with the limitations above |
-| To obtain from additional sources | Launch/landing coordinates and elevations, flight heading, separation timing, and speed/altitude conventions |
-| To estimate with documented bounds | Vehicle and attached-stage mass, propellant budget, thrust/throttle schedules, and aerodynamic coefficients |
-| To state as model assumptions | Unobserved attitude/rate initial conditions, separation impulse, wind, and actuator/deployment approximations |
+| 단위·시각 | 고도 km→m, 속력은 이미 m/s. `t_sim = t_ref − 구간 시작 시각` |
+| 고도·속력 기준 | 모델의 구면 고도와 지구 상대 속도 벡터의 크기와 비교. 원본 기준면·속력 좌표계는 미확인 가정 |
+| 보간 | 관측 시각·값을 유지하고 모의 값만 해당 시각에 보간. 범위 밖 외삽 금지 |
+| 오차 | 원본에서 인접한 유효 행 사이의 사다리꼴 시간 가중으로 평균 차이·RMSE·최대 차이 계산. 유효 시간과 제외 사유를 함께 기록 |
+| 추정과 평가 | 초기조건에 사용한 표본은 오차 평가에서 제외. 입력 탐색에 사용한 관측의 적합도는 독립 예측 검증과 구별 |
+| 오차 보정 | 시간·고도 offset을 오차 최소화로 조정하지 않음. 속력 좌표계와 표시 지연도 임의로 보정하지 않음 |
 
-Do not populate a complete NED initial state from scalar speed or derived downrange alone.
-The existing standalone recovery initial conditions remain engineering assumptions
-until justified for a selected reference window. They may be estimated or assumed
-with documented bounds; an upstream simulation is not required. Reusing a reference
-sample to initialize a run is an initial condition, not an independently predicted result.
+이 규칙은 `policy: crs11_observations_v1`에 적용된다. 정책을 지정하지 않은 기존 비교 경로는 과거 규칙을 유지하므로 두 경로의 통계를 혼용하지 않는다. `comparison_only`는 비교 통계가 계산됐다는 뜻이며 정확도 합격을 뜻하지 않는다.
+
+### 결측·표시값 처리
+
+- 고도 0은 고도 오차 평가·미분·3D 관측선에서 제외한다. 속력은 별도 판단하며 속력 0을 접지의 증거로 쓰지 않는다. T+457.223 s에 표시 고도는 0이지만 속력은 32.5 m/s다.
+- 원본 행과 반복 표시값은 보존한다. 평활화나 임의 이상치 제거는 하지 않는다. 잘못된 배열·비유한값·증가하지 않는 시간·음수 속력/고도는 준비 단계에서 거부한다.
+- 관측·모의 표본 간격이 **1.1초**를 넘거나 원본 행이 연속하지 않으면 연결하지 않는다. 원본의 최대 간격은 T+70.870–72.172 s의 1.302 s다.
+- 유효 시간이 없는 채널은 `insufficient_coverage` 또는 `not_comparable`과 null 지표로 기록한다. 홀로 남은 표본은 시간 통계에 포함하지 않으며, 비교 불가를 오차 0으로 표시하지 않는다.
+
+약 0.033초의 추출 간격은 독립 센서 측정 주기가 아니다. 저고도 100 m 표시 간격도 센서 오차나 확률분포로 환산하지 않는다. `analysed.json`에는 수직 속력이 총속력보다 큰 시각이 52개 있고, 최종 downrange는 −6.534 km다. `angle`은 경로각, `q`는 공력 압력 채널이므로 기체 pitch·quaternion·실측 위치로 사용하지 않는다.
+
+## 초기조건 구성과 평가 제외
+
+시작 고도·속력은 해당 표본 또는 인접 표본의 선형 보간으로 정한다. 상승은 발사대에서 정지한 수직 기체를 가정한다. 재진입 연소·공력 하강·최종 동력 하강은 직전 **4초**의 고도에 시간 가중 2차식을 맞춰 수직 속도를 추정하고, `수평 속력 = √(총속력² − 수직 속도²)`로 분해한다. 수평 방향은 북쪽, 초기 자세는 추력축이 속도 반대 방향을 향하도록 설정한다.
+
+2·4·6초 추정도 진단용으로 기록한다. 수직 속력이 총속력을 넘으면 거부하며 다른 창으로 자동 대체하지 않는다. 재진입의 2초 창은 1,272.664 m/s로 총속력 1,260.277 m/s를 넘어 거부됐다. 착륙의 2/4/6초 미분값은 2.612/58.076/65.946 m/s로 크게 달라, 최종 착륙에는 아래의 별도 방법을 썼다.
+
+최종 착륙은 직전 6초 동안 하강 속력/총속력 비율 `f`가 일정하다고 가정한다. `h(t) = 300 + f × ∫[t, 452.485] 속력 dt`가 관측 고도와 100 m 이내로 맞는 범위 `0.999733514–1`의 중간값을 택한다. 이에 따라 수평/하강 속력은 1.242425/76.100859 m/s다. 100 m는 공학적 허용 차이며 계측 오차 한계가 아니다.
+
+착륙 목표는 진행 방향으로 `수평 속력 × 초기 고도 / 하강 속력 = 4.897809 m` 앞의 지면이다. 목표를 원점으로 두고 초기 북쪽 위치를 −4.897809 m, 구면 고도를 300 m로 설정한다. 초기 자세는 수직이며 모든 구간의 초기 롤각·각속도는 0이다. 실제 위치·방향·자세·착륙장을 복원한 값이 아니다.
+
+검토한 모든 초기화 창과 경계 보간 표본의 합집합을 각 phase의 평가에서 제외한다. 양 끝을 포함하는 제외 범위는 다음과 같다.
+
+| 초기화 대상 | 제외 시간 T+ [s] |
+|---|---|
+| 상승 | 0–0 |
+| 재진입 연소 | 366–372.004 |
+| 공력 하강 | 378–384.016 |
+| 최종 동력 하강 | 423–429.028 |
+| 착륙 | 446.485–452.485 |
+
+입력 후보 비교에는 초기화·품질 제외 후의 같은 관측을 사용했다. 점수는 고도 RMSE/100 m와 속력 RMSE/10 m/s의 제곱을 같은 비중으로 평균한다. 이 척도는 계측 표준편차가 아니다. [flight_reconstruction.yaml](../../configs/analysis/flight_reconstruction.yaml)의 소수 변수만 수치 탐색했고, 상승 80회·회복 60회 평가 한도로 종료되어 수렴을 확인하지 못했다. 방향·명령 형태·명령 시각·핀 제어는 고정했으므로 관측 오차를 최소화한 궤적을 얻었다는 의미는 아니다. 초기 준비 정책에 있던 모든 후보를 탐색한 것도 아니며, 공력 하강 핀 편향은 0이다.
+
+## 설정과 재현 도구
+
+`flight_reconstructed_*`는 `flight_comparison_*`를 상속한다. 후자는 초기 준비 설정이므로 최종 결과를 보려면 통합 보고서의 `flight_reconstructed_*` 명령을 사용한다. 회복 구간은 앞 실행의 종료 질량·RCS 가스를 다음 초기값으로 전달하지만 위치·속도·자세는 독립 초기화한다.
+
+| 도구 | 역할 |
+|---|---|
+| `check_flight_reference.py` | 원본 무결성·구조·파생량 품질 검사 |
+| `prepare_flight_observations.py` | 단위 변환·구간·제외 규칙과 관측 품질 보고서 생성 |
+| `prepare_flight_scenarios.py` | 초기 준비 설정 대조·초기화 자료 사용 범위 검사. `--write-configs`는 준비 설정을 다시 생성 |
+| `reconstruct_flight.py` | 선언한 범위에서 입력 탐색과 최종 설정 생성 |
+| `verify_flight_reconstruction.py` | 최종 실행의 독립 적분·시간 간격 검사 |
+| `check_flight_sensitivity.py` | 고정된 최종 설정의 민감도 평가 |
+| `compare_public_flight.py` / `plot_final_flight_comparison.py` | 보존 실행 재현·검증 자료 집계 / 최종 실행만 표시하는 그림 생성 |
+
+도구와 정책은 [scripts](../../scripts), [validation](../../src/validation)에 있다. 과거 실행을 비교하는 도구도 최종 검증·그림 생성에 사용하므로 보존한다. 기존 분석 기록은 덮어쓰지 않고 새 출력 경로를 사용한다.
+
+```bash
+.venv/bin/python scripts/check_flight_reference.py
+.venv/bin/python scripts/prepare_flight_observations.py
+.venv/bin/python scripts/prepare_flight_scenarios.py
+```
+
+[관측 준비 결과](../../results/verification/public_flight_comparison/observations/summary.md), [초기화 결과](../../results/verification/public_flight_comparison/initialization/initialization_report.json), [최종 설정·수치 검사](../../results/verification/public_flight_comparison/reconstruction_20261107/final/summary.json)를 보존했다. `results/`는 git 추적 대상이 아니므로 다른 환경에서 재현할 때 기록을 별도로 전달하거나 생성해야 한다.

@@ -1,0 +1,643 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[margin=0.78in,headheight=14pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,longtable,tabularx,array,multirow}
+\usepackage{graphicx,float}
+\usepackage[table]{xcolor}
+\usepackage{siunitx}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{soul}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue!55!black,
+  citecolor=black,
+  pdftitle={Reusable Launch Vehicle Simulator Project 2 Report},
+  pdfauthor={Team 4}
+}
+\sisetup{group-separator={,}, group-minimum-digits=4}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{5pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+\definecolor{navy}{HTML}{1F4E78}
+\definecolor{lightblue}{HTML}{EAF2F8}
+\definecolor{lightgray}{HTML}{F2F2F2}
+\sethlcolor{yellow!45}
+\newcommand{\todoitem}[1]{\par\medskip\noindent\textbf{\colorbox{yellow!45}{TODO}} \textbf{#1}\par\medskip}
+\newcommand{\sourcecode}[1]{\texttt{#1}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{lightgray},
+  frame=single,
+  rulecolor=\color{black!20},
+  breaklines=true,
+  columns=fullflexible,
+  xleftmargin=0.2in,
+  xrightmargin=0.2in,
+  aboveskip=8pt,
+  belowskip=8pt
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{RLV Simulator Project 2}
+\rhead{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{1.7in}
+  {\LARGE\bfseries Reusable Launch Vehicle Simulator\par}
+  \vspace{0.16in}
+  {\Large Project 2 Report\par}
+  \vspace{0.3in}
+  \rule{0.58\textwidth}{0.5pt}\par
+  \vspace{0.3in}
+  {\large Guidance, Navigation, and Control System for Reusable Launch Vehicles\par}
+  \vspace{0.1in}
+  {\large M2795.007800\par}
+  \vfill
+  {\large\textbf{Team 4}\par}
+  \vspace{0.16in}
+  {\large Anand \quad Jonas \quad Seongjae\par}
+  \vspace{0.32in}
+  {\large 10 November 2026\par}
+  \vfill
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+This report documents a modular six-degree-of-freedom simulator for a Falcon~9 first-stage approximation and its use in Project~2. The main conclusion is that the supplied code base provides a strong physics and software foundation for later guidance-and-control work: it propagates translational and rotational motion, variable mass properties, propulsion, aerodynamic loads, grid fins, reaction-control-system actuation, and a rotating spherical-Earth environment. Five independently initialized representative cases demonstrate ascent, entry burn, aerodynamic descent, terminal powered descent, and a closed-loop landing.
+
+The five scenarios and the supplied verification workflow were executed for this report on 9 November 2026. The ascent, aerodynamic-descent, powered-descent, and landing checks passed; the entry-burn refinement check has one small mass-stability threshold exceedance and is kept visible in Section~\ref{sec:verification}. In the rotating-Earth landing regression, the modeled vehicle reaches the ground at approximately \SI{17.468}{\second} with \SI{0.086245}{\metre\per\second} contact speed, \ang{0.055317} tilt, \SI{0.019430}{\metre} position error, and \SI{1378.823}{\kilogram} of main propellant remaining. These figures validate numerical consistency and declared model behavior; they do not by themselves validate the simulator against the real Falcon~9 vehicle.
+
+The main Project~2 gap is navigation. The selected navigation module is an identity, or truth-pass-through, baseline. It does not generate physical IMU, GNSS, barometric, radar-altimeter, or star-tracker measurements, and the EKF selection intentionally raises \sourcecode{NotImplementedError}. This report therefore treats sensor-based navigation and navigation-error performance as unfinished work rather than claiming a completed estimator.
+
+The report now includes plots from the executed runs and an observable comparison with the supplied CRS-11 reconstruction. The remaining substantive gap is the navigation deliverable: a physical sensor model and estimator have not been implemented. This limitation is deliberately retained as a TODO in Section~\ref{sec:gnc}.
+
+\section{Project Objective and Report Scope}
+
+Project~2 asks for a physics-based vehicle simulator and a navigation capability for a reusable launch vehicle. The stated purpose is not merely to reproduce a trajectory, but to model the mechanisms that produce it: equations of motion, coordinate systems, gravity, atmospheric effects, aerodynamics, propulsion, changing mass and inertia, configuration changes, measurements, and state estimation~\cite{briefing}. The resulting simulation is intended to be the computational basis for subsequent guidance and control design.
+
+This report evaluates the supplied RLV-Sim code archive as the team's Project~2 baseline. It documents what the archive actually implements, separates verified implementation results from empirical validation, and uses the supplied CRS-11 webcast reconstruction only as a public-flight reference. The five Project~2 cases are intentionally independent engineering experiments; they are not a single continuous reconstructed CRS-11 mission~\cite{scenario_spec}.
+
+\section{Requirements Traceability}
+
+Table~\ref{tab:traceability} traces the requested Project~2 deliverables to the supplied implementation and to the reporting treatment in this document. The final column distinguishes completed capability from material that requires team action.
+
+\begin{longtable}{p{0.23\textwidth}p{0.37\textwidth}p{0.28\textwidth}}
+\caption{Traceability to the Project~2 briefing and the supplied RLV-Sim archive.}\label{tab:traceability}\\
+\toprule
+\rowcolor{navy}\color{white}\textbf{Project requirement} & \color{white}\textbf{Evidence in supplied material} & \color{white}\textbf{Report treatment / status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{navy}\color{white}\textbf{Project requirement} & \color{white}\textbf{Evidence in supplied material} & \color{white}\textbf{Report treatment / status}\\
+\midrule
+\endhead
+Simulation architecture & Modular core, plant, GNC, and simulation packages; Hydra configurations & Documented in Section~\ref{sec:architecture}; implemented\\
+\rowcolor{lightblue}
+Vehicle dynamics model & Native C++ 6-DOF rigid-body plant, RK4 propagation, variable mass and inertia & Documented in Section~\ref{sec:dynamics}; independently verified\\
+Environment, propulsion, aerodynamics & Rotating spherical Earth, USSA-1976 atmosphere, back-pressure thrust, body table, grid fins & Documented in Section~\ref{sec:dynamics}; modeling assumptions stated\\
+\rowcolor{lightblue}
+Navigation architecture & Navigation interface, timestamps, truth/measurement/estimate histories & Infrastructure implemented; estimator remains incomplete\\
+Sensor models & IdentityNav optional synthetic state perturbations only & Not a physical sensor suite; must not be overstated\\
+\rowcolor{lightblue}
+Navigation algorithm & Identity pass-through selected; EKF stub raises \sourcecode{NotImplementedError} & Open work item\\
+Simulation results and validation & Five scenarios, segment checker, supplied verification records & Reported in Sections~\ref{sec:scenarios}--\ref{sec:comparison}\\
+\rowcolor{lightblue}
+Assumptions and sources & YAML configuration, scenario specification, verification documents, webcast reconstruction & Reported in Section~\ref{sec:assumptions} and References\\
+\bottomrule
+\end{longtable}
+
+\section{Simulation Architecture and Implementation}\label{sec:architecture}
+
+The software is organized around four layers. The \sourcecode{core} package defines immutable NumPy-oriented interfaces, reference-frame utilities, and deterministic seeding. The \sourcecode{plant} package resolves vehicle and environmental configuration and builds the native C++ dynamics session. The \sourcecode{gnc} package supplies separable guidance, navigation, control, allocation, and phase-scheduling components. The \sourcecode{sim} package executes multirate rollouts, records telemetry, computes KPIs, and exports replay data~\cite{readme,architecture}.
+
+\begin{table}[H]
+\centering
+\caption{Software decomposition used by the supplied simulator.}\label{tab:architecture}
+\begin{tabularx}{\textwidth}{p{0.12\textwidth}YY}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Layer} & \color{white}\textbf{Main responsibility} & \color{white}\textbf{Representative evidence}\\
+\midrule
+\sourcecode{core} & State, command, parameter, and frame contracts & \sourcecode{PlantState}, \sourcecode{Measurement}, \sourcecode{Command}, \sourcecode{ActuatorCommand}\\
+\rowcolor{lightblue}
+\sourcecode{plant} & Configuration resolution and native vehicle model & \sourcecode{src/native/plant.cpp}; mass, aero, Earth, actuator models\\
+\sourcecode{gnc} & Guidance, navigation, control, allocation, phase scheduling & LCvx, PD attitude control, identity navigation, scheduler\\
+\rowcolor{lightblue}
+\sourcecode{sim} & Multirate execution, telemetry, KPIs, replay, Monte Carlo & \sourcecode{run.py}, \sourcecode{loop.py}, \sourcecode{telemetry.py}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The closed-loop signal flow is
+\begin{center}
+\small
+plant truth $\rightarrow$ navigation measurement/estimate $\rightarrow$ guidance command $\rightarrow$ attitude control torque $\rightarrow$ allocation $\rightarrow$ held actuator command $\rightarrow$ native plant advance.
+\end{center}
+Navigation, guidance, control, and logging can use independent periods; the scheduler expresses all periods as integer multiples of the plant timestep. This design avoids hidden rate rounding and makes timing and delay data available as simulation output. Prescribed-input cases use the same plant but do not construct GNC or navigation modules.
+
+Hydra configuration groups make key modeling choices explicit and reproducible. A command can change a component group such as \sourcecode{plant/actuator=ideal} or \sourcecode{gnc/guidance=scvx}, while resolved configuration and manifests identify the resulting run. The isolation of the plant session also supports deterministic repeated runs and independent Monte Carlo episodes~\cite{readme,architecture}.
+
+\section{Vehicle Dynamics and Subsystem Models}\label{sec:dynamics}
+
+\subsection{State Frames and Six Degree of Freedom Dynamics}
+
+The model uses a body frame and Earth-fixed axes aligned with North-East-Down at the selected spherical-surface origin. In rotating-Earth mode, stored \sourcecode{r\_ned} and \sourcecode{v\_ned} are Cartesian displacement and velocity in these fixed axes rather than coordinates in a moving local-level frame. The body-to-reference quaternion $q_{BN}$ is scalar-first, while $\bm{\omega}_{body}$ is the body angular rate relative to the Earth-fixed reference axes. The inertial angular rate is separately available for future gyro modeling~\cite{physics_report}.
+
+The propagated state can be written compactly as
+\begin{equation}
+ \bm{x} = \begin{bmatrix}\bm{r} & \bm{v} & q_{BN} & \bm{\omega} & m\end{bmatrix}^{T}.
+\end{equation}
+For rotating-Earth runs, the translational dynamics are
+\begin{equation}\label{eq:translation}
+ \dot{\bm{v}} = \frac{C_{BN}\bm{F}_{b}}{m}
+ - \frac{\mu\bm{R}_{f}}{\lVert\bm{R}_{f}\rVert^{3}}
+ - 2\bm{\Omega}\times\bm{v}
+ - \bm{\Omega}\times(\bm{\Omega}\times\bm{R}_{f}),
+\end{equation}
+where $\bm{R}_{f}$ is geocentric position, $\bm{\Omega}$ is the Earth rotation vector, $\mu$ is the gravitational parameter, and $\bm{F}_{b}$ is the non-gravitational body force. The rotating model includes central gravity, Coriolis acceleration, and full centrifugal acceleration. Contact, altitude, flight-path angle, and touchdown vertical speed are evaluated radially rather than using a flat tangent plane.
+
+\subsection{Mass Properties and Propulsion}
+
+The vehicle mass is the sum of structure, main propellant, and a separately tracked RCS-gas reserve. Two cylindrical LOX/RP-1 tanks are used to compute fill-dependent center of gravity and inertia, including the inertia-rate contribution in rotational dynamics. Main-engine fuel exhaustion removes thrust but does not remove the RCS reserve or stop a ballistic episode. For the Project~2 recovery experiments, the common assumed engine model uses \SI{914}{\kilo\newton} vacuum thrust per engine, specific impulse \SI{311}{\second}, and \SI{0.68}{\square\metre} nozzle exit area; these are declared engineering assumptions rather than validated Falcon~9 parameters~\cite{scenario_spec}.
+
+The thrust and main-propellant mass-flow model are
+\begin{align}
+ T_i &= \max\left(u_iT_{vac,i} - p_aA_{e,i},\,0\right),\\
+ \dot{m}_{main} &= -\sum_i\frac{u_iT_{vac,i}}{I_{sp,i}g_0}.
+\end{align}
+The formulation separates gross vacuum-thrust mass flow from ambient-pressure back-pressure correction. Engines may be enabled per scenario, with thrust-vector-control (TVC) deflection providing force and moment around the current CG. The model also represents 12 cold-gas RCS nozzles in a paired three-axis layout, including PWM or averaged operation, nozzle failures, gas use, and force/moment diagnostics.
+
+\subsection{Environment and Aerodynamics}
+
+The nominal Project~2 configuration selects inverse-square gravity, a uniformly rotating spherical Earth at an assumed reference latitude of \ang{28.6}, a US Standard Atmosphere 1976 polynomial/layer model, no wind, no fault, and no slosh. The \ang{28.6} value is a reference-site assumption for each independently initialized case; it is not a reconstructed CRS-11 geodetic trajectory~\cite{scenario_spec,physics_report}.
+
+For air-relative speed $V$ and density $\rho$, dynamic pressure and Mach number are
+\begin{equation}
+ \bar{q}=\tfrac{1}{2}\rho V^2, \qquad M=V/a.
+\end{equation}
+The aerodynamic model uses an analytic coefficient table over Mach 0--8 and angle of attack \ang{0}--\ang{90}. Its base drag, transonic rise, hypersonic rise, normal-force slope, and center-of-pressure behavior are configuration parameters. Four grid fins compute local flow from relative airspeed and body rotation, then add lift, drag, and moment. Fin deployment is an instantaneous aerodynamic-exposure approximation; hinge dynamics, deployment impulse, stowed-fin drag, and structural flexibility are outside the model.
+
+\subsection{Actuator Models and Numerical Integration}
+
+The production plant is implemented in C++ and advances the state with fixed-step fourth-order Runge--Kutta integration. Realistic throttle, TVC, and fin actuators can include nonlinear lag, rate limits, deflection limits, a deep-throttle floor, and RCS minimum impulse/PWM behavior. Ideal actuation tracks clipped commands without lag and is used for the Project~2 landing regression. This distinction is important: an ideal-actuator successful landing is not evidence that a realistic-actuator configuration is equally successful~\cite{readme,physics_report}.
+
+\section{GNC and Navigation Status}\label{sec:gnc}
+
+\subsection{Guidance, Control, and Allocation}
+
+The closed-loop landing scenario uses lossless convexification (LCvx) for a fuel-oriented powered-descent plan, a per-axis PD attitude controller, and a control allocator that maps requested body torque into gimbal, grid-fin, and optional RCS commands. The landing planner uses a 20-node second-order-cone program, a \ang{15} thrust-pointing limit, a \ang{20} glideslope constraint, a hard terminal condition, and a locally constant planning gravity. The physical plant remains 6-DOF with spherical rotating-Earth dynamics; the planner is a local 3-DOF approximation~\cite{architecture,configs}.
+
+For rotating-Earth landing, the builder includes surface centrifugal acceleration in the planner's nominal gravity. It also uses reduced lateral position and velocity tracking gains, $[0.1,0.1,1.0]~\si{\per\second\squared}$ and $[0.6,0.6,4.0]~\si{\per\second}$, respectively, so that lateral thrust commands do not exceed the bandwidth of attitude-mediated response. This is a targeted control-design correction, not a relaxation of touchdown requirements~\cite{physics_report}.
+
+\subsection{Current Navigation Capability and Limitation}
+
+The supplied navigation interface is well structured: it creates separate timestamped truth, measurement, estimate, and error histories at every navigation update. It is therefore an appropriate location to add sensor models and an estimator. However, the configured \sourcecode{IdentityNav} baseline returns the plant state directly as the measurement and estimate. Optional independent state perturbations are synthetic noise/bias helpers; they are not models of physical sensors. Selecting \sourcecode{gnc/navigation=ekf} intentionally raises \sourcecode{NotImplementedError}~\cite{readme,architecture}.
+
+\todoitem{If the project must satisfy the navigation deliverable, add an IMU propagation model plus one or more aiding sources (for example GNSS, barometric altitude, radar altitude, or star tracker), implement an EKF/ESKF, and report position, velocity, attitude, bias, and consistency/error metrics. Update Sections~\ref{sec:gnc}, \ref{sec:verification}, \ref{sec:assumptions}, and \ref{sec:conclusion} only after verification.}
+
+\begin{table}[H]
+\centering
+\caption{Accurate description of navigation scope in the supplied code.}\label{tab:navigation}
+\begin{tabularx}{\textwidth}{p{0.25\textwidth}YY}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Navigation element} & \color{white}\textbf{Current state} & \color{white}\textbf{Defensible claim in the submitted report}\\
+\midrule
+Interface and timestamps & Implemented & Multirate truth, measurement, estimate, and error records are available\\
+\rowcolor{lightblue}
+Measurement generation & Truth pass-through with optional synthetic state perturbations & A test harness exists; a physical sensor suite does not\\
+Estimator & IdentityNav; EKF stub unavailable & No state-estimation performance can be claimed\\
+\rowcolor{lightblue}
+Navigation error statistics & Infrastructure exists; baseline error is zero & Zero error follows truth pass-through, not estimator validation\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Representative Flight Phases and Scenarios}\label{sec:scenarios}
+
+The Project~2 configuration defines five representative phases. The first four are separately initialized prescribed-input physics experiments. They were selected to show important flight regimes without implying that an assumed mass, attitude, input, and horizontal origin reconstruct the CRS-11 flight. The fifth case is an independently initialized closed-loop landing regression. All five select rotating Earth at the assumed latitude; they are not chained through mass, state, or event continuity~\cite{scenario_spec}.
+
+\begin{longtable}{p{0.19\textwidth}p{0.21\textwidth}p{0.39\textwidth}p{0.13\textwidth}}
+\caption{Five Project~2 cases from the scenario specification.}\label{tab:scenarios}\\
+\toprule
+\rowcolor{navy}\color{white}\textbf{Scenario} & \color{white}\textbf{Initial condition} & \color{white}\textbf{Input / run condition} & \color{white}\textbf{End condition}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{navy}\color{white}\textbf{Scenario} & \color{white}\textbf{Initial condition} & \color{white}\textbf{Input / run condition} & \color{white}\textbf{End condition}\\
+\midrule
+\endhead
+\sourcecode{project2\_ascent} & \SI{0}{\metre}; \SI{0}{\metre\per\second}; \SI{545200}{\kilogram} & Nine engines; pitch kick at 10--12 s; throttle 0.8 at 50--74 s; cutoff at 145 s & 150 s, including 5 s coast\\
+\rowcolor{lightblue}
+\sourcecode{project2\_entry\_burn} & \SI{47.5}{\kilo\metre}; \SI{1260.3}{\metre\per\second}; \SI{40000}{\kilogram} & Engines 0, 1, 5 at 0.50 throttle; cutoff at 12 s & 14 s\\
+\sourcecode{project2\_aero\_descent} & \SI{35.0}{\kilo\metre}; \SI{953.9}{\metre\per\second}; \SI{34000}{\kilogram} & Main engines off; neutral grid fins exposed & 45 s\\
+\rowcolor{lightblue}
+\sourcecode{project2\_powered\_descent} & \SI{4.7}{\kilo\metre}; \SI{319.7}{\metre\per\second}; \SI{32000}{\kilogram} & Center engine 0.55 throttle; cutoff at 20 s & 22 s\\
+\sourcecode{project2\_landing} & \SI{300}{\metre}; \SI{25}{\metre\per\second} downward; \SI{29500}{\kilogram} & Single engine; ideal actuation; LCvx guidance and PD control & Touchdown or 40 s\\
+\bottomrule
+\end{longtable}
+
+The prescribed cases use actual 6-DOF propagation after initialization; their attitude, angular rate, forces, mass properties, and aerodynamic response are not frozen. However, no GNC or navigation module determines their trajectory. The terminal powered-descent run is deliberately a \SI{20}{\second} deceleration plus \SI{2}{\second} shutdown-observation experiment. It is not intended to reach the ground, whereas \sourcecode{project2\_landing} is the dedicated soft-touchdown demonstration.
+
+\section{Verification Results and Simulation Evidence}\label{sec:verification}
+
+Table~\ref{tab:results} reports values reproduced by executing the five Project~2 scenarios on 9 November 2026; the results agree with the archive's supplied physics-results record~\cite{physics_results}. The four prescribed cases verify model implementation and numerical behavior under declared inputs. The landing case adds a closed-loop touchdown regression with a separate acceptance criterion. Corresponding output plots are included in Appendix~\ref{app:runplots}.
+
+\begin{table}[H]
+\centering
+\caption{Project~2 results reproduced from the supplied archive. Landing values use interpolated contact KPIs.}\label{tab:results}
+\small
+\begin{tabularx}{\textwidth}{p{0.17\textwidth}p{0.10\textwidth}Yp{0.15\textwidth}Y}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Case} & \color{white}\textbf{Duration [s]} & \color{white}\textbf{Final altitude / speed} & \color{white}\textbf{Main propellant [kg]} & \color{white}\textbf{Outcome}\\
+\midrule
+Ascent & 150 & \SI{101.056}{\kilo\metre} / \SI{2171.271}{\metre\per\second} & 20654.720 & Completed prescribed experiment\\
+\rowcolor{lightblue}
+Entry burn & 14 & \SI{33.000}{\kilo\metre} / \SI{944.131}{\metre\per\second} & 9576.247 & Completed prescribed experiment\\
+Aerodynamic descent & 45 & \SI{3.758}{\kilo\metre} / \SI{310.462}{\metre\per\second} & 8800.000 & Completed prescribed experiment\\
+\rowcolor{lightblue}
+Powered descent & 22 & \SI{1.528}{\kilo\metre} / \SI{80.630}{\metre\per\second} & 3557.695 & Completed prescribed experiment\\
+Landing & 17.468 & \SI{0}{\metre} / \SI{0.086245}{\metre\per\second} & 1378.823 & Soft touchdown; \sourcecode{success=true}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Numerical and Physical Acceptance Evidence}
+
+For the first four phases, the checker compares the native solution against an independently implemented DOP853 reference integration and separately compares 2, 1, and \SI{0.5}{\milli\second} native timesteps. It checks mass bookkeeping, nonnegative propellant, quaternion normalization, inactive-engine force, actual shutdown, RCS use, and body-table applicability. In the present execution, ascent, aerodynamic descent, and powered descent passed every applicable check. The entry-burn state and convergence checks passed, but its formal independent-equations result is \sourcecode{false}: its mass-refinement difference was \SI{1.04194e-4}{\kilogram}, just above the configured \SI{1.0e-4}{\kilogram} stability threshold. The code and thresholds were not modified to conceal this result. Their maximum angle-of-attack values are \ang{0.968}, \ang{0.808}, \ang{0.766}, and \ang{0.726} for ascent, entry burn, aerodynamic descent, and powered descent, respectively, within the configured aerodynamic-table domain~\cite{physics_results}.
+
+For the current rotating-Earth phase set, the supplied verification report records maximum native/reference differences of \SI{3.083e-6}{\metre} in position and \SI{4.229e-7}{\metre\per\second} in velocity. The present landing branch passed actual-touchdown, soft-landing class, finite-state, quaternion-validity, propellant, mass-bookkeeping, and aerodynamic-table checks rather than applying the prescribed-input DOP853 test. Ruff static analysis was also run locally and passed. The archive documentation reports 400 passing tests and 25 replay state/geometry checks~\cite{physics_report,physics_results}; a local full \sourcecode{pytest} run is not claimed as passing because the installed QOCO solver path produced a \sourcecode{KeyError: solver\_status} in a convex-feasibility test.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{images/physics_coupled_6dof.png}
+  \caption{Coupled six-degree-of-freedom verification case: simulation samples agree with the independent reference; attitude errors remain far below the \SI{1e-8}{\radian} tolerance. Source: supplied verification report~\cite{physics_report}.}
+  \label{fig:coupled-verification}
+\end{figure}
+
+\todoitem{Investigate and resolve (or justify) the entry-burn mass-refinement exceedance and the local QOCO/\sourcecode{pytest} compatibility failure before making a blanket claim that every automated check passes. Keep the resolved configurations and result folders with the final submission.}
+
+\section{Comparison with CRS-11 Webcast Reconstruction}\label{sec:comparison}
+
+The supplied CRS-11 reconstruction is useful as an observable-flight reference and as a source of nominal scale for initial conditions. For example, the entry-burn, aerodynamic-descent, and powered-descent initial heights and speeds in the Project~2 scenarios correspond closely to the reconstructed event conditions. It is not a complete six-degree-of-freedom ground-truth data set: the broadcast-derived observables do not separate vehicle state, sensor error, data-processing error, altitude datum, or reference-frame convention. The code documentation therefore treats flight comparison as an explicit opt-in analysis rather than a physics acceptance criterion~\cite{scenario_spec,physics_report}.
+
+The archive's opt-in comparator was executed against the supplied reconstruction. It aligns each scenario with the corresponding reference segment and reports altitude and speed residuals over the overlapping interval. Table~\ref{tab:flight-rmse} gives the resulting error statistics. The short entry-burn comparison has the smallest residuals; this is expected because its initial condition and duration closely correspond to the available reference segment. The ascent discrepancy is much larger because its prescribed-input experiment is not calibrated to the webcast mission. The powered-descent overlap ends early because the experiment lasts \SI{22}{\second}, while the available reconstructed reference segment is longer. The comparison plots are included in Appendix~\ref{app:comparisonplots}.
+
+\begin{table}[H]
+\centering
+\caption{Observable comparison to the CRS-11 reconstruction from the executed opt-in comparator. These are not navigation errors or physics-acceptance metrics.}\label{tab:flight-rmse}
+\begin{tabular}{lrrrrr}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Case} & \color{white}\textbf{Overlap [s]} & \color{white}\textbf{Altitude bias [m]} & \color{white}\textbf{Altitude RMSE [m]} & \color{white}\textbf{Speed bias [m/s]} & \color{white}\textbf{Speed RMSE [m/s]}\\
+\midrule
+Ascent & 143.643 & 7364.973 & 10721.563 & 160.777 & 203.029\\
+\rowcolor{lightblue}
+Entry burn & 11.979 & -103.263 & 135.052 & -11.414 & 22.149\\
+Aerodynamic descent & 44.979 & 250.098 & 650.004 & 43.290 & 59.871\\
+\rowcolor{lightblue}
+Powered descent & 21.955 & 502.968 & 617.790 & -53.588 & 56.141\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{CRS-11 reconstructed event states supplied by the team.}\label{tab:crs-events}
+\begin{tabularx}{\textwidth}{Yrrrr}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Event} & \color{white}\textbf{T+ [s]} & \color{white}\textbf{Altitude [km]} & \color{white}\textbf{Speed [m/s]} & \color{white}\textbf{Downrange [km]}\\
+\midrule
+Max-Q & 65 & 8.77 & 310 & 1.24\\
+\rowcolor{lightblue}
+MECO & 145 & 62.36 & 1684 & 43.34\\
+Boostback ignition & 161 & 79.23 & 1579 & 63.18\\
+\rowcolor{lightblue}
+Boostback cutoff & 211 & 113.53 & 588 & 87.92\\
+Apogee & 248 & 120.12 & 475 & 70.43\\
+\rowcolor{lightblue}
+Entry burn ignition & 372 & 47.46 & 1260 & 10.78\\
+Entry burn cutoff & 384 & 35.01 & 954 & 5.90\\
+\rowcolor{lightblue}
+Landing burn ignition & 429 & 4.74 & 320 & -5.37\\
+Landing burn cutoff & 462 & $\approx 0$ & 4.3 & -6.53\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{CRS-11 reconstructed velocity components. Signs are reproduced as provided; the exact coordinate convention remains uncertain.}\label{tab:crs-components}
+\begin{tabularx}{\textwidth}{Yrr}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Event} & \color{white}\textbf{Vertical velocity [m/s]} & \color{white}\textbf{Horizontal velocity [m/s]}\\
+\midrule
+Max-Q & 305 & 59\\
+\rowcolor{lightblue}
+MECO & 1155 & 1229\\
+Boostback ignition & 992 & 1229\\
+\rowcolor{lightblue}
+Boostback cutoff & 360 & -465\\
+Apogee & 0 & -475\\
+\rowcolor{lightblue}
+Entry burn ignition & -1248 & -182\\
+Entry burn cutoff & -932 & -204\\
+\rowcolor{lightblue}
+Landing burn ignition & -319 & -32\\
+Landing burn cutoff & -4.3 & 0\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The Project~2 ascent case should not be judged by direct agreement with the MECO row: it uses assumed throttle, gimbal, atmospheric, mass, and reference-site conditions and ends at \SI{101.056}{\kilo\metre} and \SI{2171.271}{\metre\per\second} after \SI{150}{\second}, whereas the webcast reconstruction gives approximately \SI{62.36}{\kilo\metre} and \SI{1684}{\metre\per\second} at MECO. That difference is expected in an independent physics experiment. By contrast, the aerodynamic-descent case begins at the reconstructed entry-burn-cutoff scale and ends after \SI{45}{\second} at \SI{3.758}{\kilo\metre} and \SI{310.462}{\metre\per\second}, close in scale to the reconstructed landing-burn-ignition values of \SI{4.74}{\kilo\metre} and \SI{320}{\metre\per\second}. This is an engineering consistency observation, not a calibration result.
+
+The residuals in Table~\ref{tab:flight-rmse} use the archive's comparison conventions and are preserved as an observable comparison only. No parameters were calibrated to minimise these errors, and no sensor measurement was used. Therefore the table is useful for scale and model-context discussion, but it is not a navigation-filter error analysis.
+
+\section{Assumptions, Limitations, and GNC Risks}\label{sec:assumptions}
+
+The Project~2 briefing requires a clear separation of known, estimated, and assumed information. Table~\ref{tab:assumptions} provides a concise ledger for the current implementation. Keeping this distinction explicit is essential because numerical verification demonstrates correct implementation of declared equations, not empirical agreement with an operational vehicle.
+
+\begin{table}[H]
+\centering
+\caption{Assumption and evidence ledger.}\label{tab:assumptions}
+\begin{tabularx}{\textwidth}{p{0.19\textwidth}YY}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Category} & \color{white}\textbf{Examples in the present work} & \color{white}\textbf{Consequence for interpretation}\\
+\midrule
+Known / code-defined & Equations, numerical scheme, scheduled inputs, code configuration, output conventions & Can be reproduced and numerically verified\\
+\rowcolor{lightblue}
+Estimated from webcast context & Representative entry, descent, and landing-burn altitude/speed scales & Useful for initial-condition selection; uncertain as flight truth\\
+Engineering assumptions & Masses, tank geometry, \SI{914}{\kilo\newton} engine model, aero coefficients, \ang{28.6} latitude, no wind/fault/slosh & Must be sensitivity-tested before design decisions\\
+\rowcolor{lightblue}
+Not modeled / incomplete & Physical sensors, EKF, realistic-actuator landing qualification, leg impact, J2/oblateness, validated flight aerodynamics & Cannot support a claim of operational GNC readiness\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Most Dangerous Errors for Future Guidance and Control}
+
+\begin{longtable}{p{0.22\textwidth}p{0.42\textwidth}p{0.24\textwidth}}
+\caption{Risk assessment answering the Project~2 final evaluation question.}\label{tab:risks}\\
+\toprule
+\rowcolor{navy}\color{white}\textbf{Potential error} & \color{white}\textbf{Why it is dangerous} & \color{white}\textbf{Recommended mitigation}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{navy}\color{white}\textbf{Potential error} & \color{white}\textbf{Why it is dangerous} & \color{white}\textbf{Recommended mitigation}\\
+\midrule
+\endhead
+Navigation state or bias error & Guidance may solve the correct problem from the wrong position, velocity, attitude, or mass state; terminal constraints can be missed even with a feasible plan. & Implement sensor models and ESKF/EKF; test bias, dropout, delay, and covariance consistency.\\
+\rowcolor{lightblue}
+Thrust magnitude or throttle-lag error & Landing fuel margin and burn timing are highly sensitive to effective thrust. Ideal actuation can mask a late or underperforming engine response. & Run dispersions with realistic actuator dynamics, thrust bias, minimum throttle, and engine-out cases.\\
+Aerodynamic coefficient or wind error & During entry and grid-fin descent, force/moment errors create trajectory, attitude, and load errors that propagate into landing initialization. & Use bounded aerodynamic/wind dispersions and verify controller margins across Mach, alpha, and $\bar q$.\\
+\rowcolor{lightblue}
+Mass, CG, or inertia error & Allocation and attitude dynamics use moment arms and inertia. Incorrect tank fill or CG produces incorrect gimbal/fin authority. & Calibrate mass properties; sweep propellant, CG, and inertia uncertainty.\\
+Reference-frame or Earth-model inconsistency & Mixing Earth-relative and inertial rates or altitude definitions can inject persistent guidance and sensor-model errors. & Maintain explicit frame metadata; cross-check against independent inertial propagation.\\
+\rowcolor{lightblue}
+Overinterpreted webcast comparison & A small plot mismatch could reflect ambiguous data extraction instead of model error; fitting it can conceal structural errors. & Separate physics verification from observable comparison and report data limitations.\\
+\bottomrule
+\end{longtable}
+
+\section{Reproducibility and Run Commands}\label{sec:reproducibility}
+
+The following commands are adapted from the supplied README and Project~2 specification. They were executed for this report using the supplied archive with SHA-256 prefix \texttt{d6022aa6}. Run them from the repository root after creating the required Python environment. The project declares Python~3.10+ and a C++ compiler as prerequisites. Keep each output directory, resolved configuration, manifest, and source revision with the report figures.
+
+\subsection{Installation and Baseline Checks}
+\begin{lstlisting}
+python -m pip install -e ".[dev,qoco]"
+python -m pytest tests/ -q
+ruff check src tests scripts
+\end{lstlisting}
+
+\subsection{Five Project 2 Runs}
+\begin{lstlisting}
+.venv/bin/python scripts/run_single.py scenario=project2_ascent hydra.run.dir=results/project2_physics/ascent
+.venv/bin/python scripts/run_single.py scenario=project2_entry_burn hydra.run.dir=results/project2_physics/entry_burn
+.venv/bin/python scripts/run_single.py scenario=project2_aero_descent hydra.run.dir=results/project2_physics/aero_descent
+.venv/bin/python scripts/run_single.py scenario=project2_powered_descent hydra.run.dir=results/project2_physics/powered_descent
+.venv/bin/python scripts/run_single.py scenario=project2_landing hydra.run.dir=results/project2_physics/landing
+.venv/bin/python scripts/check_project2_segments.py
+.venv/bin/python scripts/check_rotating_earth.py
+\end{lstlisting}
+
+\subsection{Optional Public Flight Comparison and Replay}
+\begin{lstlisting}
+.venv/bin/python scripts/run_single.py scenario=project2_entry_burn scenario.reference.enabled=true hydra.run.dir=results/project2_optional/entry_burn
+.venv/bin/python scripts/check_project2_segments.py --compare-flight --output results/project2_optional/checks
+.venv/bin/python scripts/view_replay.py results/project2_physics/powered_descent
+\end{lstlisting}
+
+The optional comparison command must be reported separately from the physics acceptance checks. An RMSE result is an observable comparison under the selected conventions; it is not proof of vehicle fidelity or navigation accuracy. The normal result folders contain trajectory, actuator, navigation, timing, replay, KPI, and resolved-configuration information, depending on scenario and run mode.
+
+The five phase runs, validation results, and opt-in flight-comparison plots in this report were produced with this command sequence. The remaining reproducibility action is to retain the result folders with the submitted source archive and investigate the two visible automated-check limitations reported in Section~\ref{sec:verification}.
+
+\section{Conclusions and Remaining Work}\label{sec:conclusion}
+
+The supplied RLV-Sim archive is a credible Project~2 simulator baseline. Its modular separation of plant, GNC, configuration, and simulation harness makes it suitable for later guidance and control work. It represents the physics needed to produce representative ascent and recovery trajectories rather than only replaying a pre-recorded path. The five phase cases were executed successfully, with the one explicitly reported entry-burn refinement exception, and demonstrate the intended range from powered ascent through soft landing.
+
+The report should nevertheless remain precise about scope. The code verifies its declared equations and numerical implementation; it does not validate all vehicle parameters against the real Falcon~9. The CRS-11 reconstruction is valuable for context and nominal initial conditions but cannot independently validate full state, sensor, or navigation performance. The key remaining technical priority is a realistic sensor-and-estimator stack with quantified navigation errors, followed by closed-loop dispersion testing with realistic actuation, wind, aerodynamic uncertainty, and thrust/mass uncertainty.
+
+\todoitem{Complete the physical sensor and estimator work if required by the grading rubric. Independently resolve or explain the entry-burn mass-refinement exceedance and QOCO test compatibility issue, then perform the final editorial check before submission.}
+
+\clearpage
+\begin{thebibliography}{9}
+\bibitem{briefing}
+RSLV GNC Project~2, \emph{Development of Vehicle Simulator with Navigation Blocks}. Course briefing slides supplied as PDF.
+
+\bibitem{readme}
+RLV-Sim, \sourcecode{README.md}, supplied RLV-Sim-2026-main archive.
+
+\bibitem{architecture}
+RLV-Sim, \sourcecode{docs/1\_architecture.md}, supplied RLV-Sim-2026-main archive.
+
+\bibitem{scenario_spec}
+RLV-Sim, \sourcecode{docs/reference/project2\_scenario\_spec.md}, supplied RLV-Sim-2026-main archive.
+
+\bibitem{physics_report}
+RLV-Sim, \sourcecode{docs/verification/physics\_implementation\_report\_en.md}, supplied RLV-Sim-2026-main archive.
+
+\bibitem{physics_results}
+RLV-Sim, \sourcecode{docs/verification/project2\_segments/physics\_results.md}, supplied RLV-Sim-2026-main archive.
+
+\bibitem{configs}
+RLV-Sim configuration and source files: \sourcecode{configs/scenario/project2\_*.yaml}, \sourcecode{configs/gnc/*}, \sourcecode{src/sim/*}, \sourcecode{src/gnc/*}, and \sourcecode{src/plant/*}, supplied archive.
+
+\bibitem{crs11}
+CRS-11 reconstructed event data and plots supplied by the team from webcast analysis.
+\end{thebibliography}
+
+\appendix
+\clearpage
+\section{Team Completion Checklist}
+
+Use this list to turn the supplied draft into a submission-ready team report. The rows are deliberately concrete so that nothing material is silently assumed.
+
+\begin{table}[H]
+\centering
+\caption{Submission checklist.}\label{tab:checklist}
+\begin{tabularx}{\textwidth}{p{0.18\textwidth}Yp{0.11\textwidth}}
+\toprule
+\rowcolor{navy}\color{white}\textbf{Item} & \color{white}\textbf{What the team should do} & \color{white}\textbf{Status}\\
+\midrule
+Cover details & Team number, author names, and the briefing's stated submission date have been entered. & Done\\
+\rowcolor{lightblue}
+Execution evidence & All five scenarios, the segment checker, and the opt-in flight comparator were executed on 9 November 2026. Retain the result folders with the submission. & Done\\
+Figures & Generated run plots and CRS-11 comparison plots are included in Appendices~\ref{app:runplots} and \ref{app:comparisonplots}. & Done\\
+\rowcolor{lightblue}
+Navigation & Either implement and validate a sensor/estimator solution or state the limitation in agreement with the instructor. & TODO\\
+Comparison conventions & Source-defined comparator was executed and reported only as an observable comparison; retain this scope unless independently reprocessed. & Done\\
+\rowcolor{lightblue}
+Assumption review & Confirm vehicle parameters, atmosphere, Earth model, wind, actuator mode, and input policy match the final experiment. & TODO\\
+Automated checks & Investigate the entry-burn mass-refinement threshold exceedance and local QOCO/\sourcecode{pytest} compatibility issue. & TODO\\
+\rowcolor{lightblue}
+Final editorial review & Update contents, references, captions, units, and every highlighted TODO; verify claims match the final code version. & TODO\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\clearpage
+\section{Executed Project~2 Simulation Plots}\label{app:runplots}
+
+The following figures were generated from the five Project~2 scenarios executed for this report. Together, each summary and detailed-physics pair provides trajectory/altitude, velocity, attitude, angular-rate, mass/propellant, dynamic-pressure, aerodynamic, and mass-property evidence. A physical navigation-error plot is intentionally absent because the current \sourcecode{IdentityNav} implementation is a truth pass-through rather than an estimator. These are simulator outputs, unlike the webcast reconstruction in the next appendix.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/ascent.png}
+  \caption{Executed Project~2 ascent scenario: simulator output summary.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/physics_ascent.png}
+  \caption{Executed Project~2 ascent scenario: altitude/downrange, flight-path and angle-of-attack, dynamic pressure, propellant, centre of gravity, and inertia.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/entry_burn.png}
+  \caption{Executed Project~2 entry-burn scenario: simulator output summary.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/physics_entry_burn.png}
+  \caption{Executed Project~2 entry-burn scenario: detailed physics output.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/aero_descent.png}
+  \caption{Executed Project~2 aerodynamic-descent scenario: simulator output summary.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/physics_aero_descent.png}
+  \caption{Executed Project~2 aerodynamic-descent scenario: detailed physics output.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/powered_descent.png}
+  \caption{Executed Project~2 powered-descent scenario: simulator output summary.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/physics_powered_descent.png}
+  \caption{Executed Project~2 powered-descent scenario: detailed physics output.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/landing.png}
+  \caption{Executed Project~2 closed-loop landing scenario: simulator output summary.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/physics_landing.png}
+  \caption{Executed Project~2 closed-loop landing scenario: detailed physics output.}
+\end{figure}
+
+\clearpage
+\section{Executed CRS-11 Observable-Comparison Plots}\label{app:comparisonplots}
+
+These figures show the archive's optional, source-defined comparison between each executed scenario and the supplied CRS-11 reconstruction. They are included to make the RMSE values in Table~\ref{tab:flight-rmse} inspectable. They do not represent navigation-filter errors.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/comparison_ascent.png}
+  \caption{Executed observable comparison: Project~2 ascent and CRS-11 reconstruction.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/comparison_entry_burn.png}
+  \caption{Executed observable comparison: Project~2 entry burn and CRS-11 reconstruction.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/comparison_aero_descent.png}
+  \caption{Executed observable comparison: Project~2 aerodynamic descent and CRS-11 reconstruction.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/final_runs/comparison_powered_descent.png}
+  \caption{Executed observable comparison: Project~2 powered descent and CRS-11 reconstruction.}
+\end{figure}
+
+\clearpage
+\section{CRS-11 Reference Plots}
+
+The following plots are the team-supplied webcast reconstruction. They are included as reference context only. They should be captioned as reconstructed observables, not as simulator output.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/crs11_altitude_time.png}
+  \caption{CRS-11 reconstructed altitude versus mission elapsed time. Source: team-supplied webcast reconstruction~\cite{crs11}.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/crs11_velocity_time.png}
+  \caption{CRS-11 reconstructed speed versus mission elapsed time. Source: team-supplied webcast reconstruction~\cite{crs11}.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/crs11_downrange_time.png}
+  \caption{CRS-11 reconstructed downrange distance versus mission elapsed time. Source: team-supplied webcast reconstruction~\cite{crs11}.}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.97\textwidth]{images/crs11_trajectory_2D.png}
+  \caption{CRS-11 reconstructed altitude-downrange trajectory. Source: team-supplied webcast reconstruction~\cite{crs11}.}
+\end{figure}
+
+\end{document}

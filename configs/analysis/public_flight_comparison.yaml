@@ -1,0 +1,179 @@
+# Frozen observation contract and step 2 reconstruction policy. Not a runnable scenario.
+schema_version: 1
+policy_id: crs11_observations_v1
+decided_on: '2026-11-06'
+date_timezone: Asia/Seoul
+scope: observation_preparation_and_comparison_configuration
+reference:
+  dataset: crs11
+  stage: 1
+  commit: b245d3b81aa36b7941ec10f3f4b508999d106a6d
+  raw_file: stage1_raw.json
+  event_file: events.json
+  input_units: {time: s, altitude: km, velocity: m/s}
+  output_units: {time_s: s, altitude_m: m, speed_mps: m/s}
+  derived_channels: diagnostics_only_not_independent_measurements
+time:
+  source: archived_webcast_T_plus
+  mapping: simulation_time_s = reference_time_s - phase_start_s
+  offset_fitting: forbidden
+  extrapolation: forbidden
+  observation_resampling: none
+  simulation_interpolation: to_eligible_observation_epochs_within_simulated_coverage
+  event_rounding_half_width_s: 0.5
+  event_rounding_is_total_uncertainty: false
+observables:
+  altitude:
+    input_scale_to_si: 1000.0
+    source_datum_status: unknown
+    comparison_assumption: simulator_radial_altitude_plus_fixed_offset
+    altitude_offset_m: 0.0
+    offset_status: assumed_not_fitted
+    quantization_rule: unknown_no_sensor_accuracy_or_error_bars_assigned
+  speed:
+    input_scale_to_si: 1.0
+    source_frame_status: unknown
+    comparison_assumption: earth_relative_scalar_speed_norm_v_ned
+    assumption_status: provisional_not_confirmed_by_provider
+quality:
+  max_gap_s: 1.1
+  max_gap_role: inherited_analysis_cutoff_not_measurement_uncertainty
+  malformed_arrays: reject_dataset
+  zero_altitude: exclude_from_altitude_score_and_derivatives
+  zero_speed: retain_with_flag_not_exact_touchdown_truth
+  repeated_values: retain_with_flag_use_time_weighting
+  outlier_deletion: none_without_independent_evidence
+  smoothing: none
+  zero_altitude_does_not_mask_speed: true
+  coverage: sum_only_adjacent_eligible_same_phase_intervals_not_crossing_gaps
+  mask_scope: observation_eligibility_not_initialization_or_fit_mask
+  unavailable_metric: null_with_reason_never_zero_error
+phase_partition:
+  boundary_rule: left_closed_right_open_last_phase_right_closed
+  shared_boundary_owner: later_phase
+  landing_split:
+    rule: first_positive_altitude_at_or_below_threshold_after_landing_start
+    threshold_m: 300.0
+    fixed_time_s: 452.485
+    meaning: display_based_analysis_split_not_exact_300m_crossing
+  landing_end:
+    fixed_time_s: 464.630
+    meaning: last_archived_observation_not_measured_touchdown
+phases:
+  ascent:
+    start_s: 0.0
+    end_s: 145.0
+    start_anchor: archive_launch_epoch
+    end_anchor: meco
+  entry_burn:
+    start_s: 372.0
+    end_s: 384.0
+    start_anchor: entry_start
+    end_anchor: entry_end
+  aero_descent:
+    start_s: 384.0
+    end_s: 429.0
+    start_anchor: entry_end
+    end_anchor: landing_start
+  powered_descent:
+    start_s: 429.0
+    end_s: 452.485
+    start_anchor: landing_start
+    end_anchor: landing_split
+  landing:
+    start_s: 452.485
+    end_s: 464.630
+    start_anchor: landing_split
+    end_anchor: archive_end
+evidence:
+  provider_readme:
+    url: https://raw.githubusercontent.com/shahar603/Telemetry-Data/b245d3b81aa36b7941ec10f3f4b508999d106a6d/README.md
+    status: inspected_units_stage_and_event_rounding_confirmed
+  webcast:
+    url: https://www.youtube.com/watch?v=JuZBOUMsYws
+    checked_on: '2026-11-06'
+    access_result: web_fetch_failed
+    frame_audit_status: not_performed
+  event_timing: archived_markers_not_independently_frame_verified
+  actual_touchdown_time_s: null
+  exact_touchdown_speed_mps: null
+  actual_landing_position: null
+  full_initial_state: not_available_requires_reconstruction_and_assumptions
+next_step:
+  initialization_and_fit_windows: declared_in_reconstruction_section
+  simulator_comparison_integration: policy_dispatch_in_flight_reference
+reconstruction:
+  version: 1
+  derivative_spans_s: [2.0, 4.0, 6.0]
+  nominal_span_s: 4.0
+  derivative_method: trailing_time_weighted_quadratic
+  initialization_exclusion: union_of_all_phase_derivative_support_and_ic_brackets_inclusive
+  fit_window: each_phase_window_minus_initialization_and_quality_masks
+  evaluation_role: descriptive_reconstruction_not_held_out_prediction
+  residual_weighting: adjacent_interval_trapezoidal_time_weighted
+  channel_weights: {altitude: 1.0, speed: 1.0}
+  normalization_scales: {altitude_m: 100.0, speed_mps: 10.0}
+  scales_role: engineering_objective_scales_not_measurement_uncertainties
+  fixed:
+    time_and_altitude_offsets: true
+    observed_initial_altitude_and_scalar_speed: true
+    engine_count_and_burn_anchors: true
+    thrust_vac_n_per_engine: 914000.0
+    isp_s: 311.0
+    nozzle_exit_area_m2: 0.68
+    wind_and_slosh: none
+    navigation: truth
+    heading_deg: 0.0
+    horizontal_origin: segment_start_ground_projection
+    landing_target_ned_m: [0.0, 0.0, 0.0]
+    landing_target_role: assumed_return_to_initial_ground_projection_not_measured_LZ1
+  bounds_role: engineering_search_limits_not_flight_confidence_intervals
+  phases:
+    ascent:
+      base_scenario: project2_ascent
+      mass_kg: 545200.0
+      mass_bounds_kg: [520000.0, 545200.0]
+      attitude: vertical
+      duration_s: 145.0
+      input_policy: inherited_ascent_knots_without_endpoint_cutoff
+      throttle_bounds: [0.4, 1.0]
+      pitch_kick_bounds_rad: [-0.01, 0.01]
+    entry_burn:
+      base_scenario: project2_entry_burn
+      mass_kg: 40000.0
+      mass_bounds_kg: [38000.0, 44000.0]
+      attitude: initial_retrograde
+      duration_s: 12.0
+      input_policy: constant_three_engine_burn
+      active_engines: [0, 1, 5]
+      throttle: 0.5
+      throttle_bounds: [0.4, 1.0]
+    aero_descent:
+      base_scenario: project2_aero_descent
+      mass_kg: 34000.0
+      mass_bounds_kg: [32000.0, 38000.0]
+      attitude: initial_retrograde
+      duration_s: 45.0
+      input_policy: engines_off_neutral_fins
+      active_engines: []
+      throttle: 0.0
+      fin_bounds_rad: [-0.1, 0.1]
+    powered_descent:
+      base_scenario: project2_powered_descent
+      mass_kg: 32000.0
+      mass_bounds_kg: [30000.0, 35000.0]
+      attitude: initial_retrograde
+      duration_s: 23.485
+      input_policy: constant_single_engine_burn_through_split
+      active_engines: [0]
+      throttle: 0.55
+      throttle_bounds: [0.4, 1.0]
+    landing:
+      base_scenario: project2_landing
+      mass_kg: 29500.0
+      mass_bounds_kg: [28000.0, 32000.0]
+      attitude: vertical
+      duration_s: 40.0
+      input_policy: existing_lcvx_pd_closed_loop
+      pointing_cone_bounds_deg: [15.0, 45.0]
+      actuator_policy: inherited_ideal_not_hardware_validation

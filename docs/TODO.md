@@ -1,10 +1,12 @@
 # RLV-Sim Development TODO
 
-Status as of 2026-11-03. Scope: complete [Project 2](../materials/RSLV_GNC_Project2.pdf) through independently initialized representative flight scenarios, followed by sensor/navigation development. Project 2 p.5 asks for selected representative phases; a continuous launch-to-touchdown mission is an optional extension.
+Status as of 2026-11-07. Scope: complete [Project 2](../materials/RSLV_GNC_Project2.pdf) through independently initialized representative flight scenarios, followed by sensor/navigation development. Project 2 p.5 asks for selected representative phases; a continuous launch-to-touchdown mission is an optional extension.
+
+**Current status:** The five-phase public-flight comparison and conditional model checks are documented in the [report](verification/public_flight_comparison_report_ko.md). Further trajectory fitting and sensor/navigation development are deferred.
 
 **Sequence:** Select representative physics experiments → Define engineering initial/boundary conditions and prescribed inputs → Verify dynamics and numerical agreement → Inspect physical histories and rendering → Document assumptions and useful variants → Later implement sensors/navigation and error analysis → Complete the report, including a scoped public-flight-data comparison when its conventions and input correspondence are understood.
 
-**Current priority:** Demonstrate five `project2_*` phases on rotating Earth: four prescribed physics experiments plus `scenario=project2_landing` with closed-loop LCvx/PD control. Inspect trajectories, loads, attitude/rates, propellant and actuator response; require soft touchdown for landing. See [current results](verification/project2_segments/physics_results.md). CRS-11 comparison is opt-in background and RMSE reduction is not a current acceptance criterion. Terminal powered descent uses a 20 s burn and 2 s shutdown observation; that experiment does not require touchdown. Landing uses ideal actuation, truth navigation, rotation-aware nominal planning gravity and separate lateral/vertical tracking gains. Additional variants should exercise useful physics within model limits. Sensor/navigation remains later work by user choice and is required for final Project 2 completion. Continuous full-flight recovery remains optional.
+**Physics milestone baseline (2026-11-03):** Demonstrate five `project2_*` phases on rotating Earth: four prescribed physics experiments plus `scenario=project2_landing` with closed-loop LCvx/PD control. Inspect trajectories, loads, attitude/rates, propellant and actuator response; require soft touchdown for landing. See [current results](verification/project2_segments/physics_results.md). CRS-11 comparison is opt-in background and RMSE reduction is not a current acceptance criterion. Terminal powered descent uses a 20 s burn and 2 s shutdown observation; that experiment does not require touchdown. Landing uses ideal actuation, truth navigation, rotation-aware nominal planning gravity and separate lateral/vertical tracking gains. Additional variants should exercise useful physics within model limits. Sensor/navigation remains later work by user choice and is required for final Project 2 completion. Continuous full-flight recovery remains optional.
 
 ## Completed Work
 
@@ -128,18 +130,17 @@ The existing ascent/separation/maneuver/boostback connections are completed capa
 
 **Completion criterion:** Rendered geometry and actuator states agree with recorded simulation state, and the guide describes only implemented and verified behavior.
 
-## 6. Later: Scoped Public-Flight Comparison and Optional Parameter Fitting
+## 6. Public-Flight Comparison
 
-Use archived observations as optional background during the physics-experiment milestone. Default runs and physics checks do not load webcast data or optimize RMSE. For final Project 2 reporting, define a meaningful comparison after documenting observation conventions and the correspondence of initial conditions/inputs; quantify differences without calling them isolated model or navigation errors.
+- [x] Preserve CRS-11 observations and define units, time mapping, quality exclusions and initialization rules in the [reference](reference/crs11_flight_reference.md).
+- [x] Run five independently initialized final configurations; compare altitude/speed and carry recovery mass budgets between phases.
+- [x] Check model constraints, independent integration, time-step sensitivity and [assumption sensitivity](verification/public_flight_sensitivity_ko.md).
+- [x] Document final settings, errors and per-phase commands in the [report](verification/public_flight_comparison_report_ko.md).
+- [x] Show an observed-altitude line in the existing animator only for flight-comparison runs.
 
-- [x] Archive and audit the CRS-11 reference snapshot: file integrity, array structure, time coverage, gaps, and derived-speed consistency flags. This is data preparation, not flight-model validation.
-- [x] Implement raw altitude/speed comparison with explicit offsets/conventions, overlap-only interpolation, gap-aware time weighting, per-window metrics, and comparison plots. Run the initial uncalibrated ascent and 2/1/0.5 ms timestep comparison; record results in the [verification report](verification/physics_implementation_report_en.md#5-ascent-integration-and-initial-flight-data-comparison).
-- [x] Apply explicit local/reference epoch offsets, units, initial-sample exclusion, overlap masks and gap-aware time weighting for each selected scenario. Record the still-assumed altitude datum/speed frame under the [comparison contract](reference/crs11_flight_reference.md#comparison-contract); evidence needed to resolve those assumptions remains open in Section 1.
-- [x] Compare raw altitude and scalar speed for the four segments, with coverage, bias, RMSE, maximum error and histories. No prescribed event-time scores or empirical flight-accuracy pass verdicts are assigned.
-- [x] Present downrange, attitude/rates, dynamic pressure, angle of attack and propellant histories as simulation diagnostics in the four physics experiments. Keep derived reference channels and optional observation errors separate; see [physical histories](verification/project2_segments/physics_results.md).
-- [ ] Before parameter fitting, select and record calibration versus withheld intervals or an independently audited second flight. Freeze fitted parameters before validation and report remaining uncertainty.
+**Scope and limitations:** Inputs were fitted within a small parameter set; aerodynamic-descent fins remain at zero deflection. The nominal ideal-actuator landing reaches 0.998 m/s, but 6.072 s of eligible speed observations are not reproduced. Reduced thrust and unchanged realistic actuators can cause a crash. These results do not establish full observation tracking, real-flight accuracy or independent predictive validation. Further fitting/control changes are deferred by user choice.
 
-**Completion criterion:** A later scoped comparison states the observation uncertainty, initial-condition/input correspondence and modeling assumptions. It is separate from physics acceptance and from navigation-error evaluation. Parameter fitting is optional and requires a declared calibration/validation distinction; RMSE reduction is not a prerequisite for using the current experiments.
+Existing `project2_*` physics experiments keep their separate acceptance criteria. Public-flight comparison is opt-in and does not change ordinary runs.
 
 ## 7. Deferred: Sensor Models and Navigation
 

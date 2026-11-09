@@ -44,6 +44,16 @@ these do not verify physical globe rendering or landing-leg contact. See the
 
 ## Ascent and rendering checks
 
+### Optional public-flight observation line
+
+With `scenario.reference.enabled=true`, newly exported replays add an amber dashed line to the
+existing viewer; ordinary runs are unchanged. The line combines observed altitude with simulated
+horizontal positions, so it is not measured 3D flight truth. Gaps and post-simulation positions
+are not filled. Re-run older comparison episodes once to include this data. See the
+[report and per-phase commands](../docs/verification/public_flight_comparison_report_ko.md).
+
+### Replay checks
+
 Generate the three regression replays with the same native build:
 
 ```bash

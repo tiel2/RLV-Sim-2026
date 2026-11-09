@@ -205,5 +205,5 @@ CRS-11 자료는 실제 비행의 고도·속력·시간 규모를 참고하는 
 [이전 CRS-11 비교 결과](../../results/verification/project2_segments/runtime_results.md)는 초기 35초 최종
 하강을 포함한 과거 실행 기록이며 현재 시나리오의 합격/불합격 기준으로 사용하지 않는다.
 
-Project 2의 공개 비행 자료 비교는 이후 초기조건·입력·관측 기준의 대응 관계를 정리해 다룬다.
+공개 관측 비교는 별도 `flight_reconstructed_*` 설정으로 수행했다. [최종 보고서](../verification/public_flight_comparison_report_ko.md)에 초기조건·입력·구간별 오차와 실행 명령을, [관측 기준](crs11_flight_reference.md)에 자료 처리 규칙을 정리했다. 기존 `project2_*` 물리 실험과 완료 기준은 별개다. 제한된 입력 탐색이며 공력 하강 핀 제어를 통한 추종과 전체 착륙 관측 재현은 수행하지 못했다.
 센서·항법 오차는 별도의 simulation truth와 합성 센서 측정으로 평가한다.

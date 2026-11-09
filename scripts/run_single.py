@@ -114,7 +114,9 @@ def main(cfg):
     write_validation(report, reference, out_dir, plot=bool(cfg.run.save_plots))
     print("validation:", report["status"])
 
-    if cfg.scenario.get("reference") is not None and cfg.scenario.reference.get("enabled", True):
+    flight_reference = cfg.scenario.get("reference")
+    reference_enabled = flight_reference is not None and flight_reference.get("enabled", True)
+    if reference_enabled:
         from validation.flight_reference import write_flight_comparison
 
         comparison = write_flight_comparison(
@@ -125,6 +127,17 @@ def main(cfg):
     # Per-run 3D replay for the web viewer.
     if cfg.run.save_replay:
         doc = build_replay_doc(result, bundle, cfg)
+        if reference_enabled:
+            from sim.replay_reference import attach_flight_reference
+
+            with np.load(out_dir / "flight_comparison.npz") as observations:
+                attach_flight_reference(
+                    doc,
+                    physics,
+                    observations,
+                    flight_reference,
+                    float(cfg.environment.gravity.radius),
+                )
         path = write_replay(doc, out_dir / "replay.json")
         print(f"replay: {path} ({doc['meta']['n_frames']} frames)")
 
