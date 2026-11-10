@@ -1,0 +1,74 @@
+# Engineering bounds, not measured commands or parameter confidence intervals.
+version: 1
+comparison_policy: configs/analysis/public_flight_comparison.yaml
+objective_scales: {altitude_m: 100.0, speed_m_s: 10.0}
+objective: equal_channel_and_phase_time_weighted_mse_plus_weak_regularization
+role: held_in_system_identification_not_independent_validation
+fit_mask: all_quality_eligible_rows_after_initial_epoch_including_initialization_support
+evaluation_mask: original_policy_unchanged_not_held_out_validation
+optimizer:
+  method: bounded_least_squares
+  max_evaluations: 800 # Includes finite-difference Jacobian evaluations.
+  ascent_max_evaluations: 80
+  recovery_max_evaluations: 800
+  landing_max_evaluations: 200
+  diff_step: 0.001
+  ftol: 0.00001
+  xtol: 0.00001
+  gtol: 0.00001
+ascent:
+  throttle_times_s: [0, 25, 50, 74, 100, 125]
+  throttle_initial: [0.9091640606138418, 0.9112710473749708, 0.7638375149531614, 0.905151450737472, 0.9170284417978019, 0.9102396678347314]
+  throttle_bounds: [0.4, 1.0]
+  gimbal_windows_s: [[10, 12], [25, 50], [50, 74], [74, 100], [100, 125], [125, 145]]
+  gimbal_initial_mrad: [1.8394170154082001, -0.06652028552655677, -0.19178226528505904, 0.06272529379039338, 0.07739996720010241, 0.28866905220949457]
+  gimbal_bounds_mrad: [[0, 5], [-1, 1], [-1, 1], [-1, 1], [-1, 1], [-1, 1]]
+  throttle_difference_regularization: 0.01
+  late_gimbal_regularization: 0.001
+recovery:
+  # Order: entry throttle x3, gamma x3 [deg], attitude offsets x2 [deg],
+  # Cd-base/Cd-transonic/Cd-hyper/Cn scales x4, powered throttle x4, ignition [s], initial mass [t].
+  initial_parameters: [0.4002246952751438, 0.7191394403214658, 0.5183699026327421, 66.73201340100505, 67.99566515863587, 78.48877078870994, 2.9063718231577553, 0.696694302705211, 1.504875009278366, 1.504875009278366, 1.504875009278366, 1.9781318934346472, 0.4000000000001614, 0.40000000262000013, 0.4001041508377159, 0.7919686339845519, 5.9, 43.963690496161824]
+  entry_throttle_times_s: [0, 4, 8]
+  powered_throttle_times_s: [0, 6, 12, 18] # First active knot is replaced by fitted ignition.
+  powered_ignition_initial_s: 2.0
+  powered_ignition_bounds_s: [0.1, 5.9] # Inferred burn onset after this segment starts.
+  throttle_bounds: [0.4, 1.0]
+  initial_mass_bounds_tonnes: [38, 44]
+  initial_flight_path_offset_bounds_deg: [-15, 15]
+  maximum_initial_flight_path_deg: 89.9
+  initial_attitude_offset_bounds_deg: [-15, 15]
+  common_drag_scale_bounds: [0.5, 2.0] # Separate base/transonic/hyper scales, shared by phases.
+  common_normal_scale_bounds: [0.5, 2.0]
+  mass_coupling: actual_terminal_mass_and_rcs_gas
+  state_coupling: independent_observation_initialization
+  coefficient_prior_regularization: 0.01
+  angle_prior_regularization: 0.001
+landing:
+  mode: closed_loop_lcvx_pd
+  actuator: realistic
+  initial_altitude_m: 348.7644451542088
+  initial_altitude_role: prior_calibrated_100m_display_bin_assumption
+  initial_velocity: vertical_with_observed_scalar_speed
+  attitude: upright_zero_rates
+  horizon_s: 40.0
+  guidance:
+    convex_touchdown_time_s: 12.145 # Assumed terminal epoch, not verified actual touchdown.
+    convex_nodes: 60
+    convex_drag_cd: 2.0 # Low-Mach nominal consistent with the calibrated body table.
+    convex_thrust_rate_max_nps: 30000.0 # Planned magnitude slew, within hardware capability.
+    convex_tracking_k_r: [0.1, 0.1, 6.0]
+    convex_tracking_k_v: [0.6, 0.6, 4.0]
+    convex_replan: false # LCvx plan once; live-state feedback at every control tick.
+    convex_terminal_slack: false
+    convex_terminal_vz_max_mps: 0.5 # Hard 0..0.5 m/s terminal sink window; no slack.
+    landing_cutoff_impact_mps: 0.0
+  scope: actual_soft_contact_under_lcvx_pd_with_live_state_feedback
+fixed:
+  observed_time_and_altitude_offsets: true
+  observed_initial_scalar_speed: true
+  engine_hardware_and_limits: true
+  atmosphere_gravity_and_earth_rotation: true
+  wind_slosh_sensor_noise: none
+
+# Warm start retained from the preliminary bounded recovery search.

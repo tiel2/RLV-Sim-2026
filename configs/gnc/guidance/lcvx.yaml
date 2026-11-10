@@ -23,6 +23,7 @@ convex_slew_rate_max_mps3: null      # u-vector rate SOC ||u_{k+1}-u_k||<=rate*d
 
 # Touchdown-time policy.
 convex_replan: false                   # solve once at ignition; track the committed plan
+convex_touchdown_time_s: null           # optional terminal epoch from simulation start; null = free time
 convex_tf_min_s: 0.5                 # free-tf search lower bound [s]
 convex_tf_freeze_s: 2.0              # tf_go below this: fly out the committed plan
 convex_tf_search_iters: 8            # free-tf line-search iterations

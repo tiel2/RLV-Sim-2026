@@ -91,6 +91,24 @@ python scripts/view_replay.py results/ascent_boostback
 CRS-11 comparison is disabled by default; the archived comparison tool remains available with
 `scenario.reference.enabled=true`. See [ascent assumptions](docs/reference/crs11_ascent.md).
 
+## CRS-11 trajectory calibration
+
+The `flight_calibrated_*` scenarios identify bounded, time-varying inputs and uncertain
+recovery parameters through native 6-DOF rollouts. They preserve the original physics
+and LCvx landing regressions. These are held-in reconstructions; altitude/speed alone do
+not identify the real 3D trajectory or unique actuator history. The calibrated landing
+uses LCvx guidance, live-state position/velocity feedback, PD attitude control, and realistic
+actuators. It reaches soft contact while covering the full eligible speed observation window.
+See [method, assumptions, results, and replay commands](docs/reference/crs11_calibration_ko.md).
+
+```bash
+.venv/bin/python scripts/run_single.py scenario=flight_calibrated_ascent
+.venv/bin/python scripts/view_replay.py --system
+# Re-identify inputs/parameters; choose a fresh output directory:
+.venv/bin/python scripts/calibrate_flight.py --output results/calibration_repeat --write-configs
+.venv/bin/python scripts/verify_flight_calibration.py --output results/calibration_verified_repeat
+```
+
 ## Vehicle physics (Module 4 pp.7–23)
 
 - Gravity: `mu / (radius + h)^2` down in NED, with the corresponding quaternion-rotated body force.
