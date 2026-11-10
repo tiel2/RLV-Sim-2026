@@ -1,35 +1,36 @@
-"""Synthetic IMU/GNSS/radar sensors and a 15-state error-state INS filter.
+"""Synthetic CG-mounted IMU/GNSS/radial altimeter and rotating-frame 15-state ESKF.
 
-The sensor model is a deterministic research example, not a hardware specification.
-It assumes a fixed-origin NED frame, zero sensor latency, known initial state/alignment,
-and constant mass. Accelerometer samples are specific force in body axes.
+Only the sensor generator receives native force/rate truth. The estimator consumes
+samples, an uncertain alignment observation, and a declared position/velocity prior.
+Mass is an explicitly ideal auxiliary measurement, not an estimated filter state.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import copy
+from dataclasses import dataclass, replace
 
 import numpy as np
 
 from core.interfaces import Measurement
 
 
-def skew(vector: np.ndarray) -> np.ndarray:
-    x, y, z = np.asarray(vector, dtype=float)
-    return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
+def skew(v):
+    x, y, z = v
+    return np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]], float)
 
 
-def qnorm(quaternion: np.ndarray) -> np.ndarray:
-    value = np.asarray(quaternion, dtype=float)
-    norm = np.linalg.norm(value)
-    if value.shape != (4,) or not np.isfinite(norm) or norm <= 0.0:
-        raise ValueError("attitude quaternion must be a finite nonzero 4-vector")
-    return value / norm
+def qnorm(q):
+    a = np.asarray(q, float)
+    n = np.linalg.norm(a)
+    if a.shape != (4,) or not np.isfinite(n) or n == 0:
+        raise ValueError("attitude must be a finite nonzero quaternion")
+    return a / n
 
 
-def qmul(left: np.ndarray, right: np.ndarray) -> np.ndarray:
-    w, x, y, z = left
-    W, X, Y, Z = right
+def qmul(a, b):
+    w, x, y, z = a
+    W, X, Y, Z = b
     return np.array(
         [
             w * W - x * X - y * Y - z * Z,
@@ -40,16 +41,15 @@ def qmul(left: np.ndarray, right: np.ndarray) -> np.ndarray:
     )
 
 
-def dq_body(rotation: np.ndarray) -> np.ndarray:
-    angle = float(np.linalg.norm(rotation))
+def dq_body(dtheta):
+    angle = np.linalg.norm(dtheta)
     if angle < 1e-12:
-        return qnorm(np.r_[1.0, 0.5 * np.asarray(rotation, dtype=float)])
-    axis = np.asarray(rotation, dtype=float) / angle
-    return np.r_[np.cos(angle / 2.0), np.sin(angle / 2.0) * axis]
+        return qnorm(np.r_[1.0, 0.5 * np.asarray(dtheta)])
+    return np.r_[np.cos(angle / 2), np.sin(angle / 2) * np.asarray(dtheta) / angle]
 
 
-def rot(quaternion: np.ndarray) -> np.ndarray:
-    w, x, y, z = qnorm(quaternion)
+def rot(q):
+    w, x, y, z = qnorm(q)
     return np.array(
         [
             [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
@@ -59,522 +59,557 @@ def rot(quaternion: np.ndarray) -> np.ndarray:
     )
 
 
-def _vector(value, name: str) -> np.ndarray:
-    result = np.asarray(value, dtype=float)
-    if result.shape != (3,) or not np.all(np.isfinite(result)):
-        raise ValueError(f"{name} must be a finite 3-vector")
-    return result.copy()
+def left_jacobian(phi):
+    """SO(3) reset for a left (reference-frame) attitude error."""
+    angle = np.linalg.norm(phi)
+    A = skew(phi)
+    if angle < 1e-5:
+        return np.eye(3) + 0.5 * A + A @ A / 6
+    return (
+        np.eye(3)
+        + (1 - np.cos(angle)) / angle**2 * A
+        + (angle - np.sin(angle)) / angle**3 * (A @ A)
+    )
 
 
-def _sigma(value: float, name: str) -> float:
-    result = float(value)
-    if not np.isfinite(result) or result < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
-    return result
+@dataclass(frozen=True)
+class NavigationFrame:
+    """Declared reference constants, independent of realized plant state/faults."""
+
+    rotating: bool = False
+    omega: tuple = (0.0, 0.0, 0.0)
+    radius: float = 6371000.0
+    mu: float = 3.986004418e14
+    inverse_square: bool = True
+    uniform_g: float = 9.80665
+
+    def height_gradient(self, r):
+        r = np.asarray(r, float)
+        if not self.rotating:
+            return -r[2], np.array([0.0, 0.0, -1.0])
+        R = r + [0.0, 0.0, -self.radius]
+        distance = np.linalg.norm(R)
+        # Rationalized altitude avoids cancellation near the surface.
+        h = (r @ r - 2 * self.radius * r[2]) / (distance + self.radius)
+        return h, R / distance
+
+    def acceleration_gradient(self, r, v):
+        r = np.asarray(r, float)
+        W = skew(self.omega)
+        if self.rotating:
+            R = r + [0.0, 0.0, -self.radius]
+            d = np.linalg.norm(R)
+            g = -self.mu * R / d**3
+            J = self.mu * (3 * np.outer(R, R) / d**5 - np.eye(3) / d**3)
+            return g - 2 * W @ v - W @ W @ R, J - W @ W
+        if self.inverse_square:
+            # Fixed-Earth plant uses a vertical field and clamps subsurface height.
+            h = max(-r[2], 0.0)
+            g = self.mu / (self.radius + h) ** 2
+            J = np.zeros((3, 3))
+            if r[2] < 0:
+                J[2, 2] = 2 * self.mu / (self.radius + h) ** 3
+            return np.array([0.0, 0.0, g]), J
+        return np.array([0.0, 0.0, self.uniform_g]), np.zeros((3, 3))
 
 
 @dataclass(frozen=True)
 class SensorMeasurement(Measurement):
-    """Synchronous sensor packet; GNSS position/velocity are NaN when unavailable."""
-
-    accel_body: np.ndarray | None = None
-    gyro_body: np.ndarray | None = None
-    gnss_scheduled: bool = False
+    accel_body: object = None
+    gyro_body: object = None  # inertial body rate; not body/reference rate
     gnss_valid: bool = False
-    gnss_outlier: bool = False
-    radar_scheduled: bool = False
     radar_alt_m: float = float("nan")
     radar_valid: bool = False
+    alignment_valid: bool = False
+    gnss_scheduled: bool = False
+    radar_scheduled: bool = False
+    gnss_outlier: bool = False
 
 
 class SyntheticESKF:
-    """Deterministic IMU, GNSS, radar, and aided INS sensor/estimator module."""
-
     def __init__(
         self,
         *,
-        imu_rate_hz: float = 200.0,
-        imu_accel_sigma: float = 0.08,
-        imu_gyro_sigma_deg: float = 0.025,
+        imu_accel_sigma=0.08,
+        imu_gyro_sigma_deg=0.025,
         accel_bias=(0.025, -0.02, 0.035),
         gyro_bias_deg=(0.005, -0.006, 0.004),
+        gnss_pos_sigma=2.5,
+        gnss_vel_sigma=0.15,
+        gnss_dropout=0.03,
+        gnss_period=0.1,
+        radar_sigma=0.5,
+        radar_period=0.05,
+        radar_range=1500.0,
+        gnss_outage_start=-1.0,
+        gnss_outage_end=-1.0,
+        seed_offset=0,
+        frame=None,
+        alignment_sigma_deg=1.0,
+        alignment_error_deg=(0.0, 0.0, 0.0),
+        initial_position=None,
+        initial_velocity=None,
+        prior_position_sigma=25.0,
+        prior_velocity_sigma=2.0,
+        gyro_bias_rw_deg=0.0005,
+        accel_bias_rw=0.0005,
+        imu_rate_hz=100.0,
         accel_scale_factor=(0.0, 0.0, 0.0),
         gyro_scale_factor=(0.0, 0.0, 0.0),
-        accel_bias_random_walk: float = 0.0,
-        gyro_bias_random_walk_deg: float = 0.0,
-        gnss_pos_sigma: float = 2.5,
-        gnss_vel_sigma: float = 0.15,
-        gnss_dropout: float = 0.03,
-        gnss_period: float = 0.1,
+        accel_bias_random_walk=0.0,
+        gyro_bias_random_walk_deg=0.0,
         gnss_outlier_times=(),
         gnss_outlier_position_m=(100.0, -100.0, 50.0),
         gnss_outlier_velocity_mps=(10.0, -10.0, 5.0),
-        gnss_gate_threshold: float = 16.812,
-        radar_sigma: float = 0.5,
-        radar_period: float = 0.05,
-        radar_range: float = 1500.0,
-        radar_gate_threshold: float = 6.635,
-        gnss_outage_start: float = -1.0,
-        gnss_outage_end: float = -1.0,
-        seed_offset: int = 0,
-        initial_position_sigma_m: float = 5.0,
-        initial_velocity_sigma_mps: float = 2.0,
-        initial_attitude_sigma_deg: float = 1.0,
-        initial_gyro_bias_sigma_deg: float = 0.05,
-        initial_accel_bias_sigma_mps2: float = 0.1,
-        initial_state=None,
-        initial_position=None,
-        initial_velocity=None,
-        initial_attitude=None,
-        initial_mass: float | None = None,
+        gnss_gate_threshold=None,
+        radar_gate_threshold=None,
     ):
-        self.imu_rate_hz = self._positive(imu_rate_hz, "imu_rate_hz")
-        self.imu_period = 1.0 / self.imu_rate_hz
-        self.sa = _sigma(imu_accel_sigma, "imu_accel_sigma")
-        self.sg = np.deg2rad(_sigma(imu_gyro_sigma_deg, "imu_gyro_sigma_deg"))
-        self.ba = _vector(accel_bias, "accel_bias")
-        self.bg = np.deg2rad(_vector(gyro_bias_deg, "gyro_bias_deg"))
-        self.accel_scale = _vector(accel_scale_factor, "accel_scale_factor")
-        self.gyro_scale = _vector(gyro_scale_factor, "gyro_scale_factor")
-        self.ba_rw = _sigma(accel_bias_random_walk, "accel_bias_random_walk")
-        self.bg_rw = np.deg2rad(
-            _sigma(gyro_bias_random_walk_deg, "gyro_bias_random_walk_deg")
-        )
-        self.sp = _sigma(gnss_pos_sigma, "gnss_pos_sigma")
-        self.sv = _sigma(gnss_vel_sigma, "gnss_vel_sigma")
+        self.sa = float(imu_accel_sigma)
+        self.sg = float(np.deg2rad(imu_gyro_sigma_deg))
+        self.ba = np.asarray(accel_bias, float)
+        self.bg = np.deg2rad(np.asarray(gyro_bias_deg, float))
+        self.sp, self.sv = float(gnss_pos_sigma), float(gnss_vel_sigma)
         self.drop = float(gnss_dropout)
-        if not np.isfinite(self.drop) or not 0.0 <= self.drop <= 1.0:
-            raise ValueError("gnss_dropout must be between zero and one")
-        self.gperiod = self._positive(gnss_period, "gnss_period")
-        gnss_ratio = self.gperiod / self.imu_period
-        if not np.isclose(gnss_ratio, round(gnss_ratio), rtol=0.0, atol=1e-8):
-            raise ValueError("gnss_period must be an integer multiple of the IMU period")
-        self.outlier_times = tuple(float(value) for value in gnss_outlier_times)
-        if not np.all(np.isfinite(self.outlier_times)):
-            raise ValueError("gnss_outlier_times must contain only finite times")
-        self.outlier_position = _vector(
-            gnss_outlier_position_m, "gnss_outlier_position_m"
-        )
-        self.outlier_velocity = _vector(
-            gnss_outlier_velocity_mps, "gnss_outlier_velocity_mps"
-        )
-        self.gnss_gate = self._positive(gnss_gate_threshold, "gnss_gate_threshold")
-        self.srad = _sigma(radar_sigma, "radar_sigma")
-        self.rperiod = self._positive(radar_period, "radar_period")
-        radar_ratio = self.rperiod / self.imu_period
-        if not np.isclose(radar_ratio, round(radar_ratio), rtol=0.0, atol=1e-8):
-            raise ValueError("radar_period must be an integer multiple of the IMU period")
-        self.rrange = self._positive(radar_range, "radar_range")
-        self.radar_gate = self._positive(radar_gate_threshold, "radar_gate_threshold")
-        self.outage0 = float(gnss_outage_start)
-        self.outage1 = float(gnss_outage_end)
-        if not np.isfinite(self.outage0) or not np.isfinite(self.outage1):
-            raise ValueError("GNSS outage endpoints must be finite")
-        self.initial_sigmas = np.array(
-            [
-                *([_sigma(initial_position_sigma_m, "initial_position_sigma_m")] * 3),
-                *([_sigma(initial_velocity_sigma_mps, "initial_velocity_sigma_mps")] * 3),
-                *(
-                    [np.deg2rad(_sigma(initial_attitude_sigma_deg, "initial_attitude_sigma_deg"))]
-                    * 3
-                ),
-                *(
-                    [np.deg2rad(_sigma(initial_gyro_bias_sigma_deg, "initial_gyro_bias_sigma_deg"))]
-                    * 3
-                ),
-                *([_sigma(initial_accel_bias_sigma_mps2, "initial_accel_bias_sigma_mps2")] * 3),
-            ]
-        )
+        self.gperiod, self.rperiod = float(gnss_period), float(radar_period)
+        self.srad, self.rrange = float(radar_sigma), float(radar_range)
+        self.outage0, self.outage1 = float(gnss_outage_start), float(gnss_outage_end)
         self.seed_offset = int(seed_offset)
-        self.initial_position = self._optional_vector(initial_position, "initial_position")
-        self.initial_velocity = self._optional_vector(initial_velocity, "initial_velocity")
-        self.initial_attitude = (
-            qnorm(initial_attitude) if initial_attitude is not None else np.array([1.0, 0, 0, 0])
+        self.frame = frame or NavigationFrame()
+        self.alignment_sigma = float(np.deg2rad(alignment_sigma_deg))
+        self.alignment_error = np.deg2rad(np.asarray(alignment_error_deg, float))
+        self.initial_position = (
+            None if initial_position is None else np.array(initial_position, dtype=float)
         )
-        self.initial_mass = None if initial_mass is None else float(initial_mass)
-        if self.initial_mass is not None and (
-            not np.isfinite(self.initial_mass) or self.initial_mass <= 0.0
-        ):
-            raise ValueError("initial_mass must be finite and positive")
-        if initial_state is not None:
-            self.initial_position = _vector(initial_state.r_ned, "initial_state.r_ned")
-            self.initial_velocity = _vector(initial_state.v_ned, "initial_state.v_ned")
-            self.initial_attitude = qnorm(initial_state.q_bn)
-            self.initial_mass = float(initial_state.m)
-        self._prev_truth: tuple[float, np.ndarray] | None = None
+        self.initial_velocity = (
+            None if initial_velocity is None else np.array(initial_velocity, dtype=float)
+        )
+        self.prior_sp, self.prior_sv = float(prior_position_sigma), float(prior_velocity_sigma)
+        self.sbg, self.sba = np.deg2rad(gyro_bias_rw_deg), float(accel_bias_rw)
+        self.imu_rate_hz = float(imu_rate_hz)
+        if not np.isfinite(self.imu_rate_hz) or self.imu_rate_hz <= 0:
+            raise ValueError("imu_rate_hz must be finite and positive")
+        self.imu_period = 1.0 / self.imu_rate_hz
+        self.accel_scale = np.asarray(accel_scale_factor, float)
+        self.gyro_scale = np.asarray(gyro_scale_factor, float)
+        self.accel_walk = float(accel_bias_random_walk)
+        self.gyro_walk = float(np.deg2rad(gyro_bias_random_walk_deg))
+        self.outlier_times = np.asarray(gnss_outlier_times, float)
+        self.outlier_position = np.asarray(gnss_outlier_position_m, float)
+        self.outlier_velocity = np.asarray(gnss_outlier_velocity_mps, float)
+        self.gnss_gate = None if gnss_gate_threshold is None else float(gnss_gate_threshold)
+        self.radar_gate = None if radar_gate_threshold is None else float(radar_gate_threshold)
         self._walk_ba = np.zeros(3)
         self._walk_bg = np.zeros(3)
+        self._sensor_epoch = None
+        if (
+            min(
+                self.gperiod,
+                self.rperiod,
+                self.sp,
+                self.sv,
+                self.srad,
+                self.prior_sp,
+                self.prior_sv,
+            )
+            <= 0
+            or not 0 <= self.drop <= 1
+        ):
+            raise ValueError(
+                "sensor periods/aiding uncertainties must be positive; dropout in [0,1]"
+            )
+        if min(self.sa, self.sg, self.alignment_sigma, self.sbg, self.sba) < 0:
+            raise ValueError("noise amplitudes must be nonnegative")
+
+        vectors = (
+            self.ba,
+            self.bg,
+            self.alignment_error,
+            self.accel_scale,
+            self.gyro_scale,
+            self.outlier_position,
+            self.outlier_velocity,
+        )
+        if any(v.shape != (3,) or not np.all(np.isfinite(v)) for v in vectors):
+            raise ValueError(
+                "sensor bias, scale, alignment and outlier parameters must be finite 3-vectors"
+            )
+        scalars = (
+            self.sa,
+            self.sg,
+            self.sp,
+            self.sv,
+            self.srad,
+            self.gperiod,
+            self.rperiod,
+            self.rrange,
+            self.alignment_sigma,
+            self.sbg,
+            self.sba,
+            self.accel_walk,
+            self.gyro_walk,
+            self.prior_sp,
+            self.prior_sv,
+        )
+        if not np.all(np.isfinite(scalars)) or min(self.accel_walk, self.gyro_walk) < 0:
+            raise ValueError("sensor parameters must be finite and random walk nonnegative")
+        for period in (self.gperiod, self.rperiod):
+            if not np.isclose(period / self.imu_period, round(period / self.imu_period), atol=1e-9):
+                raise ValueError("GNSS/radar periods must be integer multiples of the IMU period")
+        for gate in (self.gnss_gate, self.radar_gate):
+            if gate is not None and (not np.isfinite(gate) or gate <= 0):
+                raise ValueError("innovation gates must be finite positive thresholds or null")
+        if (
+            self.outlier_times.ndim != 1
+            or not np.all(np.isfinite(self.outlier_times))
+            or np.any(self.outlier_times < 0)
+            or any(not self._due(t, self.gperiod) for t in self.outlier_times)
+        ):
+            raise ValueError("outlier times must lie on the nonnegative GNSS grid")
+
+    def initial_memory(self):
+        return {}
+
+    def _rng(self, seed, t, channel):
+        ints = [int(v) for v in np.asarray(seed).reshape(-1)]
+        ss = np.random.SeedSequence(
+            [
+                *(x & 0xFFFFFFFF for x in ints),
+                int(round(t * 1e6)) & 0xFFFFFFFF,
+                int(channel),
+                self.seed_offset & 0xFFFFFFFF,
+            ]
+        )
+        return np.random.default_rng(ss)
 
     @staticmethod
-    def _positive(value: float, name: str) -> float:
-        result = float(value)
-        if not np.isfinite(result) or result <= 0.0:
-            raise ValueError(f"{name} must be finite and positive")
-        return result
-
-    @staticmethod
-    def _optional_vector(value, name: str) -> np.ndarray | None:
-        return None if value is None else _vector(value, name)
-
-    @staticmethod
-    def _due(t: float, period: float) -> bool:
+    def _due(t, period):
         return abs(t / period - round(t / period)) < 1e-5
 
-    def _rng(self, seed, t: float, channel: int) -> np.random.Generator:
-        values = np.asarray(seed, dtype=np.uint64).reshape(-1)
-        if not values.size:
-            raise ValueError("sensor seed must contain at least one integer")
-        words = [int(value) & 0xFFFFFFFF for value in values]
-        sequence = np.random.SeedSequence(
-            [*words, int(round(t * 1e6)) & 0xFFFFFFFF, channel, self.seed_offset & 0xFFFFFFFF]
+    def measure_native(self, state, seed, diagnostics):
+        """Specific force at the modeled CG includes support force, excludes gravitation."""
+        return self.measure(
+            state,
+            seed,
+            specific_force_body=(
+                np.asarray(diagnostics["F_body_total"]) + np.asarray(diagnostics["F_pad_body"])
+            )
+            / float(state.m),
+            inertial_rate_body=diagnostics["omega_inertial_body"],
         )
-        return np.random.default_rng(sequence)
 
-    def measure(self, state, seed) -> SensorMeasurement:
+    def measure(self, state, seed, *, specific_force_body, inertial_rate_body):
+        """Sample supplied physical channels; never infer acceleration from state differences."""
         t = float(state.t)
-        if not np.isfinite(t):
-            raise ValueError("sensor state time must be finite")
-        p = _vector(state.r_ned, "state.r_ned")
-        v = _vector(state.v_ned, "state.v_ned")
-        q_truth = qnorm(state.q_bn)
-        w = _vector(state.w_body, "state.w_body")
-        if self._prev_truth is None:
-            # The first sample has no velocity history; initialize with zero translational accel.
-            acceleration_ned = np.zeros(3)
+        p, v = np.asarray(state.r_ned, float), np.asarray(state.v_ned, float)
+        reset = self._sensor_epoch is None or t <= self._sensor_epoch
+        if reset:
+            self._walk_ba = np.zeros(3)
+            self._walk_bg = np.zeros(3)
         else:
-            previous_t, previous_v = self._prev_truth
-            dt = t - previous_t
-            if dt <= 0.0:
-                raise ValueError("sensor truth timestamps must increase")
-            if not np.isclose(dt, self.imu_period, rtol=0.0, atol=1e-8):
-                raise ValueError(
-                    f"IMU sample interval {dt:g} s does not match configured "
-                    f"period {self.imu_period:g} s"
-                )
-            acceleration_ned = (v - previous_v) / dt
+            dt = t - self._sensor_epoch
+            if not np.isclose(dt, self.imu_period, rtol=0, atol=1e-8):
+                raise ValueError("sensor epoch spacing does not match configured period")
             self._walk_ba += (
-                self.ba_rw
-                * np.sqrt(dt)
-                * self._rng(seed, t, 10).standard_normal(3)
+                self.accel_walk * np.sqrt(dt) * self._rng(seed, t, 8).standard_normal(3)
             )
-            self._walk_bg += (
-                self.bg_rw
-                * np.sqrt(dt)
-                * self._rng(seed, t, 11).standard_normal(3)
-            )
-        self._prev_truth = (t, v.copy())
-
-        altitude = max(-p[2], 0.0)
-        gravity = 9.80665 * (6_371_000.0 / (6_371_000.0 + altitude)) ** 2
-        gravity_ned = np.array([0.0, 0.0, gravity])
-        specific_force = rot(q_truth).T @ (acceleration_ned - gravity_ned)
+            self._walk_bg += self.gyro_walk * np.sqrt(dt) * self._rng(seed, t, 9).standard_normal(3)
         accel = (
-            (1.0 + self.accel_scale) * specific_force
+            np.asarray(specific_force_body, float) * (1 + self.accel_scale)
             + self.ba
             + self._walk_ba
             + self.sa * self._rng(seed, t, 1).standard_normal(3)
         )
         gyro = (
-            (1.0 + self.gyro_scale) * w
+            np.asarray(inertial_rate_body, float) * (1 + self.gyro_scale)
             + self.bg
             + self._walk_bg
             + self.sg * self._rng(seed, t, 2).standard_normal(3)
         )
-
-        gnss_scheduled = self._due(t, self.gperiod)
-        gnss_valid = gnss_scheduled
-        gnss_valid &= not (
-            self.outage0 <= t <= self.outage1 and self.outage1 > self.outage0
+        gps_on = self._due(t, self.gperiod)
+        gps_on &= not (self.outage0 <= t <= self.outage1 and self.outage1 > self.outage0)
+        if gps_on:
+            gps_on = self._rng(seed, t, 3).random() >= self.drop
+        gp = (
+            p + self.sp * self._rng(seed, t, 4).standard_normal(3) if gps_on else np.full(3, np.nan)
         )
-        if gnss_valid:
-            gnss_valid = self._rng(seed, t, 3).random() >= self.drop
-        if gnss_valid:
-            position = p + self.sp * self._rng(seed, t, 4).standard_normal(3)
-            velocity = v + self.sv * self._rng(seed, t, 5).standard_normal(3)
-        else:
-            position = np.full(3, np.nan)
-            velocity = np.full(3, np.nan)
-        gnss_outlier = gnss_valid and any(
-            np.isclose(t, event_time, rtol=0.0, atol=1e-8)
-            for event_time in self.outlier_times
+        gv = (
+            v + self.sv * self._rng(seed, t, 5).standard_normal(3) if gps_on else np.full(3, np.nan)
         )
-        if gnss_outlier:
-            position += self.outlier_position
-            velocity += self.outlier_velocity
-
-        radar_scheduled = self._due(t, self.rperiod)
-        radar_valid = radar_scheduled and 0.0 <= -p[2] <= self.rrange
-        radar_altitude = (
-            -p[2] + self.srad * self._rng(seed, t, 6).standard_normal()
-            if radar_valid
-            else float("nan")
-        )
-        if self.initial_mass is None:
-            self.initial_mass = float(state.m)
-
+        outlier = bool(gps_on and np.any(np.isclose(t, self.outlier_times, rtol=0, atol=1e-8)))
+        if outlier:
+            gp += self.outlier_position
+            gv += self.outlier_velocity
+        height, _ = self.frame.height_gradient(p)
+        radar_on = self._due(t, self.rperiod) and 0 <= height <= self.rrange
+        ra = height + self.srad * self._rng(seed, t, 6).standard_normal() if radar_on else np.nan
+        alignment = self._sensor_epoch is None or t <= self._sensor_epoch
+        q = np.full(4, np.nan)
+        if alignment:
+            error = self.alignment_error + self.alignment_sigma * self._rng(
+                seed, t, 7
+            ).standard_normal(3)
+            q = qnorm(qmul(dq_body(error), state.q_bn))
+        self._sensor_epoch = t
         return SensorMeasurement(
-            r_ned=position,
-            v_ned=velocity,
-            q_bn=self.initial_attitude.copy(),
-            w_body=gyro.copy(),
-            m=self.initial_mass,
+            r_ned=gp,
+            v_ned=gv,
+            q_bn=q,
+            w_body=gyro,
+            m=float(state.m),
             t=t,
             accel_body=accel,
             gyro_body=gyro,
-            gnss_scheduled=bool(gnss_scheduled),
-            gnss_valid=bool(gnss_valid),
-            gnss_outlier=bool(gnss_outlier),
-            radar_scheduled=bool(radar_scheduled),
-            radar_alt_m=float(radar_altitude),
-            radar_valid=bool(radar_valid),
+            gnss_valid=bool(gps_on),
+            radar_alt_m=float(ra),
+            radar_valid=bool(radar_on),
+            alignment_valid=alignment,
+            gnss_scheduled=self._due(t, self.gperiod),
+            radar_scheduled=self._due(t, self.rperiod),
+            gnss_outlier=outlier,
         )
-
-    def initial_memory(self):
-        return {}
-
-    def _initial_filter_state(self, measurement: SensorMeasurement) -> dict:
-        position = self.initial_position
-        velocity = self.initial_velocity
-        if position is None:
-            position = (
-                np.nan_to_num(np.asarray(measurement.r_ned, dtype=float))
-                if measurement.gnss_valid
-                else np.zeros(3)
-            )
-        if velocity is None:
-            velocity = (
-                np.nan_to_num(np.asarray(measurement.v_ned, dtype=float))
-                if measurement.gnss_valid
-                else np.zeros(3)
-            )
-        mass = self.initial_mass if self.initial_mass is not None else float(measurement.m)
-        return {
-            "r": np.array(position, dtype=float, copy=True),
-            "v": np.array(velocity, dtype=float, copy=True),
-            "q": self.initial_attitude.copy(),
-            "bg": np.zeros(3),
-            "ba": np.zeros(3),
-            "m": float(mass),
-            "t": float(measurement.t),
-        }
-
-    def _propagate(self, memory: dict, measurement: SensorMeasurement) -> dict:
-        mem = {
-            key: value.copy() if isinstance(value, np.ndarray) else value
-            for key, value in memory.items()
-        }
-        mem["previous_t"] = mem["t"]
-        mem["previous_q"] = mem["q"].copy()
-        t = float(measurement.t)
-        dt = t - mem["t"]
-        if not np.isfinite(dt) or dt <= 0.0:
-            raise ValueError("navigation timestamps must increase")
-        if measurement.accel_body is None or measurement.gyro_body is None:
-            raise ValueError("INS propagation requires accelerometer and gyro samples")
-        accel = _vector(measurement.accel_body, "accel_body") - mem["ba"]
-        gyro = _vector(measurement.gyro_body, "gyro_body") - mem["bg"]
-        c_bn = rot(mem["q"])
-        altitude = max(-mem["r"][2], 0.0)
-        gravity = 9.80665 * (6_371_000.0 / (6_371_000.0 + altitude)) ** 2
-        acceleration = c_bn @ accel + np.array([0.0, 0.0, gravity])
-        mem["r"] += mem["v"] * dt + 0.5 * acceleration * dt**2
-        mem["v"] += acceleration * dt
-        mem["q"] = qnorm(qmul(mem["q"], dq_body(gyro * dt)))
-        mem["t"] = t
-        return mem
 
     @staticmethod
-    def _estimate_record(memory: dict, measurement: SensorMeasurement) -> Measurement:
-        gyro = _vector(measurement.gyro_body, "gyro_body") - memory["bg"]
-        return Measurement(
-            r_ned=memory["r"].copy(),
-            v_ned=memory["v"].copy(),
-            q_bn=memory["q"].copy(),
-            w_body=gyro,
-            m=memory["m"],
-            t=float(measurement.t),
-        )
+    def _update(mem, z, h, H, R, channel, gate=None):
+        P = mem["P"]
+        innovation = z - h
+        S = H @ P @ H.T + R
+        nis = float(innovation @ np.linalg.solve(S, innovation))
+        accepted = gate is None or nis <= gate
+        normalized = innovation / np.sqrt(np.diag(S))
+        mem[f"{channel}_nis"] = nis
+        mem[f"{channel}_normalized_innovation"] = normalized
+        mem[f"{channel}_update_accepted"] = accepted
+        mem["innovations"].append(dict(channel=channel, dof=len(z), nis=nis, accepted=accepted))
+        if not accepted:
+            return False
+        K = np.linalg.solve(S, (P @ H.T).T).T
+        dx = K @ innovation
+        mem["r"] += dx[:3]
+        mem["v"] += dx[3:6]
+        mem["q"] = qnorm(qmul(dq_body(dx[6:9]), mem["q"]))
+        mem["bg"] += dx[9:12]
+        mem["ba"] += dx[12:15]
+        A = np.eye(15) - K @ H
+        posterior = A @ P @ A.T + K @ R @ K.T
+        reset = np.eye(15)
+        reset[6:9, 6:9] = left_jacobian(dx[6:9])
+        posterior = reset @ posterior @ reset.T
+        mem["P"] = (posterior + posterior.T) / 2
+        return True
 
-    def estimate(self, measurement: SensorMeasurement, act, memory):
-        mem = (
-            self._initial_filter_state(measurement)
-            if "t" not in memory
-            else self._propagate(memory, measurement)
-        )
-        if "P" not in mem:
-            mem["P"] = np.diag(self.initial_sigmas**2)
-            mem["previous_t"] = mem["t"]
-            mem["previous_q"] = mem["q"].copy()
+    def _initialize(self, meas):
+        if not meas.alignment_valid:
+            raise ValueError("navigation initialization requires an alignment observation")
+        if meas.gnss_valid:
+            r, v = np.array(meas.r_ned, float), np.array(meas.v_ned, float)
+            sp, sv, source = self.sp, self.sv, "gnss"
         else:
-            self._predict_covariance(mem, measurement)
+            if self.initial_position is None or self.initial_velocity is None:
+                raise ValueError("GNSS unavailable: supply an explicit position/velocity prior")
+            r, v = self.initial_position.copy(), self.initial_velocity.copy()
+            sp, sv, source = self.prior_sp, self.prior_sv, "declared_prior"
+        if not (r.shape == v.shape == (3,) and np.all(np.isfinite(np.r_[r, v]))):
+            raise ValueError("initial position and velocity must be finite 3-vectors")
+        P = np.diag(
+            [sp**2] * 3
+            + [sv**2] * 3
+            + [max(self.alignment_sigma, 1e-8) ** 2] * 3
+            + [np.deg2rad(0.05) ** 2] * 3
+            + [0.1**2] * 3
+        )
+        return dict(
+            r=r,
+            v=v,
+            q=qnorm(meas.q_bn),
+            bg=np.zeros(3),
+            ba=np.zeros(3),
+            P=P,
+            t=float(meas.t),
+            initialization_source=source,
+            first_gnss_time=None,
+            previous_accel=np.array(meas.accel_body),
+            previous_gyro=np.array(meas.gyro_body),
+            innovations=[],
+        )
 
-        mem["gnss_nis"] = float("nan")
-        mem["gnss_normalized_innovation"] = np.full(6, np.nan)
-        mem["gnss_update_accepted"] = False
-        mem["radar_nis"] = float("nan")
-        mem["radar_normalized_innovation"] = np.full(1, np.nan)
-        mem["radar_update_accepted"] = False
-        if measurement.gnss_valid:
-            h = np.zeros((6, 15))
-            h[:6, :6] = np.eye(6)
-            observed = np.r_[measurement.r_ned, measurement.v_ned]
-            predicted = np.r_[mem["r"], mem["v"]]
-            covariance = np.diag([self.sp**2] * 3 + [self.sv**2] * 3)
-            (
-                mem["gnss_nis"],
-                mem["gnss_normalized_innovation"],
-                mem["gnss_update_accepted"],
-            ) = self._update(mem, observed, predicted, h, covariance, self.gnss_gate)
-        if measurement.radar_valid:
-            h = np.zeros((1, 15))
-            h[0, 2] = -1.0
-            (
-                mem["radar_nis"],
-                mem["radar_normalized_innovation"],
-                mem["radar_update_accepted"],
-            ) = self._update(
+    def linearization(self, r, v, C, f):
+        _, J = self.frame.acceleration_gradient(r, v)
+        W = skew(self.frame.omega)
+        F = np.zeros((15, 15))
+        F[:3, 3:6] = np.eye(3)
+        F[3:6, :3], F[3:6, 3:6] = J, -2 * W
+        F[3:6, 6:9], F[3:6, 12:15] = -skew(C @ f), -C
+        F[6:9, 6:9], F[6:9, 9:12] = -W, -C
+        return F
+
+    def _propagate(self, mem, meas):
+        dt = float(meas.t) - mem["t"]
+        if dt <= 0:
+            raise ValueError("navigation timestamps must increase")
+        w = (mem["previous_gyro"] + np.asarray(meas.gyro_body)) / 2 - mem["bg"]
+        f = (mem["previous_accel"] + np.asarray(meas.accel_body)) / 2 - mem["ba"]
+        omega = np.asarray(self.frame.omega)
+        qmid = qmul(dq_body(-omega * dt / 2), qmul(mem["q"], dq_body(w * dt / 2)))
+        C = rot(qmid)
+        force = C @ f
+
+        # RK4 of translation with midpoint specific force and full frame acceleration.
+        def rhs(x):
+            a, _ = self.frame.acceleration_gradient(x[:3], x[3:])
+            return np.r_[x[3:], force + a]
+
+        x = np.r_[mem["r"], mem["v"]]
+        k1 = rhs(x)
+        k2 = rhs(x + dt * k1 / 2)
+        k3 = rhs(x + dt * k2 / 2)
+        k4 = rhs(x + dt * k3)
+        F = self.linearization(mem["r"], mem["v"], C, f)
+        x += dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        mem["r"], mem["v"] = x[:3], x[3:]
+        mem["q"] = qnorm(qmul(dq_body(-omega * dt), qmul(mem["q"], dq_body(w * dt))))
+        Phi = np.eye(15) + F * dt + (F @ F) * (dt * dt / 2)
+        G = np.zeros((15, 12))
+        G[3:6, :3], G[6:9, 3:6] = C, C
+        G[9:12, 6:9], G[12:15, 9:12] = np.eye(3), np.eye(3)
+        B = (np.eye(15) + F * dt / 2) @ G
+        variance = np.array(
+            [self.sa**2 * dt**2] * 3
+            + [self.sg**2 * dt**2] * 3
+            + [self.sbg**2 * dt] * 3
+            + [self.sba**2 * dt] * 3
+        )
+        P = Phi @ mem["P"] @ Phi.T + (B * variance) @ B.T
+        mem["P"] = (P + P.T) / 2
+        mem["t"] = float(meas.t)
+        mem["previous_accel"] = np.array(meas.accel_body)
+        mem["previous_gyro"] = np.array(meas.gyro_body)
+
+    def estimate(self, meas, act, memory):
+        initializing = "P" not in memory
+        mem = (
+            self._initialize(meas)
+            if initializing
+            else {
+                key: value.copy() if isinstance(value, np.ndarray) else value
+                for key, value in memory.items()
+            }
+        )
+        mem["innovations"] = []
+        for channel, count in (("gnss", 6), ("radar", 1)):
+            mem[f"{channel}_nis"] = float("nan")
+            mem[f"{channel}_normalized_innovation"] = np.full(count, np.nan)
+            mem[f"{channel}_update_accepted"] = False
+        if not initializing:
+            self._propagate(mem, meas)
+        if meas.gnss_valid:
+            accepted = True
+            if not initializing:  # the initialization sample is used exactly once
+                H = np.zeros((6, 15))
+                H[:6, :6] = np.eye(6)
+                accepted = self._update(
+                    mem,
+                    np.r_[meas.r_ned, meas.v_ned],
+                    np.r_[mem["r"], mem["v"]],
+                    H,
+                    np.diag([self.sp**2] * 3 + [self.sv**2] * 3),
+                    "gnss",
+                    self.gnss_gate,
+                )
+            else:
+                mem["gnss_update_accepted"] = True
+            if accepted and mem["first_gnss_time"] is None:
+                mem["first_gnss_time"] = float(meas.t)
+        if meas.radar_valid:
+            height, gradient = self.frame.height_gradient(mem["r"])
+            H = np.zeros((1, 15))
+            H[0, :3] = gradient
+            self._update(
                 mem,
-                np.array([measurement.radar_alt_m]),
-                np.array([-mem["r"][2]]),
-                h,
+                np.array([meas.radar_alt_m]),
+                np.array([height]),
+                H,
                 np.array([[self.srad**2]]),
+                "radar",
                 self.radar_gate,
             )
-        return self._estimate_record(mem, measurement), mem
-
-    def _predict_covariance(self, memory: dict, measurement: SensorMeasurement) -> None:
-        dt = float(measurement.t) - float(memory["previous_t"])
-        c_bn = rot(memory["previous_q"])
-        specific_force = _vector(measurement.accel_body, "accel_body") - memory["ba"]
-        f_ned = c_bn @ specific_force
-        f = np.zeros((15, 15))
-        f[:3, 3:6] = np.eye(3)
-        f[3:6, 6:9] = -skew(f_ned)
-        f[3:6, 12:15] = -c_bn
-        f[6:9, 9:12] = -c_bn
-        transition = np.eye(15) + f * dt + 0.5 * (f @ f) * dt**2
-
-        q = np.zeros((15, 15))
-        accel_cov = np.eye(3) * self.sa**2
-        q[:3, :3] = accel_cov * (dt**4 / 4.0)
-        q[:3, 3:6] = accel_cov * (dt**3 / 2.0)
-        q[3:6, :3] = q[:3, 3:6].T
-        q[3:6, 3:6] = accel_cov * dt**2
-        q[6:9, 6:9] = np.eye(3) * self.sg**2 * dt**2
-        q[9:12, 9:12] = np.eye(3) * self.bg_rw**2 * dt
-        q[12:15, 12:15] = np.eye(3) * self.ba_rw**2 * dt
-
-        previous_p = memory["P"]
-        memory["P"] = transition @ previous_p @ transition.T + q
-        memory["P"] = 0.5 * (memory["P"] + memory["P"].T)
-        memory["previous_t"] = float(measurement.t)
-        memory["previous_q"] = memory["q"].copy()
-
-    @staticmethod
-    def _update(memory: dict, observed, predicted, h, covariance, gate_threshold):
-        p = memory["P"]
-        innovation_covariance = h @ p @ h.T + covariance
-        innovation = observed - predicted
-        normalized_innovation = innovation / np.sqrt(np.diag(innovation_covariance))
-        nis = float(innovation @ np.linalg.solve(innovation_covariance, innovation))
-        if nis > gate_threshold:
-            return nis, normalized_innovation, False
-        gain = np.linalg.solve(innovation_covariance, (p @ h.T).T).T
-        correction = gain @ innovation
-        memory["r"] += correction[:3]
-        memory["v"] += correction[3:6]
-        memory["q"] = qnorm(qmul(dq_body(correction[6:9]), memory["q"]))
-        memory["bg"] += correction[9:12]
-        memory["ba"] += correction[12:15]
-        residual = np.eye(15) - gain @ h
-        updated = residual @ p @ residual.T + gain @ covariance @ gain.T
-        memory["P"] = 0.5 * (updated + updated.T)
-        return nis, normalized_innovation, True
+        # Control uses Earth-relative body rate; the physical gyro observes inertial rate.
+        w = np.asarray(meas.gyro_body) - mem["bg"] - rot(mem["q"]).T @ self.frame.omega
+        return Measurement(
+            r_ned=mem["r"].copy(),
+            v_ned=mem["v"].copy(),
+            q_bn=mem["q"].copy(),
+            w_body=w,
+            m=meas.m,
+            t=float(meas.t),
+        ), mem
 
 
 class UnfilteredINS:
-    """IMU-only strapdown baseline using the same initialization and sensor samples."""
+    """Same initialized mechanization, with all aiding disabled after the first sample."""
 
-    def __init__(self, initial_state=None):
-        self.initial_position = (
-            _vector(initial_state.r_ned, "initial_state.r_ned")
-            if initial_state is not None
-            else None
-        )
-        self.initial_velocity = (
-            _vector(initial_state.v_ned, "initial_state.v_ned")
-            if initial_state is not None
-            else None
-        )
-        self.initial_attitude = (
-            qnorm(initial_state.q_bn)
-            if initial_state is not None
-            else np.array([1.0, 0.0, 0.0, 0.0])
-        )
-        self.initial_mass = float(initial_state.m) if initial_state is not None else None
-        self._mechanizer = SyntheticESKF(
-            initial_position=self.initial_position,
-            initial_velocity=self.initial_velocity,
-            initial_attitude=self.initial_attitude,
-            initial_mass=self.initial_mass,
-        )
+    def __init__(self, navigation):
+        self.navigation = copy.deepcopy(navigation)
 
     def initial_memory(self):
         return {}
 
-    def estimate(self, measurement: SensorMeasurement, act, memory):
-        if "t" not in memory:
-            memory = self._mechanizer._initial_filter_state(measurement)
-            memory.update(bg=np.zeros(3), ba=np.zeros(3))
-        else:
-            memory = self._mechanizer._propagate(memory, measurement)
-        return self._mechanizer._estimate_record(memory, measurement), memory
+    def estimate(self, measurement, act, memory):
+        if "P" in memory:
+            measurement = replace(measurement, gnss_valid=False, radar_valid=False)
+        return self.navigation.estimate(measurement, act, memory)
 
 
 def build(ctx):
-    """Factory named by configs/gnc/navigation/synthetic_eskf.yaml."""
     cfg = ctx.cfg
     kwargs = {
-        key: cfg[key]
-        for key in (
+        k: cfg[k]
+        for k in (
             "imu_rate_hz",
-            "imu_accel_sigma",
-            "imu_gyro_sigma_deg",
-            "accel_bias",
-            "gyro_bias_deg",
             "accel_scale_factor",
             "gyro_scale_factor",
             "accel_bias_random_walk",
             "gyro_bias_random_walk_deg",
-            "gnss_pos_sigma",
-            "gnss_vel_sigma",
-            "gnss_dropout",
-            "gnss_period",
             "gnss_outlier_times",
             "gnss_outlier_position_m",
             "gnss_outlier_velocity_mps",
             "gnss_gate_threshold",
+            "radar_gate_threshold",
+            "imu_accel_sigma",
+            "imu_gyro_sigma_deg",
+            "accel_bias",
+            "gyro_bias_deg",
+            "gnss_pos_sigma",
+            "gnss_vel_sigma",
+            "gnss_dropout",
+            "gnss_period",
             "radar_sigma",
             "radar_period",
             "radar_range",
-            "radar_gate_threshold",
             "gnss_outage_start",
             "gnss_outage_end",
             "seed_offset",
-            "initial_position_sigma_m",
-            "initial_velocity_sigma_mps",
-            "initial_attitude_sigma_deg",
-            "initial_gyro_bias_sigma_deg",
-            "initial_accel_bias_sigma_mps2",
+            "alignment_sigma_deg",
+            "alignment_error_deg",
+            "prior_position_sigma",
+            "prior_velocity_sigma",
+            "gyro_bias_rw_deg",
+            "accel_bias_rw",
         )
-        if key in cfg
+        if k in cfg
     }
-    nav_dt = getattr(ctx, "nav_dt", None)
-    if nav_dt is not None and not np.isclose(
-        float(nav_dt), 1.0 / float(kwargs["imu_rate_hz"]), rtol=0.0, atol=1e-8
+    period = getattr(ctx, "nav_dt", None)
+    if period is not None and not np.isclose(
+        period, 1 / float(kwargs.get("imu_rate_hz", 100)), rtol=0, atol=1e-10
     ):
-        raise ValueError(
-            "synthetic_eskf requires scenario.horizon.nav_dt to match "
-            "1 / gnc.navigation.imu_rate_hz"
-        )
-    return SyntheticESKF(initial_state=getattr(ctx, "initial_state", None), **kwargs)
+        raise ValueError("synthetic_eskf requires nav_dt to match 1 / imu_rate_hz")
+    reference = ctx.navigation_reference
+    if reference is None:
+        raise ValueError("synthetic_eskf requires declared navigation frame and initial prior")
+    kwargs.update(
+        frame=NavigationFrame(**reference["frame"]),
+        initial_position=np.asarray(reference["position"])
+        + np.asarray(cfg.get("prior_position_offset", [0, 0, 0])),
+        initial_velocity=np.asarray(reference["velocity"])
+        + np.asarray(cfg.get("prior_velocity_offset", [0, 0, 0])),
+    )
+    return SyntheticESKF(**kwargs)

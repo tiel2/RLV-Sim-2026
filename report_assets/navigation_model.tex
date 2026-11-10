@@ -1,0 +1,152 @@
+% Shared navigation model for report.tex and main.tex.
+\subsection{Navigation Architecture and Initialization}\label{sec:nav-architecture}
+The synthetic IMU/GNSS/altimeter generator receives the native plant state and load
+outputs. The 15-error-state ESKF receives only the resulting sensor samples, declared
+reference-frame constants, and an uncertain initial alignment. Guidance and control use
+its estimated state. Truth is retained separately for evaluation. The implementation is
+\path{src/gnc/navigation/synthetic_eskf.py}, selected by
+\path{gnc/navigation=synthetic_eskf}; \texttt{IdentityNav} supplies the ideal-feedback
+comparison. The nominal and error states are
+\begin{align}
+ x_n&=(\bm r,\bm v,q_{BN},\bm b_g,\bm b_a),\\
+ \delta\bm x&=[\delta\bm r^T,\delta\bm v^T,\delta\bm\theta^T,
+                  \delta\bm b_g^T,\delta\bm b_a^T]^T.
+\end{align}
+Position and velocity use the same fixed-origin Cartesian reference axes as the plant.
+Attitude error is expressed in reference axes, with a left multiplicative quaternion
+correction. Mass is an ideal auxiliary measurement and is not estimated by this filter.
+
+At startup, a synthetic preflight or handoff alignment observation is generated once:
+\begin{equation}
+ q_{align}=\operatorname{Exp}_q(\bm\epsilon_\theta)\otimes q_{true,0},
+ \qquad\bm\epsilon_\theta\sim\mathcal N(0,\sigma_{align}^2 I),\quad
+ \sigma_{align}=\ang{1}.
+\end{equation}
+This models an external coarse-alignment result with unknown error; it is not exact
+attitude feedback or an autonomous cold-start alignment algorithm. No subsequent truth
+quaternion is supplied to the estimator. Initial biases are zero, with standard
+deviations of 0.05 deg/s and 0.1 m/s$^2$ for gyro and accelerometer bias.
+
+When GNSS is available, its first position and velocity samples initialize the corresponding
+state and covariance with the sensor variances; the same sample is not fused a second
+time. Otherwise, an explicit launch-site or handoff position/velocity prior is used,
+with 25 m and 2 m/s standard deviations per axis. This prior comes from the configured
+nominal initial condition, independently of realized truth or dispersions. The outage
+experiments deliberately perturb it. GNSS is fused normally when it becomes available.
+Initialization without either GNSS or a declared prior is rejected before feedback begins.
+
+\subsection{Physical Sensor Measurements}\label{sec:nav-sensors}
+The IMU is modeled at the instantaneous vehicle CG. Native non-gravitational force and
+inertial angular velocity generate its physical channels:
+\begin{align}
+ \widetilde{\bm f}_k&=\frac{\bm F_{non-grav,B,k}+\bm F_{pad,B,k}}{m_k}
+                         +\bm b_a+\bm n_{a,k},\\
+ \widetilde{\bm\omega}_{i,k}&=\bm\omega_{body,k}
+                       +C(q_k)^T\bm\Omega+\bm b_g+\bm n_{g,k}.
+\end{align}
+Here $C(q)$ rotates body components into reference axes. Specific force includes pad
+support and excludes gravitation: an ideal accelerometer reads zero in vacuum free fall
+and a nonzero support acceleration on the pad. The gyro measures inertial body rate,
+including Earth rotation even when the vehicle is stationary relative to Earth. These
+channels are sampled directly from native force/rate diagnostics, without differentiating
+truth velocity or using the filter's gravity model to generate the accelerometer signal.
+
+GNSS measures reference-frame position and velocity; the altimeter measures radial height
+above the modeled sphere:
+\begin{align}
+ \bm z_p&=\bm r+\bm n_p,&\bm z_v&=\bm v+\bm n_v,\\
+ z_h&=\|\bm r+[0,0,-R_E]^T\|-R_E+n_h.
+\end{align}
+The altimeter is available from 0 to 1500 m height. In fixed-Earth experiments it instead
+uses the plant's flat height $-r_D$. It is an ideal radial-height sensor, rather than a
+model of a tilted radar beam and terrain intersection.
+
+\begin{table}[!htbp]\centering\small
+\caption{Assumed sensor parameters. White-noise levels are per-sample standard deviations,
+per axis where applicable.}\label{tab:nav-sensors}
+\begin{tabularx}{\textwidth}{lYY}\toprule
+Channel & Rate / noise & Bias or availability\\\midrule
+Accelerometer & 100 Hz; 0.08 m/s$^2$ & $(0.025,-0.020,0.035)$ m/s$^2$\\
+Gyroscope & 100 Hz; 0.025 deg/s & $(0.005,-0.006,0.004)$ deg/s\\
+GNSS position / velocity & 10 Hz; 2.5 m / 0.15 m/s & 3\% random loss per scheduled sample\\
+Radial altimeter & 20 Hz; 0.5 m & 0--1500 m height\\
+Initial alignment & Once; 1 deg & Independent reference-axis rotation error\\\bottomrule
+\end{tabularx}
+\end{table}
+Noise streams are deterministic functions of episode seed, epoch, and channel. The
+injected IMU biases are constant; the filter permits bias adaptation through process
+noise. Sensor noise, bias, and alignment values are engineering assumptions, not
+identified Falcon~9 hardware specifications. Optional scale factors, bias random walks,
+GNSS gross-error injection, and innovation gates are available for separate mismatch
+experiments; they are disabled in the nominal campaign. GNSS interruption is selected
+only in the explicitly labeled outage trials. Sensor latency, misalignment, saturation,
+lever arms, vibration, and quantization are outside this model. Standalone
+post-processed sensor CSVs are not the samples fused by this online ESKF.
+
+\subsection{Rotating-Frame INS and ESKF}\label{sec:nav-filter}
+For $\bm R=\bm r+[0,0,-R_E]^T$, bias-corrected measurements
+$\bm f=\widetilde{\bm f}-\widehat{\bm b}_a$ and
+$\bm\omega_i=\widetilde{\bm\omega}_i-\widehat{\bm b}_g$, the mechanization is
+\begin{align}
+ \dot{\widehat{\bm r}}&=\widehat{\bm v},\\
+ \dot{\widehat{\bm v}}&=C(\widehat q)\bm f
+   -\frac{\mu\widehat{\bm R}}{\|\widehat{\bm R}\|^3}
+   -2\bm\Omega\times\widehat{\bm v}
+   -\bm\Omega\times(\bm\Omega\times\widehat{\bm R}),\\
+ \widehat q_k^-&=\operatorname{Exp}_q(-\bm\Omega\Delta t)\otimes
+   \widehat q_{k-1}^+\otimes\operatorname{Exp}_q(\overline{\bm\omega}_i\Delta t).
+\end{align}
+Neighboring IMU samples are averaged, and the midpoint attitude rotates the specific
+force. Translation uses RK4 over each navigation interval with that held midpoint force.
+The frame acceleration is evaluated at the RK stages. This is a sampled mechanization;
+subsample coning, sculling, and actuator discontinuities are not resolved by averaging.
+The fixed-Earth mode uses its configured vertical gravity law and zero Earth rotation.
+The rate returned to control is
+$\widehat{\bm\omega}_{body}=\widetilde{\bm\omega}_i-\widehat{\bm b}_g
+-C(\widehat q)^T\bm\Omega$.
+
+Let $W=[\bm\Omega]_\times$, $A=C\bm f$, and
+$J_g=\mu(3\bm R\bm R^T/\|\bm R\|^5-I/\|\bm R\|^3)$. The reference-frame
+error linearization, using the global angular-error convention~\cite{sola}, is
+\begin{equation}
+ F=\begin{bmatrix}
+ 0&I&0&0&0\\
+ J_g-W^2&-2W&-[A]_\times&0&-C\\
+ 0&0&-W&-C&0\\
+ 0&0&0&0&0\\
+ 0&0&0&0&0
+ \end{bmatrix},\qquad
+ \Phi=I+F\Delta t+\tfrac12F^2\Delta t^2.
+\end{equation}
+The fixed-mode gravity Jacobian replaces $J_g$ where applicable. Covariance propagation is
+$P^- =\Phi P^+\Phi^T+BDB^T$, where $B=(I+\tfrac12F\Delta t)G$ and $G$ maps
+accelerometer noise into velocity through $C$, gyro noise into attitude through $C$, and
+bias noise into the two bias blocks. The noise variances in $D$ are
+$\sigma_a^2\Delta t^2$, $\sigma_g^2\Delta t^2$, $s_{bg}^2\Delta t$, and
+$s_{ba}^2\Delta t$, each repeated three times. The assumed bias-process amplitudes are
+$s_{bg}=0.0005$ deg/s$/\sqrt{\mathrm{s}}$ and
+$s_{ba}=0.0005$ m/s$^2/\sqrt{\mathrm{s}}$. This discrete noise approximation does not
+explicitly augment the correlated noise introduced by neighboring-sample averaging;
+its covariance behavior is evaluated empirically in the consistency study.
+
+For innovation $\bm y=\bm z-h(\widehat x^-)$,
+\begin{align}
+ S&=HP^-H^T+R,&K&=P^-H^TS^{-1},&\delta\widehat{\bm x}&=K\bm y,\\
+ P_J&=(I-KH)P^-(I-KH)^T+KRK^T.
+\end{align}
+GNSS selects position and velocity. The radial-height Jacobian is
+$H_{h,r}=\widehat{\bm R}^T/\|\widehat{\bm R}\|$.
+Optional innovation gates reject an update when $\bm y^TS^{-1}\bm y$ exceeds a
+configured threshold; the nominal results use ungated valid measurements.
+Position, velocity, and bias corrections are additive; attitude is corrected on the left,
+$\widehat q^+=\operatorname{Exp}_q(\delta\widehat{\bm\theta})\otimes\widehat q^-$.
+After injection, covariance is reset as $P^+=G_rP_JG_r^T$, where the attitude block of
+$G_r$ is the SO(3) left Jacobian
+\begin{equation}
+ J_l(\bm\phi)=I+\frac{1-\cos\theta}{\theta^2}[\bm\phi]_\times
+ +\frac{\theta-\sin\theta}{\theta^3}[\bm\phi]_\times^2,
+ \qquad\theta=\|\bm\phi\|,
+\end{equation}
+with its small-angle limit near zero. Covariance is symmetrized after propagation and
+correction. Innovation statistics and the full-state estimation error are evaluated
+separately from quaternion normalization and covariance positivity.

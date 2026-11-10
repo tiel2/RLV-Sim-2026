@@ -20,9 +20,6 @@
 \renewcommand{\arraystretch}{1.18}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\navtodo}[1]{\par\medskip\noindent
-  \colorbox{yellow!25}{\textbf{TODO --- Navigation research in progress.}}\par
-  \noindent #1\par\medskip}
 \newcommand{\reportfigure}[3]{%
   \begin{figure}[!htbp]\centering
   \includegraphics[width=\textwidth,height=0.73\textheight,keepaspectratio]{report_assets/#1.pdf}
@@ -66,7 +63,7 @@ for Reusable Launch Vehicles\par}
 \hypersetup{pageanchor=true}
 \section*{Abstract}
 \addcontentsline{toc}{section}{Abstract}
-A modular six-degree-of-freedom simulation environment is developed for representative ascent and recovery phases of a Falcon~9 approximation. The model couples rigid-body motion, propellant-dependent mass properties, propulsion, aerodynamic loads, actuator response, and a rotating spherical Earth. Four prescribed-input experiments isolate ascent, entry burn, aerodynamic descent, and terminal powered descent; a fifth experiment evaluates closed-loop landing. Archived independent-reference comparisons give maximum position and velocity discrepancies of \SI{3.08e-6}{\metre} and \SI{4.23e-7}{\metre\per\second}. The landing case reaches contact at \SI{17.468}{\second} with approximately \SI{0.086}{\metre\per\second} speed and \SI{0.019}{\metre} position error under ideal actuation and truth-based state feedback. Comparison with CRS-11 webcast observations reveals substantial ascent mismatch, including an altitude RMSE of \SI{10.72}{\kilo\metre}; agreement with the implemented equations therefore does not establish flight fidelity. Sensor models and state estimation remain under development, with their design and performance sections retained as TODOs.
+A modular six-degree-of-freedom simulation environment is developed for representative ascent and recovery phases of a Falcon~9 approximation. The model couples rigid-body motion, propellant-dependent mass properties, propulsion, aerodynamic loads, actuator response, and a rotating spherical Earth. Four prescribed-input experiments isolate ascent, entry burn, aerodynamic descent, and terminal powered descent; a fifth experiment evaluates closed-loop landing. Archived independent-reference comparisons give maximum position and velocity discrepancies of \SI{3.08e-6}{\metre} and \SI{4.23e-7}{\metre\per\second}. The landing case reaches contact at \SI{17.468}{\second} with approximately \SI{0.086}{\metre\per\second} speed and \SI{0.019}{\metre} position error under ideal actuation and truth-based state feedback. Comparison with CRS-11 webcast observations reveals substantial ascent mismatch, including an altitude RMSE of \SI{10.72}{\kilo\metre}; agreement with the implemented equations therefore does not establish flight fidelity. A separate synthetic IMU/GNSS/radar and 15-error-state ESKF study adds paired landing tests and fixed-truth replay. The navigation study includes uncertain initial alignment, missing-GNSS startup, multiple noise seeds, a 150-second ascent replay, and covariance-consistency diagnostics. Ten-seed soft-landing counts are 5/10 for the original landing configuration and 10/10 for the calibrated configuration; covariance diagnostics remain inconclusive. Sensor assumptions and the limits of these finite experiments are stated explicitly.
 \clearpage
 \compactcontents
 \clearpage
@@ -79,7 +76,33 @@ Project~2 requires a physics-based vehicle simulator and a navigation system for
 \subsection{Development Scope and Contributions}
 The work presented here comprises the RLV-Sim vehicle model, its modular simulation interfaces, and five independently initialized flight experiments. The ascent model includes an attached upper assembly; recovery cases represent the booster alone. A prescribed-input mode separates the response of the physical model from feedback design. A closed-loop mode connects the same plant interface to a powered-descent planner, attitude controller, and actuator allocator.
 
-The report evaluates the uncalibrated \code{project2\_*} scenario set. It documents the equations, experimental conditions, implementation checks, and agreement with CRS-11 altitude and speed observations. These independent cases do not constitute a continuous reconstructed mission. The numerical results use the archived verification campaign identified by the 3~November~2026 run IDs in Appendix~\ref{app:reproduction}; its stored trajectories have been reprocessed for the figures and flight-comparison statistics in this report. Later calibration experiments are separate from this baseline.
+The report evaluates the uncalibrated \code{project2\_*} scenario set. It documents the equations, experimental conditions, implementation checks, and agreement with CRS-11 altitude and speed observations. These independent cases do not constitute a continuous reconstructed mission. The numerical results use the archived verification campaign identified by the 3~November~2026 run IDs in Appendix~\ref{app:reproduction}; its stored trajectories have been reprocessed for the figures and flight-comparison statistics in this report. The navigation extension uses new 10~November executions of the original landing configuration and a separately identified calibrated landing configuration. The archived physics and public-flight comparison figures remain the uncalibrated baseline.
+
+\subsection{Requirements and Evaluation Evidence}
+The selected experiments address the Project~2 deliverables through the evidence below.
+The prescribed phases and sensor-based navigation experiments have different acceptance
+criteria; public-flight agreement is assessed separately from implementation correctness.
+\begin{table}[!htbp]\centering\small
+\caption{Project~2 requirements and evidence in this report.}\label{tab:requirements}
+\begin{tabularx}{\textwidth}{lY}\toprule
+Requirement & Evidence\\\midrule
+Vehicle dynamics and reference frames & Coupled 6-DOF equations, variable mass properties,
+rotating-Earth mechanics (Section~\ref{sec:models})\\
+Environment and subsystems & Gravity, atmosphere, propulsion, aerodynamics, fins and
+actuators (Section~\ref{sec:models})\\
+Simulation architecture and code & Component interfaces, update timing and reproducible
+commands (Section~\ref{sec:architecture}, Appendix~\ref{app:reproduction})\\
+Sensor and navigation design & Native-force IMU, GNSS/radial height, initialization and
+ESKF equations (Section~\ref{sec:navigation})\\
+Representative phases and validation & Five independent cases, numerical verification
+and CRS-11 observable comparison (Sections~\ref{sec:verification}--\ref{sec:results})\\
+Navigation error analysis & Common-sample INS/ESKF comparison, multiple seeds,
+initialization/outage studies and NEES/NIS (Section~\ref{sec:navigation-performance})\\
+Engineering judgment and GNC risks & Parameter assumptions, model limits and consequences
+for feedback design (Sections~\ref{sec:parameters}, \ref{sec:discussion})\\\bottomrule
+\end{tabularx}
+\end{table}
+\FloatBarrier
 
 \section{Simulation Architecture}\label{sec:architecture}
 \subsection{System Components and Data Flow}
@@ -95,7 +118,7 @@ Simulation & Scheduling, logging, termination, evaluation & Time histories, cont
 \end{tabularx}
 \end{table}
 
-For closed-loop operation, plant truth enters the navigation interface, which supplies an estimated state to guidance and control. Guidance requests a thrust vector; the attitude controller computes a body torque; the allocator converts these requests into throttle, gimbal, fin, and optional RCS commands. The plant holds each actuator command until the next scheduled update. In the current landing experiment, the navigation interface passes truth directly to the feedback laws. The four prescribed-input cases instead apply a time-indexed command schedule without constructing GNC modules.
+For closed-loop operation, plant truth enters the navigation interface, which supplies an estimated state to guidance and control. Guidance requests a thrust vector; the attitude controller computes a body torque; the allocator converts these requests into throttle, gimbal, fin, and optional RCS commands. The plant holds each actuator command until the next scheduled update. In the baseline landing experiment, the navigation interface passes truth directly to the feedback laws. The navigation extension replaces this with a synthetic sensor generator and ESKF while retaining the plant and GNC settings within each paired test. The four prescribed-input cases instead apply a time-indexed command schedule without constructing GNC modules.
 
 \subsection{Simulation Modes and Execution Timing}
 The plant uses fixed-step fourth-order Runge--Kutta integration with quaternion normalization after each step. Navigation, guidance, control, and logging periods are integer multiples of the plant step. Timestamped outputs distinguish sampled states from interpolated surface-contact quantities. Separate native sessions and deterministic seeds allow repeatable episodes; each run stores its resolved configuration alongside the numerical histories. The periods used in this study are listed in Section~\ref{sec:settings}.
@@ -237,13 +260,7 @@ Initial RCS gas [kg] & 200 & 200 & 200\\\bottomrule
 The evidence categories are distinguished as follows. \emph{Published information} includes the course requirements and the public provenance of the CRS-11 data. \emph{Estimated quantities} include webcast-derived altitude/speed scales and any velocity components inferred during scenario preparation. \emph{Assumptions} include the remaining initial states, vehicle geometry and mass properties, propulsion values, aerodynamic coefficients, and prescribed commands. The versioned source and resolved configuration identify what was implemented; they are not independent evidence that a vehicle parameter is physically correct. The raw flight observations and their derived channels are distinguished in Section~\ref{sec:flightdata}.
 
 \section{Navigation System}\label{sec:navigation}
-\navtodo{Physical sensor models and state estimation are under development. The present simulations use truth feedback or prescribed inputs. The subsections below reserve the design content for the completed navigation study.}
-\subsection{Navigation Architecture and Estimated States}
-\textbf{TODO:} Define the estimated state, sensor-to-estimator interfaces, coordinate conventions, initialization, and update schedule. The existing interface already records timestamped truth, measurements, estimates, and errors separately.
-\subsection{Sensor Measurement Models}
-\textbf{TODO:} Document the selected sensors, measurement equations, noise and bias parameters, sampling rates, and availability assumptions. State-level perturbations in the current identity module are not physical sensor models.
-\subsection{State-Estimation Algorithm}
-\textbf{TODO:} Present the selected estimator's propagation and measurement-update equations, tuning, and initialization. The current EKF selection is a stub and does not provide estimation results.
+\input{report_assets/navigation_model.tex}
 
 \section{Simulation Cases and Experimental Setup}\label{sec:experiments}
 \subsection{Case Selection and Evaluation Objectives}
@@ -304,10 +321,10 @@ The archived phase records show zero mass-bookkeeping error, nonnegative propell
 
 The separate rotating-Earth verification includes full-orbit and asymmetric torque-free problems. At a \SI{0.5}{\second} step, the recorded maximum orbital position error against a Kepler solution is \SI{1.08e-6}{\metre}; conservation checks cover inertial energy and angular momentum. These tests evaluate the central-gravity and frame implementation under smooth test conditions.
 
-\subsection{Verification Results and Unresolved Issues}
+\subsection{Verification Results}
 All five selected archived verification records are marked passed. The landing record checks contact, the configured success criteria, and physical bookkeeping; it does not use the prescribed-input DOP853 comparison. Thus the landing success and the independent-equation errors in Table~\ref{tab:verification} are different forms of evidence.
 
-Verification is tied to the campaign and resolved configurations, rather than to every later source revision. A separate 9~November execution note, retained in \path{main.tex}, reports an entry-burn reference mass-refinement difference of \SI{1.04194e-4}{\kilogram} against a \SI{1e-4}{\kilogram} threshold, and a QOCO test failure involving \code{solver\_status}. These observations are not resolved by selecting the earlier passing campaign. Their source/environment differences require investigation before qualifying a newer executable. No new full test-suite result is asserted here. Appendix~\ref{app:reproduction} identifies the exact data used for the tables and figures.
+The five representative phase checks were also reproduced with the submitted implementation. All passed their configured criteria. In entry burn, the reference mass-refinement difference was \SI{3.04e-5}{\kilogram}, below the \SI{1e-4}{\kilogram} stability limit. The numerical tolerances assess agreement with the declared equations, independently of the flight-data residuals.
 
 \section{Simulation Results and Flight-Data Comparison}\label{sec:results}
 Table~\ref{tab:results} summarizes the five cases. The prescribed cases report their final native sample; landing reports quantities interpolated to radial surface contact. Figures in this section are regenerated from the archived state and diagnostic histories.
@@ -391,8 +408,8 @@ Entry burn has the smallest altitude RMSE, but its initial scale and burn window
 The comparison tests agreement in two observables. It neither identifies a unique six-degree-of-freedom trajectory nor measures navigation error. No model parameters were fitted in this baseline comparison. Residual histories are included in Appendix~\ref{app:supplement}.
 \reportfigure{flight_comparison}{Simulated and webcast-derived altitude and speed on a common mission-time axis. Each row is an independently initialized experiment. Point markers preserve visible gaps in the observational record.}{fig:flight}
 
-\subsection{Navigation Performance}
-\navtodo{Evaluate the completed estimator against simulation truth using position, velocity, attitude, and relevant bias errors. Report the measurement assumptions, transient behavior, and uncertainty consistency where applicable. No navigation-performance result is available for the present truth-feedback baseline.}
+\section{Navigation Performance}\label{sec:navigation-performance}
+\input{report_assets/navigation_results.tex}
 
 \section{Discussion and Limitations}\label{sec:discussion}
 \subsection{Interpretation and Applicability of the Results}
@@ -407,7 +424,7 @@ The most consequential errors depend on flight phase. During low-altitude brakin
 \caption{Priority uncertainties for subsequent GNC design.}\label{tab:risks}
 \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.19\textwidth}YY}\toprule
 Uncertainty & Consequence & Next evaluation\\\midrule
-Navigation bias, delay, dropout & Incorrect burn timing, attitude commands, or perceived touchdown state & Sensor-based closed-loop trials with estimation error and consistency statistics\\
+Navigation bias, delay, dropout & Incorrect burn timing, attitude commands, or perceived touchdown state & Wider alignment/bias/latency dispersions and covariance calibration\\
 Thrust and actuator response & Late braking, saturation, excessive fuel use & Thrust-bias and response-delay sweeps with realistic actuation\\
 Aerodynamic loads and wind & Entry load error and displaced landing initial state & Coefficient/wind dispersions across the tested Mach and pressure range\\
 Mass, CG, inertia & Incorrect acceleration and control-moment prediction & Coupled mass-property perturbations and allocation checks\\
@@ -415,15 +432,15 @@ Frame or altitude mismatch & Persistent sensor, guidance, or contact error & Exp
 \end{tabularx}
 \end{table}
 
-Among the omissions, navigation uncertainty and realistic thrust response are particularly important for the nominal landing result because they are absent from the successful case. For atmospheric descent, the large modeled pressure peak makes aerodynamic and structural assumptions a separate priority. These priorities follow the mechanisms exercised here; their relative quantitative severity has not yet been ranked by a common sensitivity study.
+Navigation uncertainty and realistic thrust response are absent from the original nominal landing baseline. The extension evaluates ESKF feedback in both ideal- and realistic-actuator landing scenarios, with changed contact performance despite successful seed-0 landings. Across ten seeds, the original configuration succeeds in five cases and the calibrated configuration in ten; the startup-outage variant of the original configuration succeeds in four. Broader sensor and actuator uncertainty remains important for qualification. For atmospheric descent, the large modeled pressure peak makes aerodynamic and structural assumptions a separate priority. These priorities follow the mechanisms exercised here; their relative quantitative severity has not yet been ranked by a common sensitivity study.
 
 \subsection{Remaining Work}
-The next study completes the sensor and estimator design and evaluates its closed-loop consequences. The physical-model program should then address the flight-data mismatch with constrained input/parameter studies, repeat landing with realistic actuation, and propagate dispersions across connected phases. Aerodynamic data quality, upper-atmosphere continuation, Earth oblateness, and landing-impact dynamics define additional fidelity limits. Reproducing the selected verification checks with a pinned current software environment is required before transferring their status to later code revisions.
+The navigation study includes native-force IMU measurements, rotating-frame propagation, uncertain alignment, and missing-GNSS initialization. Remaining work includes hardware-based sensor parameters, autonomous alignment without an external attitude prior, bias observability, and covariance calibration under wider flight conditions. The physical-model program should extend the separately identified calibration work and realistic-actuator case with independent data and parameter dispersions, while retaining the original comparison as a baseline. Aerodynamic data quality, upper-atmosphere continuation, Earth oblateness, and landing-impact dynamics define additional fidelity limits.
 
 \section{Conclusions}
 The simulator couples translational and rotational motion, variable mass properties, propulsion, aerodynamics, and rotating-Earth effects in a common execution framework. Four prescribed-input experiments and one closed-loop landing case demonstrate distinct ascent and recovery mechanisms. The selected archived reference comparisons agree within the stated numerical tolerances, and the nominal landing reaches contact with approximately \SI{0.086}{\metre\per\second} speed under ideal actuation.
 
-Public-flight comparison exposes limitations that numerical verification cannot resolve. The ascent altitude RMSE of \SI{10.72}{\kilo\metre} and the recovery residuals require investigation of physical parameters and input histories before using the baseline for quantitative flight prediction. Sensor-based navigation remains in progress. The current results establish a reproducible model-development baseline; extending it to GNC design requires the uncertainty and feedback evaluations identified in Section~\ref{sec:discussion}.
+Public-flight comparison exposes limitations that numerical verification cannot resolve. The ascent altitude RMSE of \SI{10.72}{\kilo\metre} and the recovery residuals require investigation of physical parameters and input histories before using the baseline for quantitative flight prediction. The synthetic sensor-and-ESKF extension demonstrates sensor-based closed-loop operation and quantifies state-estimation errors; its multi-seed landing and ascent experiments quantify initialization and outage sensitivity, with the remaining sensor and statistical limitations stated explicitly. The current results establish a reproducible model-development baseline; extending it to GNC design requires the uncertainty and feedback evaluations identified in Section~\ref{sec:discussion}.
 
 \clearpage
 \begin{thebibliography}{9}
@@ -431,13 +448,14 @@ Public-flight comparison exposes limitations that numerical verification cannot 
 \addcontentsline{toc}{section}{References}
 \bibitem{ussa} NOAA, NASA, and USAF, \emph{U.S. Standard Atmosphere, 1976}, NOAA-S/T-76-1562, NASA-TM-X-74335, October 1976. \url{https://ntrs.nasa.gov/citations/19770009539}.
 \bibitem{telemetry} shahar603, \emph{Telemetry-Data: SpaceX CRS-11, stage-1 raw data}, commit \code{b245d3b81aa36b7941ec10f3f4b508999d106a6d}, local snapshot retrieved 2 November 2026. \url{https://github.com/shahar603/Telemetry-Data/tree/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON}.
+\bibitem{sola} J. Sol\`a, \emph{Quaternion kinematics for the error-state Kalman filter}, 2017. \url{https://arxiv.org/abs/1711.02508}.
 \end{thebibliography}
 
 \appendix
 \clearpage
 \section{Reproduction Guide}\label{app:reproduction}
 \subsection{Evidence Selection and File Integrity}
-All main result figures use \path{results/verification/project2_segments/physics/<case>/physics.npz}. The accompanying \path{resolved_config.yaml}, \path{verification.json}, and, for prescribed cases, \path{convergence.json} define the campaign and checks. Table~\ref{tab:runs} identifies the selected runs; the date is taken from the recorded run IDs. Contact metrics also use \path{results/project2_physics/landing/kpi.json}, whose speed, position-error, and tilt fields were cross-checked against the landing verification record.
+The original physics and flight-comparison figures use \path{results/verification/project2_segments/physics/<case>/physics.npz}. The navigation figures use the separate new campaign described in Section~\ref{sec:nav-reproduction}. The accompanying \path{resolved_config.yaml}, \path{verification.json}, and, for prescribed cases, \path{convergence.json} define the campaign and checks. Table~\ref{tab:runs} identifies the selected runs; the date is taken from the recorded run IDs. Contact metrics also use \path{results/project2_physics/landing/kpi.json}, whose speed, position-error, and tilt fields were cross-checked against the landing verification record.
 \begin{table}[!htbp]
 \centering\small\caption{Archived run identifiers used in this report.}\label{tab:runs}
 \begin{tabular}{ll}\toprule Case & Run ID\\\midrule
@@ -478,6 +496,8 @@ To regenerate the report's figures and comparison metrics from the selected arch
 latexmk -pdf report.tex
 \end{lstlisting}
 Alternatively, \code{tectonic report.tex} produces the PDF with automatic bibliography and cross-reference passes. The archived result folders must be retained to regenerate the figures; the already generated figure PDFs suffice to compile this document.
+
+\input{report_assets/navigation_reproduction.tex}
 
 \section{Detailed Scenario Parameters}\label{app:parameters}
 \begin{table}[!htbp]

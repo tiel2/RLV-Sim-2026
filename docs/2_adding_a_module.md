@@ -23,10 +23,14 @@ python scripts/run_single.py gnc/navigation=synthetic_eskf scenario=project2_lan
 python scripts/run_single.py gnc/control=template
 ```
 
-When `run_single.py` selects `synthetic_eskf`, it sets `scenario.horizon.nav_dt` to the configured
-IMU period (`1 / imu_rate_hz`), then automatically writes the same-truth INS/ESKF comparison to
-that run's result directory: `navigation_comparison.json`, `navigation_comparison.npz`, and four
-PNG plots. The standalone fixed-truth navigation analysis sets its sample grid automatically too.
+The navigation period is explicit: `scenario.horizon.nav_dt` must equal
+`1 / gnc.navigation.imu_rate_hz` (100 Hz / 10 ms in the report). Runners validate
+this setting and never silently change it. Online synthetic sensors receive native
+CG specific force and inertial rate through `measure_native(state, seed, diagnostics)`.
+The estimator consumes the resulting samples, not the native diagnostics.
+Standalone comparison uses the recorded native channels on the same navigation grid.
+Initial position/velocity use GNSS or a declared handoff prior; the alignment observation
+has modeled uncertainty. Both compared estimators share that initialization.
 
 ## Construction
 

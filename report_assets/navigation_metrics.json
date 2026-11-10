@@ -1,0 +1,1859 @@
+{
+  "basis": "Native-force IMU / rotating ESKF; paired seed-0 runs, 30 seed trials, and 15 ascent replays",
+  "source_revision": "0998cab510a1cacded94a45edd5246e64fefa6df",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "versions": {
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "hydra-core": "1.3.7",
+    "matplotlib": "3.11.2",
+    "cvxpy": "1.9.3",
+    "clarabel": "0.11.1"
+  },
+  "source_sha256": {
+    "configs/analysis/flight_calibration.yaml": "ae97522521d0874030150c7829a74cbd1bd9b4c0622cd9235efc785cfecda93c",
+    "configs/analysis/flight_reconstruction.yaml": "e39f43b480a3573c63269386a97d41db1711004da41425bfe3146bfc43dcad30",
+    "configs/analysis/flight_sensitivity.yaml": "dbb50576090bc94a7d9d150c571a8b90b96f8bffcc0c4c41895eadfbe3f30c8b",
+    "configs/analysis/project2_segments.yaml": "1c7350ff070529b507626dfc3a41fef32cbf6f0ff235736fa58ae06f1f4f8d3a",
+    "configs/analysis/public_flight_comparison.yaml": "acc8ec01c6461afe6e3be14345de5b9cbe17e1c1eebd69989954e223ed91c69b",
+    "configs/baseline/pdg.yaml": "fc12fd20fda6bc1a8936950fa599e81d653189fb68d7a90172f7a91a78924435",
+    "configs/config.yaml": "2e2049c4ba0d2c0260e871e7273bebea6e09ac86f03a4ad630344f5b576cc495",
+    "configs/environment/atmosphere/exp.yaml": "f1587fe6a4593a8def1cdb57d569dc4863039db75353119ffd57868d7fca9f8b",
+    "configs/environment/atmosphere/nonstd_day.yaml": "d5289564fd67f87d9ae2765106af5443ccc175919998ad97af8fa4ae2cd2e2f0",
+    "configs/environment/atmosphere/ussa_poly.yaml": "0bd6df4dc61889f8933f6d1600f3d919922fc86f130420ed879d655527994cd1",
+    "configs/environment/atmosphere/vacuum.yaml": "89c4209c6075e08e1704d31021b666694b190bca8f5227eafd93d5d4f7370198",
+    "configs/environment/earth/fixed.yaml": "1988b9e6001b33f88f935715b45d84a70f44714d833f77bd42c54517401f5483",
+    "configs/environment/earth/rotating.yaml": "54dfa158a551bcabeaabd218b656b33bae884b6f9dd0e21468e4270290edaf31",
+    "configs/environment/gravity/inverse_square.yaml": "1041bd22245639ff12a00ad199265094803c5b2c3ec93cf222f5e2d848996400",
+    "configs/environment/gravity/uniform.yaml": "ea8d1bb0971b965ef3408bfbe465c81a0e27bf2c555fe1a7c4bab86e41ac97dd",
+    "configs/environment/wind/dryden.yaml": "a4034037325cf9a4cbc5663b32b1ab0c69dcee54991ed09d193cf9d95f880588",
+    "configs/environment/wind/none.yaml": "0df14b9cc71e21ff070702448d54a2b5f11489549a8e41b73cec000307e472e2",
+    "configs/environment/wind/steady.yaml": "41148263e9a3a9ad016e984319483b91b3378f09055cb79224ead46899c2be10",
+    "configs/environment/wind/von_karman.yaml": "92d3f1e54d6d71eca319eef499c7d248e04938a56694b610809a5262a06fea6b",
+    "configs/fault/engine_out.yaml": "2ad79ab130c06b240569430e8683b116aef355a80091d12b3c73d09c73f4f096",
+    "configs/fault/engine_underperform.yaml": "06e375f0ca86b3ce23c3e26a7239752a9837976944920f13b3dc7a1670bb3a7d",
+    "configs/fault/fin_lock.yaml": "d676a206c81193006aa68fbb76e71128b0cf5dc9eebc14a3a601ca5d1fe93547",
+    "configs/fault/none.yaml": "1164b5bcb3e627c67257e6ba437a52362339416c94a68d0d6eedec9403ee802d",
+    "configs/fault/tvc_bias.yaml": "eb1513d936ae2f336e7d5644ec1018d1490e551c7910f668daec5300642119b3",
+    "configs/fidelity/ideal.yaml": "5797323afc9c31ce4d3aca65c5ac7802c6a1e92fb5c51939761f40277e3869e3",
+    "configs/fidelity/real.yaml": "5f12dfce75756850dbedbd5e81e809c6b01ba2057b4de2df05870f1343e1013e",
+    "configs/fidelity/simplified.yaml": "0597fea8bbadf3b73bfdff3bc9d02c4b46240b0ba937ec488ff4139aab1f3fc3",
+    "configs/gnc/allocation/default.yaml": "817f119c356b3dfb4280a3bb550f9a7c37433a3f612a30b3b560ddafed53a859",
+    "configs/gnc/control/pd.yaml": "05738c9a96c3820f0d90b48d7c2ea2d69eb079355e6fc7945a19bf9625cf82bb",
+    "configs/gnc/control/template.yaml": "1b2b922b1c4b4e25e7e13267b63a6f8199db2ea08b2083861fed6df632192137",
+    "configs/gnc/guidance/lcvx.yaml": "73d919981c23fe259d768e23ec72eacb50ab55177aaf590738773184b177618c",
+    "configs/gnc/guidance/scvx.yaml": "237cebdc01cc0d8c92d8a9520641c58b322d487c68fecf828d7333d0ceaf7ed1",
+    "configs/gnc/guidance/template.yaml": "dddd1bb0e6a724ccb428d873b52f10d3a4250296200b26db8f7ef889c89ea361",
+    "configs/gnc/navigation/ekf.yaml": "d25f4baba1a217ef3c9ceda68602a59608fd5fd314630f987f417adc2f965a72",
+    "configs/gnc/navigation/identity.yaml": "80add25f6175adeef7110441ff21dc4018406ffc78d603208b8a183869b0a96b",
+    "configs/gnc/navigation/synthetic_eskf.yaml": "20d8878f9ac32446195d13f313ed1d2de408b886533893ee6d82b683f0fbd2dc",
+    "configs/gnc/navigation/template.yaml": "c7d9b258e9a373454ddc1ff4b5f24537200a5ece28499fbeeafd965323cf52c2",
+    "configs/gnc/scheduler/altitude.yaml": "478d7b8bd01b7cdc6c8cbefb30a9fe9c5415861bb10b5f6366b60a3956b7c3f0",
+    "configs/gnc/scheduler/guard.yaml": "272be63cd09c775aa4d6ef032e18e9d386b14af5083f51fc7e7f2b03cd2f7ed7",
+    "configs/plant/actuator/ideal.yaml": "b235fc3b599fbdf64fbdd5a566a828447373615f6cb716f84ca624cf3b24b801",
+    "configs/plant/actuator/realistic.yaml": "6fc275fecdfc11c9b5c8eea53bfa2a7b99d8e0444333be950906a1e6cb9ee3a5",
+    "configs/plant/actuator/simplified.yaml": "f254e20249ef9372493b9564651a89f2c4e70be2da3015ccae5f80083d25bdff",
+    "configs/plant/aero/ascent.yaml": "71c08cfddac11dd6e1e3061aa327d5ffe569fb086f20452ed4760ed5694f0afa",
+    "configs/plant/aero/linear.yaml": "684915049f6639cc41f00712cf75ff983eade5a64014bb2288d7fc60faf90ef3",
+    "configs/plant/aero/table.yaml": "ea5435bae95e6a0da63c2e61f862ef43aefc2d610d54ff7a94f19e36fe3e2024",
+    "configs/plant/rcs/paired.yaml": "e03861b4a4a9580b33cddd54761f4479f1afc9ee81a45faf7fe6b4d642324b6c",
+    "configs/plant/rcs/roll_four.yaml": "c06864b7b165990ad61a4956d669e8be619143001376fb3f2a6278ca8d9ef51d",
+    "configs/plant/slosh/none.yaml": "b14b1d01db033131b329b8ffda5053b25b44227a9b0eab0fceafac1fe81153af",
+    "configs/plant/slosh/pendulum.yaml": "8c9795b7e176ba8478c1535cc6ee20c88c9d25d6deabf5100524aa2d6cf0fb81",
+    "configs/plant/slosh/springmass.yaml": "b820c4fc1aefb674d7dae4560e74947191f641c793b6d7ed1d1f48d7a1c3e6fb",
+    "configs/plant/thrust/backpressure.yaml": "093df5e31112789d6595b68b853b83c4bf9f6a6e6c0197a955735e37f2967316",
+    "configs/plant/thrust/sea_level.yaml": "ee2e734dc9deeb509e312e742c466664fb7741b774377098d8f2394eacf64999",
+    "configs/plant/thrust/vacuum.yaml": "e640b2418ba28e1443b1fa65bf6a732a688bcc2a7a43dd6d0cecc6735d4c1848",
+    "configs/plant/vehicle/falcon9_ascent.yaml": "d215d32c436fa90c95a435629885b6ee259a3676f55ff693c3d4d404c6b9a659",
+    "configs/plant/vehicle/falcon9_octaweb.yaml": "32a56b4ec553871f9b05c48eb92bdcff81047c6691b3ac3d7b7315cbd2f82e02",
+    "configs/plant/vehicle/falcon9_stage1.yaml": "f455f6ff560cc7dbe210183b88128ce2043aa2dafbe313d9ad84d5fbef17d669",
+    "configs/run/montecarlo.yaml": "f72cbb1494cb38b5bea15b399dfa915ce2aa8c4e8571cbe3df9fc5dd54df1ba6",
+    "configs/run/single.yaml": "87bff0052dfab107090ae8ecfecf4b03b7be614590e6a868791eee44d7a35dee",
+    "configs/scenario/_prescribed.yaml": "bc84748dc359940d0f0e34beb7f4cdce93d56a698c2b569907b9e982fe4c6d07",
+    "configs/scenario/_project2_recovery.yaml": "3e8a0b16d82fdfa54f40c000250fd3772ed90786f69a5878e7f04e266d8a2de9",
+    "configs/scenario/actuator_response.yaml": "51e0a3768fdfee64969a03bb42e58916dacbb3dc11c4826c1dc8d1e2fc35c6e2",
+    "configs/scenario/aero_descent.yaml": "0cac6465c210750954434ae9ed2e0a90e473a10754f2f3a0365ab0c495be0c54",
+    "configs/scenario/ascent.yaml": "8fbe25b218f6758ef2808d2999f6e69c0b5086e14375445cc11cf1a70695ccd8",
+    "configs/scenario/ascent_boostback.yaml": "bdd60d469a73487fd82e90d8536ff5115129cf7c8665fdc3d4e69cc0659b02e6",
+    "configs/scenario/ascent_separation.yaml": "e51767c3a61443ff277ed6fcc1513067c145c3e577d76139d785ca0b26e61826",
+    "configs/scenario/coupled_6dof.yaml": "c86bf3f02e1ee2749e2c0e2db94dbe678ed9ce6b8926096e18ca88ad301b184b",
+    "configs/scenario/drag_descent.yaml": "d6c05fd595e67a6f4b903f8437abd6cf8fff48d5bc7eea5b54de869648bc91b4",
+    "configs/scenario/entry_burn.yaml": "a13445667ebacc7bee8373348f19474f65197ae5d7581d75c88e76ec694102a4",
+    "configs/scenario/fin_deployment.yaml": "708b9becc34165c500fdb33715942617a8625fa31a3659d2c3572bcd43a042cf",
+    "configs/scenario/fin_response.yaml": "bf1afddeaa017e11dc7d480a3523f126f7847d97adb093761f2a9cbf7c739704",
+    "configs/scenario/flight_calibrated_aero_descent.yaml": "0a604f85c9d649755bf59bb4cb0207e08d3238879fdc5b28ea64067b1f7f0ff1",
+    "configs/scenario/flight_calibrated_ascent.yaml": "5135ae8d55b505248addddaa30cee7201a453a8bf430201ba306f0c35b4e50aa",
+    "configs/scenario/flight_calibrated_entry_burn.yaml": "aea7dee287774e7fa0e1c70c9c6f5a20e40b2e4e1006aa0c48221dd5b2d9d1ef",
+    "configs/scenario/flight_calibrated_landing.yaml": "918c9e7b9c49df361f8592ffc743d100fc6c14ced090fd0378bf4a70869056aa",
+    "configs/scenario/flight_calibrated_powered_descent.yaml": "7b62b54ff8212dff2daf6ed68a213d333275ba31d8c0c650642ff06aa76d7d08",
+    "configs/scenario/flight_comparison_aero_descent.yaml": "b47784b404063b2c3ee23a9314f1f0d0b213144635d748b1fcfff86075ad32b3",
+    "configs/scenario/flight_comparison_ascent.yaml": "29bf6d3146cd52a1f870213e10ee9e46955adfaa7c2723f995cb7430c94cdcd6",
+    "configs/scenario/flight_comparison_entry_burn.yaml": "a5dd0229cf2469bff4b9461fefe01f7e0e4b4bb9a4f96831d65f4335a839268c",
+    "configs/scenario/flight_comparison_landing.yaml": "c29ff150af108c9500e7c3fa431a8a80568c7f356029a2d4caf33febcfce8e7a",
+    "configs/scenario/flight_comparison_powered_descent.yaml": "4900d5b0c570706c9c1d86e59644e0d7b5233803fde849c846eef0abc541ad29",
+    "configs/scenario/flight_reconstructed_aero_descent.yaml": "58a05966f85e5daa4b01f32bac4a02a95fdb0fbd0b98b41dfbba315a5ef6bb9b",
+    "configs/scenario/flight_reconstructed_ascent.yaml": "af1ef1f0c6a350e17b3ccee83df7fee9cace1ffdd04b0f48b5dc759118956c0a",
+    "configs/scenario/flight_reconstructed_entry_burn.yaml": "1689714ab450ae1863f1f40b772d1313fecbecd41c944d94e2691d359bf0b147",
+    "configs/scenario/flight_reconstructed_landing.yaml": "00d903d9e9da0261d6ce0cf4c72dee775123526a7807f695326838145adf7d16",
+    "configs/scenario/flight_reconstructed_powered_descent.yaml": "46ad80cb87a9003d94477c5c720f1856b1ebf5deff41bbb8e1c91d737c141a26",
+    "configs/scenario/free_rotation.yaml": "2d669f7aafde08f67591d017ddeb7af5dff9c6c72c8b28cbc543481ba17100db",
+    "configs/scenario/freefall_inverse_square.yaml": "25ed359bcd8782de7ef53cc8c42787a34cb420255c8b7645e3173c8ada5256db",
+    "configs/scenario/freefall_uniform.yaml": "06abc1d87bdf914877a838e5e0cb79388e7c13d21c9688e8bc59736ce70b83f3",
+    "configs/scenario/mass_depletion.yaml": "1f3cb03f554e54a3393c196a9b6dc11e8be9c45b853e054f3c56ac10c63d3932",
+    "configs/scenario/pdg.yaml": "859d0f2fa4ee38871c3948289a14819181bd527fa7d7da51e0b1365ca8cd130a",
+    "configs/scenario/powered_descent.yaml": "a4332d72d1810aa5335bfe3da08ff6d41e67387bfda8541d1e1f2dd1f8d2eebd",
+    "configs/scenario/project2_aero_descent.yaml": "429f3690343f5617fde60bb370998e86d23d5e8638e759652452391bfd982304",
+    "configs/scenario/project2_ascent.yaml": "051eb330f0cf7370d2e34a23322e7f82a95726216df1d2177165bbd6cb90c007",
+    "configs/scenario/project2_entry_burn.yaml": "c4dc1f6435998d971530dfc9d082cd3ed531e6da7cf8701529ab653873ada76d",
+    "configs/scenario/project2_landing.yaml": "4e4176919024266566fafe5d28f6c10d70cf9e05db6f83453b7969df27a8554f",
+    "configs/scenario/project2_powered_descent.yaml": "d6f1931b6dac0b5f58aad3c22451b311fe7d8626e9c9d02e1e2f35294a22c458",
+    "configs/scenario/reentry_to_landing.yaml": "735ff06095b1473881a97d2a763f2335f54b5ffc58c2b319bfeb00481bee9525",
+    "configs/scenario/vacuum_burn.yaml": "dbb1c171388a2f4f7c1d53ddaea41a52972948ff53c636c8d013c18d2f2c61fb",
+    "configs/vehicle_set/falcon9.yaml": "62124f254d6b526f6d81f3b7b5ac6d9ba91046195ba50946dccd6419aa849fd6",
+    "pyproject.toml": "ac8a410bca637be8fe609df59b6c2c3e77b73546bba92f031611d9a602decca3",
+    "report_assets/generate_navigation.py": "609a563170a5e61c6f6967ff2cb3127e34a8cfe4d5690f91fe1a397fd6116636",
+    "report_assets/navigation_robustness.py": "e6ef8a231b2b98a291a2bb8f4173654cf59b773f605cf8db7ae82644b18f3cc2",
+    "src/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/core/frames.py": "ee52a792f02e82e1bb1612d3fba76d6e6820a27636cab66bccc00dcf7d27078e",
+    "src/core/interfaces.py": "faec379b263c4958bf5673a64bce40ffc934f3c2b3ba2dd9d5ad834defb33ebb",
+    "src/core/seeding.py": "ab5ccfa77aab48f1fbeaf92a7778d79ea1d4d3e72a69d43f050eb00f33b19b00",
+    "src/gnc/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/gnc/allocation/__init__.py": "25779dbcff8b4964b33d4f0aa4b6b19e1d24799c56979f70b5a4dea69d926955",
+    "src/gnc/allocation/default.py": "45cae9dc4a2b1291871f8fc577a7e7d0ae307396e01dcd27c058d50e4e8deca3",
+    "src/gnc/build.py": "4518b64c1d81230c5a90c260432e135d0fe3352118def7a7862e50ae144748f6",
+    "src/gnc/context.py": "de94b497a1b5f33a10cc02eb7e2eae487709907747446b1e22c9d3b64a8d4252",
+    "src/gnc/control/__init__.py": "a269bd1e1cbfef64c25d4b896c487d48245b9e45d8705cee556f2bcf3a0710fb",
+    "src/gnc/control/pd.py": "1b8fefa6454db20dc4299bd4d4b48ff9e73552567d867d03ca9a00bf891337f1",
+    "src/gnc/control/template.py": "a93d5d4814d3ec304646abc219a8f5e57290153484d57444c54fa9d22be75d3f",
+    "src/gnc/guidance/__init__.py": "c9373561e6e72b85740bf84bd4d25906b22d9ea6b9dfbded782d9645f10ae9a1",
+    "src/gnc/guidance/aero_descent.py": "06a3db8524ffa71607ff2407278963886c62002f291539530239b7f35cdbff71",
+    "src/gnc/guidance/base.py": "f9e05bd950ca70b8fb605528bae1d9afae69e42bb7bf731a9a9dc0c737acb95e",
+    "src/gnc/guidance/boostback.py": "f59f5760f6da049e32f310bdec4ffd15893dbf95983f2eab474670a1f0f4eca7",
+    "src/gnc/guidance/convex/__init__.py": "deedcf25aaa2c7cb76ec3b119e41637f8751610d80a0aca10deadf1686c359bc",
+    "src/gnc/guidance/convex/clarabel_direct.py": "cf1f507fc7b12be275d55b02412c64d8544dd357c3d0285fe31ddeec4a142a60",
+    "src/gnc/guidance/convex/guidance.py": "175620e8e945553d4b9ac6572fb18f653aa9f1e55ea63d150452ffa107a51155",
+    "src/gnc/guidance/convex/lcvx.py": "40e9500fbf245d1eb9633ee63fcd4374340f7ac341609a95575cbe9fee4cdbeb",
+    "src/gnc/guidance/convex/qoco_direct.py": "80bef96b1df46a563cbb1f1854dce0b116c911a35707d460a9638e731f34ffce",
+    "src/gnc/guidance/convex/scvx.py": "b48230791abcd478c73f9e9645aa6d3d5a827a517d5aa419784bbfa08106354a",
+    "src/gnc/guidance/convex/solvers.py": "a5287afefbeb71d544b1f7a2534d9e155685388bca3b93dce0a4de7f13da6593",
+    "src/gnc/guidance/phase.py": "c6b329e09698991ece7be18e2c03a5335b6ec5f30b7a78bd215e52c205a178a2",
+    "src/gnc/guidance/reentry_burn.py": "2b5dfccda6cb7af6a945631b612319c46df2e18006bede3cf4a4de749ce6d901",
+    "src/gnc/guidance/scheduled.py": "d20e2e077b8dac10168ddc3cbb4c5af7bd462dba22cd11c508fc68ffcfdfac88",
+    "src/gnc/guidance/template.py": "06283a0844ff3b4960b3feeac1f871bb08512b45d1d23303a38beda1c6a01803",
+    "src/gnc/navigation/__init__.py": "3d3c2ef10b1688bd0dbf8e8bbdcf2f4d16b7df4b09fda1650f60aa6916a28216",
+    "src/gnc/navigation/ekf_stub.py": "48c96233756859c4e0650e63cc3b89c3a5e892254f4f0c3f0f0b190bdd32c32c",
+    "src/gnc/navigation/identity.py": "8b371975d1327efb632644917f2b7cc022bf9cd53a3f34a5a5e9e89472ac8709",
+    "src/gnc/navigation/synthetic_eskf.py": "a01cefaf51235a63d5a57a661f14f41f1fe3375d24dbf26ae46a66ed2068ea4a",
+    "src/gnc/navigation/template.py": "cdb556720fa3c2d547e987fe45ed3b243f2aed3a455a09b94a0ea3f5f3bd6ec5",
+    "src/gnc/stack.py": "608a62eaccbb7397692c96a8a8459e7a0dc36bd0a9bda75faeeb6ce290fc1a0f",
+    "src/native/frames.cpp": "962df8a0925711bb43b8e2e65cd2a7d8fc60ae6f6d2097c278826794c4b5386d",
+    "src/native/plant.cpp": "826ad3f8f0c2d2396b68d5b172bd9fed79283d39e6975242362220af5512cc4a",
+    "src/native/scvx.cpp": "a756776d7aa853c2c6d93bc202a66557372e78f3c65a25cf3005fa29550bb716",
+    "src/plant/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/plant/aero_data.py": "a3722a0632b274f1e4d576cad2877c91a04c24cdc0ac266a56b3c9aa6752b556",
+    "src/plant/dynamics.py": "8136d76790355b148c4b5233b6ba248417dd01e3721ce6a8aec4fba167d72656",
+    "src/plant/earth.py": "869843a3e00d9a240ef01b217f03d4da40ed6dc6cd772c6582b033b5e4d621f8",
+    "src/plant/mass_properties.py": "ebc0ab63c6cc97375250c75ae2a5480368d12f34297182e4005d9b0bed40baae",
+    "src/plant/separation.py": "d2a05082f9ee814cbbe8350f8514e51482ed7b3bf4819676227ae4705474fd57",
+    "src/sim/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/sim/aggregate.py": "7bf2c8ce2bf9454d3d9a3bb85eaa77438d5a16d565a04f7035be628e2a313136",
+    "src/sim/loop.py": "e03bb292eb5143750e1ded20331e1707cc6b315b8c098fe72e48428ad0832518",
+    "src/sim/open_loop.py": "56cbf30dbba8381afa83c3aba28714a62ada953e932c8808bcf7eeefe6d620b8",
+    "src/sim/replay.py": "71703bb6efed48acb684c7b78d0ac8fd7a933762255b09bdbdd55d06085780ba",
+    "src/sim/replay_reference.py": "f97be71d856e86d9b45a130db0324d8773c149e8c1a1e80a63d9d76c6308ab5d",
+    "src/sim/run.py": "09a943140b72b8727f605cab39e9ab9db757d565c2a25f70d5769bee40f0bec2",
+    "src/sim/schedule.py": "fa64d339cd94873590106e0bf99c9bfb04a1ed15df0c849f03fce3982ae39fdc",
+    "src/sim/telemetry.py": "ee85c20913f09751383f92eaa266fa976c8618d022620c46d22ee524370c0d1d",
+    "src/validation/__init__.py": "41c92fd29e7b4aed14be950714f044606048731efaa6df799e709b76f5df99e9",
+    "src/validation/analytical.py": "a0d74b12487d8c2204507463049b029b18af0123ea40cabdd778db2fbe94d05a",
+    "src/validation/ascent.py": "45e927447d955c1fea2398cd08dc5bbc254efcc047414437dd1e8ca7b354f8f5",
+    "src/validation/boostback.py": "a9a7a62a925ed78a2cd4aa78455d519fbdb99d12b744578cc1f23c5fa381b56d",
+    "src/validation/convergence.py": "113b26a1afb4f8bd91a8cfab5a366fa256540a71835edfd09eb4467d28a0c493",
+    "src/validation/flight_before.py": "702a2a5d08ad57469efd2f4d09615b2da57d6dbe009e789b62bcbaf2a1257d66",
+    "src/validation/flight_calibration.py": "2f1c27409d439ae8436ea94741dad87be70b97bc52ded2a08b22d210c8f6e01b",
+    "src/validation/flight_comparison_policy.py": "912a5829e42a05e8b93551760af66072e70bdf30b36a0a2085dbc5410aa0051e",
+    "src/validation/flight_observations.py": "b2364801bf875ebbda59cac5a945c1e5a6da03ccf430a60ce29d5f8d7d0aa9f7",
+    "src/validation/flight_reconstruction.py": "e6cd9f0448a6af29e48f93d27dca04769408a991891cb313d9d9aa9f670a7233",
+    "src/validation/flight_reference.py": "2abbefbbc10c3db2258759f448a97101b65bdcf8a6346ec5f0ff2c274c4cc802",
+    "src/validation/flight_report.py": "9587ff66dd1175400766d699755fd582ffbac8b59de190cc53dd35514bb1bf4e",
+    "src/validation/flight_scenarios.py": "00a9ffca930c37344a55d88f55f47034bd488627112f3f465051657591f6b165",
+    "src/validation/flight_sensitivity.py": "cc8d7b7bbad1f75e7634c7aae08d79ac02ab125616e43a5752588a0aa3fbcd62",
+    "src/validation/landing_input_reference.py": "57876d89723b3e8d78aac550a85161f5fc6a1f6f0850a8ad7f4e17edf8c1e986",
+    "src/validation/navigation.py": "7fe5dd88a3b85fb7a266e7ad520750228931158eb626e2d7c55240d17cc0cb1d",
+    "src/validation/propulsion.py": "1fc7cae6ea243832eecba215d85966c510ac872bdecc0088c9f20536318a911b",
+    "src/validation/references.py": "397483d88f9d7c2086ff4decbbaa5e2ca08144990741ba0acc16c147eca210ba",
+    "src/validation/rotating_earth.py": "3ae30c4729c9ecc9db64e4de51640644387007574279c56abe6474d28d6aaf07",
+    "src/validation/segment_spec.py": "17dd62d89879423fefab5c5e6f377e175dcfeb93019dcf8c091dac5549a6969d",
+    "src/validation/separation.py": "0b36d58755b45e5afa475d6419a399a7a7fcc8aa9bf2935e5ef5d09df3f30fdb",
+    "src/validation/vehicle_physics.py": "2b9d2cb4f02711b16e7e4a2acf8ad7bac9f6f4371523fc10a4065c7a8cc7b2f5",
+    "src/validation/vehicle_references.py": "246cde4baa8e839f3d58e1b23a27289f80043705984bdf1a78d325d167b351e2"
+  },
+  "closed_loop": {
+    "project2_landing/identity": {
+      "scenario": "project2_landing",
+      "navigation": "identity",
+      "seed": 0,
+      "actuator_model": "ideal",
+      "contact_time_s": 17.467751801796393,
+      "native_terminal_time_s": 17.468,
+      "contact_speed_mps": 0.08624524925296802,
+      "contact_position_error_m": 0.0194297475947691,
+      "contact_tilt_deg": 0.05531699750855425,
+      "landing_class": "soft",
+      "success": true,
+      "navigation_samples": 1747,
+      "navigation_last_time_s": 17.46,
+      "navigation_errors": {
+        "r_ned": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "v_ned": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "w_body": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "m": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "attitude_rad": {
+          "rmse": 0.0,
+          "max": 0.0
+        }
+      },
+      "initial_height_m": 300.0,
+      "initial_down_speed_mps": 25.0,
+      "initial_mass_kg": 29500.0,
+      "periods_s": {
+        "nav_dt": 0.01,
+        "ctrl_dt": 0.02,
+        "guidance_dt": 1.0,
+        "log_dt": 0.1
+      },
+      "config_sha256": "0ef380890963ba3244e19cc52a7071e7ba417701f429567fef2d9a6ac7ab551e",
+      "navigation_sha256": "7fcb56f5839e23bcf20f37a9be27e3a38c2980ff2f359ecf4230da6a46d88841"
+    },
+    "project2_landing/synthetic_eskf": {
+      "scenario": "project2_landing",
+      "navigation": "synthetic_eskf",
+      "seed": 0,
+      "actuator_model": "ideal",
+      "contact_time_s": 17.582955897678822,
+      "native_terminal_time_s": 17.584,
+      "contact_speed_mps": 1.380864788364712,
+      "contact_position_error_m": 0.7878838454256424,
+      "contact_tilt_deg": 0.21905623631707766,
+      "landing_class": "soft",
+      "success": true,
+      "navigation_samples": 1759,
+      "navigation_last_time_s": 17.580000000000002,
+      "navigation_errors": {
+        "r_ned": {
+          "rmse": 0.5398830893657885,
+          "max": 2.8787585562039313
+        },
+        "v_ned": {
+          "rmse": 0.06632302691620458,
+          "max": 0.18198065666041724
+        },
+        "w_body": {
+          "rmse": 0.0008421016038360206,
+          "max": 0.0022938678804892663
+        },
+        "m": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "attitude_rad": {
+          "rmse": 0.023662839406574227,
+          "max": 0.042652423546197825
+        }
+      },
+      "initial_height_m": 300.0,
+      "initial_down_speed_mps": 25.0,
+      "initial_mass_kg": 29500.0,
+      "periods_s": {
+        "nav_dt": 0.01,
+        "ctrl_dt": 0.02,
+        "guidance_dt": 1.0,
+        "log_dt": 0.1
+      },
+      "config_sha256": "7e54076c3175bce1dce90d604409d4cb6c1126d67864646261d02fd4ac83e742",
+      "navigation_sha256": "107b01c41c77105bef592fefa571345fe66018c18457f2408634707ee0f06a9b"
+    },
+    "flight_calibrated_landing/identity": {
+      "scenario": "flight_calibrated_landing",
+      "navigation": "identity",
+      "seed": 0,
+      "actuator_model": "realistic",
+      "contact_time_s": 12.229752562236149,
+      "native_terminal_time_s": 12.23,
+      "contact_speed_mps": 0.4827022069089375,
+      "contact_position_error_m": 0.013768321655048108,
+      "contact_tilt_deg": 0.06230768300459998,
+      "landing_class": "soft",
+      "success": true,
+      "navigation_samples": 1223,
+      "navigation_last_time_s": 12.22,
+      "navigation_errors": {
+        "r_ned": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "v_ned": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "w_body": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "m": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "attitude_rad": {
+          "rmse": 0.0,
+          "max": 0.0
+        }
+      },
+      "initial_height_m": 348.7644451542088,
+      "initial_down_speed_mps": 76.111,
+      "initial_mass_kg": 35692.16126350369,
+      "periods_s": {
+        "nav_dt": 0.01,
+        "ctrl_dt": 0.02,
+        "guidance_dt": 1.0,
+        "log_dt": 0.02
+      },
+      "config_sha256": "605fe7583a42c6ea00ad790dc9a3480bafb28f4cd563c1206ffd759cfb9a2238",
+      "navigation_sha256": "63608c78d7b553acbcb847107b953c5dc23452e168adb95f78929f069f4dcf93"
+    },
+    "flight_calibrated_landing/synthetic_eskf": {
+      "scenario": "flight_calibrated_landing",
+      "navigation": "synthetic_eskf",
+      "seed": 0,
+      "actuator_model": "realistic",
+      "contact_time_s": 12.194593402191845,
+      "native_terminal_time_s": 12.195,
+      "contact_speed_mps": 0.5527836813804565,
+      "contact_position_error_m": 0.6021455864906757,
+      "contact_tilt_deg": 1.0970799529569915,
+      "landing_class": "soft",
+      "success": true,
+      "navigation_samples": 1220,
+      "navigation_last_time_s": 12.19,
+      "navigation_errors": {
+        "r_ned": {
+          "rmse": 0.6414399189932636,
+          "max": 2.8788467757883462
+        },
+        "v_ned": {
+          "rmse": 0.07384080820054091,
+          "max": 0.16635235630723522
+        },
+        "w_body": {
+          "rmse": 0.000847331519650954,
+          "max": 0.0021853523854722815
+        },
+        "m": {
+          "rmse": 0.0,
+          "max": 0.0
+        },
+        "attitude_rad": {
+          "rmse": 0.02074656360998044,
+          "max": 0.039824673085200435
+        }
+      },
+      "initial_height_m": 348.7644451542088,
+      "initial_down_speed_mps": 76.111,
+      "initial_mass_kg": 35692.16126350369,
+      "periods_s": {
+        "nav_dt": 0.01,
+        "ctrl_dt": 0.02,
+        "guidance_dt": 1.0,
+        "log_dt": 0.02
+      },
+      "config_sha256": "1ba830c7a32113fe8f34110b6dcd86dd0883591ff52f7c87f12ea21de2235f2c",
+      "navigation_sha256": "2e4c99d4c0252c138a64d7a399cc6ae25ecf9cdf1d265d62cf42d41bcf52cc33"
+    }
+  },
+  "fixed_truth_replay": {
+    "cases": {
+      "imu_only": {
+        "errors": {
+          "r_ned": {
+            "rmse": 19.73223598409781,
+            "max": 44.18333338502903
+          },
+          "v_ned": {
+            "rmse": 4.30688528587133,
+            "max": 6.931492295468166
+          },
+          "w_body": {
+            "rmse": 0.0007663538915433389,
+            "max": 0.0020004357131037675
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.04045686812116042,
+            "max": 0.041193984793160006
+          }
+        },
+        "min_covariance_eigenvalue": 1.2752863235853839e-08,
+        "max_quaternion_norm_error": 2.220446049250313e-16,
+        "final_gyro_bias_error_deg_s": [
+          -0.005,
+          0.006,
+          -0.004
+        ],
+        "final_accel_bias_error_mps2": [
+          -0.025,
+          0.02,
+          -0.035
+        ]
+      },
+      "eskf": {
+        "errors": {
+          "r_ned": {
+            "rmse": 0.6407649194084272,
+            "max": 2.8788491662565248
+          },
+          "v_ned": {
+            "rmse": 0.07490525734820853,
+            "max": 0.16730454277613171
+          },
+          "w_body": {
+            "rmse": 0.0008549607021180617,
+            "max": 0.0022523989078195514
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.01904995752069602,
+            "max": 0.0398248072664813
+          }
+        },
+        "min_covariance_eigenvalue": 1.7280343520393549e-09,
+        "max_quaternion_norm_error": 2.220446049250313e-16,
+        "final_gyro_bias_error_deg_s": [
+          -0.004631532689156172,
+          0.003192588184376467,
+          0.0024736863083008303
+        ],
+        "final_accel_bias_error_mps2": [
+          0.004703036846145429,
+          0.025612080869667736,
+          -0.011253315981444384
+        ]
+      },
+      "eskf_outage": {
+        "errors": {
+          "r_ned": {
+            "rmse": 0.7564708721022604,
+            "max": 2.8788491662565248
+          },
+          "v_ned": {
+            "rmse": 0.0680290800019829,
+            "max": 0.18170664864297356
+          },
+          "w_body": {
+            "rmse": 0.0007853501519345604,
+            "max": 0.0019157202196580664
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.01944422371472934,
+            "max": 0.0398248072664813
+          }
+        },
+        "min_covariance_eigenvalue": 1.7402869008777404e-09,
+        "max_quaternion_norm_error": 2.220446049250313e-16,
+        "final_gyro_bias_error_deg_s": [
+          -0.005306611812108554,
+          0.0005869915265983814,
+          0.0025863595248606366
+        ],
+        "final_accel_bias_error_mps2": [
+          0.004496898983366644,
+          0.02431338194151964,
+          -0.032334164649717174
+        ]
+      }
+    },
+    "sample_counts": {
+      "imu": 1223,
+      "gnss_valid": 121,
+      "radar_valid": 245,
+      "gnss_valid_with_outage": 80
+    },
+    "outage_s": [
+      4.0,
+      8.0
+    ],
+    "last_time_s": 12.22,
+    "samples_sha256": "142b13bf2a9b2da01b2a87c4a97755d3cb72c62ddd94bfca098b9a7dd9a06127"
+  },
+  "robustness": {
+    "closed_loop_runs": [
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 0,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.380864788364712,
+        "miss_m": 0.7878838454256424,
+        "tilt_deg": 0.21905623631707766,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5398830893657885,
+            "max": 2.8787585562039313
+          },
+          "v_ned": {
+            "rmse": 0.06632302691620458,
+            "max": 0.18198065666041724
+          },
+          "w_body": {
+            "rmse": 0.0008421016038360206,
+            "max": 0.0022938678804892663
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.023662839406574227,
+            "max": 0.042652423546197825
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 1,
+        "success": false,
+        "landing_class": "crash",
+        "speed_mps": 6.538702311138766,
+        "miss_m": 1.1516064560480017,
+        "tilt_deg": 0.8807706797846473,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5003133981302244,
+            "max": 2.5038150496830283
+          },
+          "v_ned": {
+            "rmse": 0.09803473125104584,
+            "max": 0.47314777126094293
+          },
+          "w_body": {
+            "rmse": 0.0008174265062186433,
+            "max": 0.0019954092875123465
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.009868182061942472,
+            "max": 0.021371004267864032
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 2,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 5.253119262450736,
+        "miss_m": 0.5439894459791267,
+        "tilt_deg": 0.6159478735972304,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.6457339504165829,
+            "max": 2.662421437685999
+          },
+          "v_ned": {
+            "rmse": 0.0892538473132607,
+            "max": 0.41822698730095254
+          },
+          "w_body": {
+            "rmse": 0.0008311861659914462,
+            "max": 0.0020255946790752747
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.017166642409041814,
+            "max": 0.02621991206879414
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 3,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.6808759626869976,
+        "miss_m": 0.6507236859111377,
+        "tilt_deg": 0.6400707270967887,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.4698398890601259,
+            "max": 2.3464821743653284
+          },
+          "v_ned": {
+            "rmse": 0.08384982787794526,
+            "max": 0.2808564084447674
+          },
+          "w_body": {
+            "rmse": 0.0008218532045710905,
+            "max": 0.002189986725352129
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.010871594503202351,
+            "max": 0.02921285949181045
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 4,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.668811325643191,
+        "miss_m": 0.2085582296186261,
+        "tilt_deg": 0.19060691809616384,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.45153858166641697,
+            "max": 1.9879927631547087
+          },
+          "v_ned": {
+            "rmse": 0.07540527621401029,
+            "max": 0.1805563090979786
+          },
+          "w_body": {
+            "rmse": 0.0008835359483724833,
+            "max": 0.0020888417920033636
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.04149905253008025,
+            "max": 0.045807465892725635
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 5,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.52442528341467,
+        "miss_m": 0.5518825789216167,
+        "tilt_deg": 0.18512489109923078,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.6963601997904131,
+            "max": 2.63023266179349
+          },
+          "v_ned": {
+            "rmse": 0.07741556121566837,
+            "max": 0.4181697674573689
+          },
+          "w_body": {
+            "rmse": 0.0008014658794450427,
+            "max": 0.0019362882598473886
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.013456124102187085,
+            "max": 0.029834431969882017
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 6,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.9366506018293496,
+        "miss_m": 0.741164113658017,
+        "tilt_deg": 0.4372264899632103,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.4659257150901823,
+            "max": 2.0967181736886777
+          },
+          "v_ned": {
+            "rmse": 0.06840927743756095,
+            "max": 0.20737430771920579
+          },
+          "w_body": {
+            "rmse": 0.000801757336486038,
+            "max": 0.0020434892941713196
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.024798735812134053,
+            "max": 0.03820630227505544
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 7,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.4136220660521885,
+        "miss_m": 0.0460443968409355,
+        "tilt_deg": 0.47209637578847374,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.4259467497891727,
+            "max": 1.6121258656661945
+          },
+          "v_ned": {
+            "rmse": 0.07914323191486912,
+            "max": 0.26815899357370493
+          },
+          "w_body": {
+            "rmse": 0.0008393490742637813,
+            "max": 0.0020900949098798033
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.016246810185113685,
+            "max": 0.02901296863468279
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 8,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.52620774104735,
+        "miss_m": 0.6604796643103487,
+        "tilt_deg": 0.5272236438093669,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.7429921225072943,
+            "max": 4.316229978834491
+          },
+          "v_ned": {
+            "rmse": 0.09885653916738066,
+            "max": 0.4333097291731454
+          },
+          "w_body": {
+            "rmse": 0.0009014648316302022,
+            "max": 0.0025122932540979
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.012046098578385196,
+            "max": 0.018252043272787375
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "seed": 9,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 3.767426093174883,
+        "miss_m": 0.31380345313435104,
+        "tilt_deg": 1.2114383311834047,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.44666442968217546,
+            "max": 2.5267616890159785
+          },
+          "v_ned": {
+            "rmse": 0.09229637950115002,
+            "max": 0.33655583470792655
+          },
+          "w_body": {
+            "rmse": 0.0009355795662970524,
+            "max": 0.002742110104334118
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.01907762970955624,
+            "max": 0.037183510167779266
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 0,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.5527836813804565,
+        "miss_m": 0.6021455864906757,
+        "tilt_deg": 1.0970799529569915,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.6414399189932636,
+            "max": 2.8788467757883462
+          },
+          "v_ned": {
+            "rmse": 0.07384080820054091,
+            "max": 0.16635235630723522
+          },
+          "w_body": {
+            "rmse": 0.000847331519650954,
+            "max": 0.0021853523854722815
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.02074656360998044,
+            "max": 0.039824673085200435
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 1,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.5776015002996091,
+        "miss_m": 1.263010998415977,
+        "tilt_deg": 0.8578167204367121,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5715521283114149,
+            "max": 2.5041464990763793
+          },
+          "v_ned": {
+            "rmse": 0.10915810801713226,
+            "max": 0.44494320378428126
+          },
+          "w_body": {
+            "rmse": 0.0008337748704548125,
+            "max": 0.00197601794726203
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.007490188475979295,
+            "max": 0.02137083825288831
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 2,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.6649783034339053,
+        "miss_m": 1.835858615973751,
+        "tilt_deg": 1.4040142185372506,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.7419210912758618,
+            "max": 2.6630078277068985
+          },
+          "v_ned": {
+            "rmse": 0.09182713452845805,
+            "max": 0.3825403691513365
+          },
+          "w_body": {
+            "rmse": 0.0008317602224731965,
+            "max": 0.0021587161788771078
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.01461667076561917,
+            "max": 0.022963185849888195
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 3,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.6731804139100224,
+        "miss_m": 0.8972278183462522,
+        "tilt_deg": 1.3028366454767062,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5426183654691833,
+            "max": 2.3456178731324004
+          },
+          "v_ned": {
+            "rmse": 0.09622393090175915,
+            "max": 0.2639606763042798
+          },
+          "w_body": {
+            "rmse": 0.0008328136536883947,
+            "max": 0.002050388243087415
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.00989451692859417,
+            "max": 0.030785298757968323
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 4,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.5751233903377102,
+        "miss_m": 1.1413523256527622,
+        "tilt_deg": 0.7573357788414519,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.49689737101324993,
+            "max": 1.9903806051408668
+          },
+          "v_ned": {
+            "rmse": 0.0835499342275984,
+            "max": 0.1809683942652348
+          },
+          "w_body": {
+            "rmse": 0.0008619135463924589,
+            "max": 0.001933604080814486
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.041662889005534845,
+            "max": 0.045837481935765804
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 5,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.5403732405012158,
+        "miss_m": 0.3802167574247339,
+        "tilt_deg": 0.40153220878784196,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.7989559832669711,
+            "max": 2.630241660025676
+          },
+          "v_ned": {
+            "rmse": 0.08724238815151232,
+            "max": 0.4181697674573697
+          },
+          "w_body": {
+            "rmse": 0.0008033701038805826,
+            "max": 0.001955195141602539
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.012857467928261469,
+            "max": 0.0344835703748265
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 6,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.6437394369351163,
+        "miss_m": 0.4468380466136468,
+        "tilt_deg": 1.0336624514551886,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5018359984949312,
+            "max": 2.0967181736878993
+          },
+          "v_ned": {
+            "rmse": 0.07809906346323497,
+            "max": 0.23695814773961188
+          },
+          "w_body": {
+            "rmse": 0.0008116815307798455,
+            "max": 0.001990188840805126
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.023513443665541905,
+            "max": 0.037341374347194166
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 7,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.3143399097886004,
+        "miss_m": 0.5855980431287494,
+        "tilt_deg": 0.23479404018681052,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.44577492709726807,
+            "max": 1.6116046330071059
+          },
+          "v_ned": {
+            "rmse": 0.09259018673775973,
+            "max": 0.268783045928674
+          },
+          "w_body": {
+            "rmse": 0.0008687618357237632,
+            "max": 0.0019905795749024556
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.017499616580878594,
+            "max": 0.028870703676115175
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 8,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.7272572042520047,
+        "miss_m": 0.5555890303560865,
+        "tilt_deg": 0.5155143094639052,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.8870105313923012,
+            "max": 4.316229978842257
+          },
+          "v_ned": {
+            "rmse": 0.11594148931564013,
+            "max": 0.45268504116486263
+          },
+          "w_body": {
+            "rmse": 0.0009653321650743974,
+            "max": 0.0025286534637790833
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.013608900831587787,
+            "max": 0.024569366070982566
+          }
+        }
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "seed": 9,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 0.7175917742460026,
+        "miss_m": 1.1573583768576992,
+        "tilt_deg": 0.6337997577743275,
+        "errors": {
+          "r_ned": {
+            "rmse": 0.5204703381361345,
+            "max": 2.527496018036503
+          },
+          "v_ned": {
+            "rmse": 0.10749443690346881,
+            "max": 0.30127499227663557
+          },
+          "w_body": {
+            "rmse": 0.0010094687489398202,
+            "max": 0.0025645455527488216
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.017764346797772092,
+            "max": 0.03718328240596655
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 0,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 4.443950355989936,
+        "miss_m": 3.579030085044067,
+        "tilt_deg": 3.2682930638848506,
+        "errors": {
+          "r_ned": {
+            "rmse": 5.76077632262905,
+            "max": 13.728214415725644
+          },
+          "v_ned": {
+            "rmse": 0.40362743756484465,
+            "max": 2.532893215819242
+          },
+          "w_body": {
+            "rmse": 0.0007988814794046713,
+            "max": 0.0021785817174350816
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.02177626482989364,
+            "max": 0.04242918816769567
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 1,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.4612246427959237,
+        "miss_m": 2.6536516894264666,
+        "tilt_deg": 2.8549660467156786,
+        "errors": {
+          "r_ned": {
+            "rmse": 5.938426032126234,
+            "max": 14.151877645943513
+          },
+          "v_ned": {
+            "rmse": 0.2820989482465781,
+            "max": 1.4160638655665463
+          },
+          "w_body": {
+            "rmse": 0.000820405834751563,
+            "max": 0.002210965067518464
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.014143983829828385,
+            "max": 0.027869334232314164
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 2,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.7004233533542226,
+        "miss_m": 3.7550142277458725,
+        "tilt_deg": 2.2552969912306287,
+        "errors": {
+          "r_ned": {
+            "rmse": 6.116743847706548,
+            "max": 15.642119727498784
+          },
+          "v_ned": {
+            "rmse": 0.43448434338022396,
+            "max": 1.6727443190231936
+          },
+          "w_body": {
+            "rmse": 0.0008931622861359836,
+            "max": 0.002449306730430255
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.012249935346694383,
+            "max": 0.023226025723570826
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 3,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.3978672865819601,
+        "miss_m": 4.358238872864886,
+        "tilt_deg": 3.69000613119035,
+        "errors": {
+          "r_ned": {
+            "rmse": 6.107908370874987,
+            "max": 15.487565830183735
+          },
+          "v_ned": {
+            "rmse": 0.455770122248655,
+            "max": 1.7565421848184601
+          },
+          "w_body": {
+            "rmse": 0.0008211160599216502,
+            "max": 0.0019567725808283675
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.01262841977373639,
+            "max": 0.02495742029779122
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 4,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.610004757834496,
+        "miss_m": 3.2810936991837054,
+        "tilt_deg": 3.9520617653179086,
+        "errors": {
+          "r_ned": {
+            "rmse": 5.862201902582941,
+            "max": 13.975796255011216
+          },
+          "v_ned": {
+            "rmse": 0.2919348871756294,
+            "max": 1.8879675037895391
+          },
+          "w_body": {
+            "rmse": 0.0009686319568723306,
+            "max": 0.002392623947627433
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.026424329031817746,
+            "max": 0.05028249620505379
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 5,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 2.010691185528514,
+        "miss_m": 4.101718383708893,
+        "tilt_deg": 2.0903324155430236,
+        "errors": {
+          "r_ned": {
+            "rmse": 6.053196597379787,
+            "max": 15.352739951099043
+          },
+          "v_ned": {
+            "rmse": 0.4195002570035291,
+            "max": 1.6333718747754302
+          },
+          "w_body": {
+            "rmse": 0.0007932212765537195,
+            "max": 0.001821066731533145
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.015600597622393866,
+            "max": 0.026266851854628372
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 6,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 1.9064861249598353,
+        "miss_m": 2.6916728478957612,
+        "tilt_deg": 3.007944601846571,
+        "errors": {
+          "r_ned": {
+            "rmse": 5.851309253484138,
+            "max": 13.820500114413818
+          },
+          "v_ned": {
+            "rmse": 0.3686107615833582,
+            "max": 1.6291326652169256
+          },
+          "w_body": {
+            "rmse": 0.000845289794652298,
+            "max": 0.0019986511908238096
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.023717781127953943,
+            "max": 0.03686299655118013
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 7,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.2300175210070754,
+        "miss_m": 3.9905222872052506,
+        "tilt_deg": 3.1301682419864076,
+        "errors": {
+          "r_ned": {
+            "rmse": 5.957162667014374,
+            "max": 14.742867403460133
+          },
+          "v_ned": {
+            "rmse": 0.3752977064485517,
+            "max": 1.505469213090104
+          },
+          "w_body": {
+            "rmse": 0.0008335791183994541,
+            "max": 0.0018404949025876745
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.018394347920275073,
+            "max": 0.027866974689079057
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 8,
+        "success": false,
+        "landing_class": "hard",
+        "speed_mps": 2.1161785654219796,
+        "miss_m": 3.8122973353758596,
+        "tilt_deg": 3.787907307502188,
+        "errors": {
+          "r_ned": {
+            "rmse": 6.033234200078024,
+            "max": 15.256082268834584
+          },
+          "v_ned": {
+            "rmse": 0.38928337972314536,
+            "max": 1.1508948440074493
+          },
+          "w_body": {
+            "rmse": 0.000985742274538304,
+            "max": 0.0024574119815903364
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.014436061240310466,
+            "max": 0.02163243321238709
+          }
+        }
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "seed": 9,
+        "success": true,
+        "landing_class": "soft",
+        "speed_mps": 1.458079456263791,
+        "miss_m": 3.561662415577781,
+        "tilt_deg": 2.5658301700681476,
+        "errors": {
+          "r_ned": {
+            "rmse": 6.050364243584771,
+            "max": 15.412123387673004
+          },
+          "v_ned": {
+            "rmse": 0.4808931429519093,
+            "max": 1.5166411548209555
+          },
+          "w_body": {
+            "rmse": 0.0010182185238943266,
+            "max": 0.0026276189442457076
+          },
+          "m": {
+            "rmse": 0.0,
+            "max": 0.0
+          },
+          "attitude_rad": {
+            "rmse": 0.02027162074013828,
+            "max": 0.037614388741521634
+          }
+        }
+      }
+    ],
+    "closed_loop_summary": [
+      {
+        "scenario": "project2_landing",
+        "case": "nominal",
+        "n": 10,
+        "successes": 5,
+        "speed_max_mps": 6.538702311138766,
+        "miss_max_m": 1.1516064560480017,
+        "position_rmse_mean_m": 0.5385198125498376
+      },
+      {
+        "scenario": "flight_calibrated_landing",
+        "case": "nominal",
+        "n": 10,
+        "successes": 10,
+        "speed_max_mps": 1.3143399097886004,
+        "miss_max_m": 1.835858615973751,
+        "position_rmse_mean_m": 0.6148476653450579
+      },
+      {
+        "scenario": "project2_landing",
+        "case": "startup_outage",
+        "n": 10,
+        "successes": 4,
+        "speed_max_mps": 4.443950355989936,
+        "miss_max_m": 4.358238872864886,
+        "position_rmse_mean_m": 5.9731323437460855
+      }
+    ],
+    "ascent_runs": [
+      {
+        "case": "nominal",
+        "seed": 0,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.31267735383268175,
+        "final_attitude_deg": 0.12677888137178553,
+        "initial_attitude_deg": 0.702784242304406,
+        "minimum_covariance_diagonal": 9.476635419603077e-10,
+        "position_rmse": 0.38234745994690633,
+        "position_max": 2.2450663428655333,
+        "velocity_rmse": 0.055875330445337726,
+        "velocity_max": 0.5167669972099719,
+        "attitude_rmse": 0.011342123175074837,
+        "attitude_max": 0.032559079511317694,
+        "rate_rmse": 0.0008024489263241388,
+        "rate_max": 0.0024938390633818413,
+        "nis_gnss_mean": 5.960428561784507,
+        "nis_radar_mean": 1.0400340965983423
+      },
+      {
+        "case": "startup_5s",
+        "seed": 0,
+        "first_gnss_time": 5.1000000000000005,
+        "initialization_source": "declared_prior",
+        "final_position_m": 0.3126681850587206,
+        "final_attitude_deg": 0.2196944881540112,
+        "initial_attitude_deg": 0.702784242304406,
+        "minimum_covariance_diagonal": 9.478415943616865e-10,
+        "position_rmse": 2.785749106727656,
+        "position_max": 17.494031781927394,
+        "velocity_rmse": 0.1972142734970367,
+        "velocity_max": 1.6906717443008166,
+        "attitude_rmse": 0.009780833334484448,
+        "attitude_max": 0.03291804299395761,
+        "rate_rmse": 0.0007696527273951031,
+        "rate_max": 0.0021115123881501026,
+        "nis_gnss_mean": 5.931607133308965,
+        "nis_radar_mean": 1.0369902701403946
+      },
+      {
+        "case": "outage_20s",
+        "seed": 0,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.31520860056390965,
+        "final_attitude_deg": 0.03566090048056824,
+        "initial_attitude_deg": 0.702784242304406,
+        "minimum_covariance_diagonal": 9.57834815105263e-10,
+        "position_rmse": 0.86179199977206,
+        "position_max": 5.106294357007282,
+        "velocity_rmse": 0.1271230602117366,
+        "velocity_max": 0.737833464760473,
+        "attitude_rmse": 0.014522762463825035,
+        "attitude_max": 0.032559079511317694,
+        "rate_rmse": 0.0008107684033588164,
+        "rate_max": 0.0024938390633818413,
+        "nis_gnss_mean": 5.987568856146985,
+        "nis_radar_mean": 1.0400340965983423
+      },
+      {
+        "case": "nominal",
+        "seed": 1,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.32310028541777297,
+        "final_attitude_deg": 0.21070710498421735,
+        "initial_attitude_deg": 1.1626244416008022,
+        "minimum_covariance_diagonal": 9.47210532879966e-10,
+        "position_rmse": 0.4010967085019996,
+        "position_max": 2.336764560274008,
+        "velocity_rmse": 0.05032228871575345,
+        "velocity_max": 0.2776272046613754,
+        "attitude_rmse": 0.012977592577992263,
+        "attitude_max": 0.03610957800777939,
+        "rate_rmse": 0.0007747162262220555,
+        "rate_max": 0.0021585634943449778,
+        "nis_gnss_mean": 5.983082223469672,
+        "nis_radar_mean": 1.0284633758733621
+      },
+      {
+        "case": "startup_5s",
+        "seed": 1,
+        "first_gnss_time": 5.1000000000000005,
+        "initialization_source": "declared_prior",
+        "final_position_m": 0.32318080486047984,
+        "final_attitude_deg": 0.1599036252075993,
+        "initial_attitude_deg": 1.1626244416008022,
+        "minimum_covariance_diagonal": 9.47146084349035e-10,
+        "position_rmse": 2.5810820871433044,
+        "position_max": 14.37339671217065,
+        "velocity_rmse": 0.15642652496597895,
+        "velocity_max": 1.3084295824815453,
+        "attitude_rmse": 0.011728631831116883,
+        "attitude_max": 0.0395954943550047,
+        "rate_rmse": 0.0007697588554861072,
+        "rate_max": 0.002149107872021405,
+        "nis_gnss_mean": 6.002840322932986,
+        "nis_radar_mean": 1.026743568620376
+      },
+      {
+        "case": "outage_20s",
+        "seed": 1,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.32235939255850043,
+        "final_attitude_deg": 0.16107632314348275,
+        "initial_attitude_deg": 1.1626244416008022,
+        "minimum_covariance_diagonal": 9.551930315288758e-10,
+        "position_rmse": 0.9939656119886054,
+        "position_max": 6.002296402293778,
+        "velocity_rmse": 0.14250515677698303,
+        "velocity_max": 0.8181597352873274,
+        "attitude_rmse": 0.01786279644795329,
+        "attitude_max": 0.04248303869073529,
+        "rate_rmse": 0.0007860568704126872,
+        "rate_max": 0.0021585634943449778,
+        "nis_gnss_mean": 5.929934146155786,
+        "nis_radar_mean": 1.0284633758733621
+      },
+      {
+        "case": "nominal",
+        "seed": 2,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.35056967253477844,
+        "final_attitude_deg": 0.11295985188508145,
+        "initial_attitude_deg": 2.3323369019411286,
+        "minimum_covariance_diagonal": 9.468755586966868e-10,
+        "position_rmse": 0.36551851822227177,
+        "position_max": 3.28047109831412,
+        "velocity_rmse": 0.05825369491885634,
+        "velocity_max": 0.5192774584871431,
+        "attitude_rmse": 0.01344512020514703,
+        "attitude_max": 0.040706958204636816,
+        "rate_rmse": 0.0007695523805608122,
+        "rate_max": 0.0022784725933227,
+        "nis_gnss_mean": 5.919335988602371,
+        "nis_radar_mean": 0.9673523167813661
+      },
+      {
+        "case": "startup_5s",
+        "seed": 2,
+        "first_gnss_time": 5.1000000000000005,
+        "initialization_source": "declared_prior",
+        "final_position_m": 0.3504696134116438,
+        "final_attitude_deg": 0.32482353182310814,
+        "initial_attitude_deg": 2.3323369019411286,
+        "minimum_covariance_diagonal": 9.468350702744405e-10,
+        "position_rmse": 3.1798465860285425,
+        "position_max": 23.389386028791684,
+        "velocity_rmse": 0.42601563652632424,
+        "velocity_max": 3.586284992124742,
+        "attitude_rmse": 0.010157994238059615,
+        "attitude_max": 0.04206241971154208,
+        "rate_rmse": 0.0007813751075937289,
+        "rate_max": 0.002395381137690941,
+        "nis_gnss_mean": 5.9234756250825,
+        "nis_radar_mean": 0.9671444028843506
+      },
+      {
+        "case": "outage_20s",
+        "seed": 2,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.34909691044569213,
+        "final_attitude_deg": 0.08205455952145715,
+        "initial_attitude_deg": 2.3323369019411286,
+        "minimum_covariance_diagonal": 9.55397490882444e-10,
+        "position_rmse": 0.8156611689654976,
+        "position_max": 4.133678114176507,
+        "velocity_rmse": 0.10646891392122601,
+        "velocity_max": 0.5192774584871431,
+        "attitude_rmse": 0.01637103476298406,
+        "attitude_max": 0.040706958204636816,
+        "rate_rmse": 0.000768677576625996,
+        "rate_max": 0.0022784725933227,
+        "nis_gnss_mean": 5.891354589167852,
+        "nis_radar_mean": 0.9673523167813661
+      },
+      {
+        "case": "nominal",
+        "seed": 3,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.41257037674768254,
+        "final_attitude_deg": 0.2878898560586748,
+        "initial_attitude_deg": 2.2414305693913135,
+        "minimum_covariance_diagonal": 9.486280511680316e-10,
+        "position_rmse": 0.3743632497450846,
+        "position_max": 2.5348615050329992,
+        "velocity_rmse": 0.05732263318919407,
+        "velocity_max": 0.3207895422846606,
+        "attitude_rmse": 0.01703625161344702,
+        "attitude_max": 0.042475975640075214,
+        "rate_rmse": 0.0007824355008941291,
+        "rate_max": 0.002377585183733656,
+        "nis_gnss_mean": 6.106234934039056,
+        "nis_radar_mean": 1.0273190696210135
+      },
+      {
+        "case": "startup_5s",
+        "seed": 3,
+        "first_gnss_time": 5.1000000000000005,
+        "initialization_source": "declared_prior",
+        "final_position_m": 0.4127415200633277,
+        "final_attitude_deg": 0.3437224631585878,
+        "initial_attitude_deg": 2.2414305693913135,
+        "minimum_covariance_diagonal": 9.483669214051907e-10,
+        "position_rmse": 2.610119016280984,
+        "position_max": 14.874619937229772,
+        "velocity_rmse": 0.2143239255207775,
+        "velocity_max": 1.8174330075421155,
+        "attitude_rmse": 0.02971609895791798,
+        "attitude_max": 0.07937916972968512,
+        "rate_rmse": 0.0008378766165358158,
+        "rate_max": 0.0023791032120976984,
+        "nis_gnss_mean": 6.080681796333739,
+        "nis_radar_mean": 1.0140445310047246
+      },
+      {
+        "case": "outage_20s",
+        "seed": 3,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.4139369508033412,
+        "final_attitude_deg": 0.3035868543439712,
+        "initial_attitude_deg": 2.2414305693913135,
+        "minimum_covariance_diagonal": 9.581762532547968e-10,
+        "position_rmse": 1.5109858954041557,
+        "position_max": 8.66425472913807,
+        "velocity_rmse": 0.18647827106967893,
+        "velocity_max": 0.9456201732797426,
+        "attitude_rmse": 0.020795076044151897,
+        "attitude_max": 0.042475975640075214,
+        "rate_rmse": 0.000784652649914428,
+        "rate_max": 0.0023834621262650113,
+        "nis_gnss_mean": 6.117949694404583,
+        "nis_radar_mean": 1.0273190696210135
+      },
+      {
+        "case": "nominal",
+        "seed": 4,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.17989389905609954,
+        "final_attitude_deg": 0.6517394697719526,
+        "initial_attitude_deg": 1.400644373321779,
+        "minimum_covariance_diagonal": 9.47361051115578e-10,
+        "position_rmse": 0.37710952838078615,
+        "position_max": 5.097530038165207,
+        "velocity_rmse": 0.046682202138046205,
+        "velocity_max": 0.25793812378552083,
+        "attitude_rmse": 0.010658801271003444,
+        "attitude_max": 0.025539679455661313,
+        "rate_rmse": 0.0007787175129361234,
+        "rate_max": 0.002027648496486823,
+        "nis_gnss_mean": 6.066275337686749,
+        "nis_radar_mean": 0.9230975254998448
+      },
+      {
+        "case": "startup_5s",
+        "seed": 4,
+        "first_gnss_time": 5.1000000000000005,
+        "initialization_source": "declared_prior",
+        "final_position_m": 0.1798673937716885,
+        "final_attitude_deg": 0.7142418877315619,
+        "initial_attitude_deg": 1.400644373321779,
+        "minimum_covariance_diagonal": 9.474293003218118e-10,
+        "position_rmse": 3.005870879882537,
+        "position_max": 20.843555739177116,
+        "velocity_rmse": 0.31558923753476575,
+        "velocity_max": 2.519530837903615,
+        "attitude_rmse": 0.014171484003822064,
+        "attitude_max": 0.036703730240091666,
+        "rate_rmse": 0.0008011939410153321,
+        "rate_max": 0.002110831355510117,
+        "nis_gnss_mean": 6.070290433614439,
+        "nis_radar_mean": 0.9148451167036725
+      },
+      {
+        "case": "outage_20s",
+        "seed": 4,
+        "first_gnss_time": 0.0,
+        "initialization_source": "gnss",
+        "final_position_m": 0.17932128487806479,
+        "final_attitude_deg": 0.541025662151693,
+        "initial_attitude_deg": 1.400644373321779,
+        "minimum_covariance_diagonal": 9.557891853848574e-10,
+        "position_rmse": 1.1125003000368598,
+        "position_max": 6.737343452531738,
+        "velocity_rmse": 0.15387213847737646,
+        "velocity_max": 0.8570446402086297,
+        "attitude_rmse": 0.011881100603650677,
+        "attitude_max": 0.025539679455661313,
+        "rate_rmse": 0.0007910584883005944,
+        "rate_max": 0.002143715387281554,
+        "nis_gnss_mean": 6.047919836899843,
+        "nis_radar_mean": 0.9230975254998448
+      }
+    ],
+    "ascent_summary": [
+      {
+        "case": "nominal",
+        "n": 5,
+        "duration_s": 150.0,
+        "position_rmse_mean_m": 0.3800870929594097,
+        "velocity_rmse_mean_mps": 0.053691229881437555,
+        "attitude_rmse_mean_deg": 0.7501150716160376,
+        "position_max_m": 5.097530038165207,
+        "mean_nees": 10.70334045856745,
+        "nees_pointwise_95_coverage": 0.5040330644623692,
+        "nis_gnss_mean": 6.00707140911647,
+        "nis_radar_mean": 0.9972532768747857
+      },
+      {
+        "case": "startup_5s",
+        "n": 5,
+        "duration_s": 150.0,
+        "position_rmse_mean_m": 2.832533535212605,
+        "velocity_rmse_mean_mps": 0.26191391960897664,
+        "attitude_rmse_mean_deg": 0.8657970096939218,
+        "position_max_m": 23.389386028791684,
+        "mean_nees": 10.827589508824428,
+        "nees_pointwise_95_coverage": 0.5313645756949537,
+        "nis_gnss_mean": 6.001779062254526,
+        "nis_radar_mean": 0.9919535778707036
+      },
+      {
+        "case": "outage_20s",
+        "n": 5,
+        "duration_s": 150.0,
+        "position_rmse_mean_m": 1.0589809952334357,
+        "velocity_rmse_mean_mps": 0.14328950809140023,
+        "attitude_rmse_mean_deg": 0.9331508107082312,
+        "position_max_m": 8.66425472913807,
+        "mean_nees": 11.16609060907301,
+        "nees_pointwise_95_coverage": 0.58969402039864,
+        "nis_gnss_mean": 5.99494542455501,
+        "nis_radar_mean": 0.9972532768747857
+      }
+    ],
+    "nees_pointwise_95_limits": [
+      10.58838795410657,
+      20.167867680362672
+    ],
+    "conventions": "Means over seeds; NEES bands are pointwise ensemble bands, not independent tests over correlated time samples. Constant injected biases; all channels retain modeled noise and 1 degree alignment uncertainty."
+  },
+  "conventions": {
+    "vector_errors": "Euclidean vector norm; sample RMSE and maximum on each nav grid",
+    "attitude": "Shortest quaternion rotation angle, radians in JSON; degrees in tables",
+    "contact": "Interpolated radial ground contact; nav grid stops before terminal contact",
+    "replay": "One fixed calibrated identity trajectory; identical samples and initial posterior; no estimator feeds back into the replay plant",
+    "imu_only": "GNSS/radar initialization retained, all subsequent aiding disabled",
+    "outage": "Same samples, GNSS updates disabled at t=4 through 8 s; radar retained",
+    "scope": "Ten seeds per landing condition; five seeds per 150-second ascent condition; pointwise NEES and NIS diagnostics, not operational qualification"
+  }
+}

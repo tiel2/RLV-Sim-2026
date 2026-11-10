@@ -12,7 +12,7 @@ RLV-Sim은 Falcon 9 계열 기체의 결합체 상승과 1단 재진입·하강�
 
 이 문서는 2026-11-03의 다섯 대표 phase, 구면 회전지구 및 폐루프 착륙까지 반영했다. 기존 13개 차량 실험·상승·단분리·자세 전환/부스트백은 재사용 가능한 검증 사례로 보존한다. 현재 실행 명령과 검증 범위는 [다섯 phase 명세](reference/project2_scenario_spec.md), 결과는 [현재 결과](verification/project2_segments/physics_results.md), 남은 작업은 [TODO](TODO.md)를 따른다.
 
-센서 기반 항법은 아직 구현하지 않았다. 수식은 구현을 설명하며 생략 항과 근사를 해당 위치에 명시한다. 과거 실행 기록의 수치·테스트 수는 그 검증 시점에 해당하고, 최신 상태는 전체 테스트 400개·다섯 phase 검사·WebGL 25개 통과다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 수식과 도표를 렌더링할 수 있다.
+2026-11-10 항법 확장은 물리 IMU/GNSS/반경 고도계와 회전 지구계 ESKF, 불확실한 초기 정렬 및 GNSS 없는 초기화, 여러 seed·중단 조건과 공분산 진단을 포함한다(8.1절). 수식은 구현을 설명하며 생략 항과 근사를 해당 위치에 명시한다. 과거 실행 기록의 수치·테스트 수는 그 검증 시점에 해당하고, 11월 3일 물리 캠페인은 전체 테스트 400개·다섯 phase 검사·WebGL 25개 통과 기록을 갖는다. Markdown 뷰어에서 수학 표현과 Mermaid 지원을 활성화하면 수식과 도표를 렌더링할 수 있다.
 
 ## 목차
 
@@ -51,7 +51,7 @@ RLV-Sim은 Falcon 9 계열 기체의 결합체 상승과 1단 재진입·하강�
 | 환경 | rotating은 중심중력·전체 자전 항, 층별 대기, 정상풍·난류 | 원점 NED와 정렬한 지구고정 Cartesian 축, 반경 고도·접촉; fixed는 기존 평면 근사 |
 | 연료 출렁임 | 없음, 진자, 스프링–질량 모델 | 2개 횡방향 모드 |
 | 고장 | 엔진 정지·추력 저하, TVC 편향, fin 고착, RCS 노즐 성능 저하 | RCS 고장은 `plant.rcs.thrust_scale`로 별도 지정 |
-| 항법 | `IdentityNav`, 항법 템플릿 | 실제 상태 전달; 센서·INS·EKF는 미구현 |
+| 항법 | `IdentityNav`, `synthetic_eskf`, 항법 템플릿 | 실제 상태 전달 또는 물리 IMU/GNSS/반경 고도계와 회전 지구계 ESKF |
 | 유도 | 역추력 재진입, 공력 하강 자세, LCvx/SCvx 착륙 | 동력 착륙 유도는 설정으로 교체 |
 | 제어 | quaternion 오차 기반 PD | 요구 기체 토크 생성 |
 | 할당 | throttle·짐벌·fin·RCS 명령 | 공칭 효과에 따른 배분과 제한 |
@@ -742,7 +742,24 @@ measurement = nav.measure(truth, seed)
 x_hat, nav_memory = nav.estimate(measurement, held_actuator, nav_memory)
 ```
 
-기본 항법은 $\widehat x(t_k)=x_{truth}(t_k)$다. `IdentityNav`를 직접 구성하면 위치 등에서 $y=x+b+\sigma\epsilon$, $\epsilon\sim\mathcal N(0,I)$ 형태의 교란을 줄 수 있다. 자세 교란은 작은 회전 quaternion을 곱하고 정규화한다. 일반 센서 관측식이나 필터의 예측·갱신은 아직 없다.
+기본 항법은 $\widehat x(t_k)=x_{truth}(t_k)$다. `IdentityNav`를 직접 구성하면 위치 등에서 $y=x+b+\sigma\epsilon$, $\epsilon\sim\mathcal N(0,I)$ 형태의 교란을 줄 수 있다. 자세 교란은 작은 회전 quaternion을 곱하고 정규화한다. `synthetic_eskf`는 아래의 센서 기반 예측·갱신을 제공한다.
+
+`synthetic_eskf`의 센서 생성기는 `measure_native(truth, seed, diagnostics)`로
+native 비중력 힘(발사대 반력 포함)/질량과 관성 각속도를 받는다. 추정기에는 센서
+표본만 전달한다. 전파에는 중심중력·Coriolis·원심항·지구 자전 자세 항을 포함하며,
+고도계는 회전 지구계에서 반경 고도를 관측한다. 초기 자세는 축별 1도 불확실성을
+가진 일회성 정렬 관측이다. 첫 GNSS가 없으면 설정된 초기 위치·속도 사전값과
+공분산으로 시작하며, 사전값도 없으면 초기화를 거부한다. 질량은 이상적 보조 관측이다.
+
+`report_assets/generate_navigation.py`는 두 착륙 조건과 시작 GNSS 중단 조건에서
+각각 10개 seed, 150초 상승 궤적의 세 GNSS 조건에서 각각 5개 seed를 평가한다.
+센서 잡음·초기 정렬·중단에 대한 제한된 평가이며 전체 비행 강건성 인증은 아니다.
+
+최종 보고서는 `report.tex` / `report.pdf`이며 `main.tex`는 별도의 작업 문서다.
+기본 IMU는 100 Hz이고 `nav_dt=0.01`과 일치하는지 검사하며 실행기가 주기를 자동 변경하지 않는다.
+GNSS 이상치, 축척 오차, 센서 편향 random walk와 NIS gate는 명시적으로 설정하는 선택 실험이다.
+`scripts/analyze_navigation.py`는 같은 native IMU 자료와 불확실한 공통 초기화를 사용해
+INS/ESKF 비교 및 네 가지 진단 그림을 생성한다.
 
 ### 8.2 비행 단계와 유도
 
@@ -1144,6 +1161,8 @@ python scripts/view_replay.py
 
 `.venv`가 없는 환경에서는 활성화 전에 `python3 -m venv .venv`로 만든다. 가상환경을 활성화하면 아래의 `python`은 프로젝트 가상환경의 Python을 뜻한다. 활성화 없이 실행하려면 `python`을 `./.venv/bin/python`으로 바꾼다. `[dev]`는 pytest·ruff를 포함하며 일반 실행만 필요하면 `python -m pip install -e .`도 가능하다. LCvx의 Python QOCO 비교 경로까지 사용할 때는 `python -m pip install -e ".[dev,qoco]"`를 사용한다. 네이티브 SCvx용 QOCO는 C++ 확장에 포함된다.
 
+위 설치 명령은 센서 CSV 생성·시각화에 필요한 `pandas`도 함께 설치한다. 기존 프로젝트를 업데이트한 경우에도 같은 명령을 다시 실행하여 새로 추가된 의존성을 설치한다.
+
 | 목적 | 명령어 |
 |---|---|
 | 지정 입력 재진입 연소 구간 | `python scripts/run_single.py scenario=entry_burn` |
@@ -1228,7 +1247,7 @@ python scripts/run_single.py plant/actuator=ideal gnc/guidance=scvx \
 | `fault` | `none`, `engine_out`, `engine_underperform`, `tvc_bias`, `fin_lock` | `none` | 엔진 인덱스·구동기 모델과 함께 확인 |
 | `gnc/guidance` | `lcvx`, `scvx`, `template` | `lcvx` | `template`은 확장용 예제 유도 |
 | `gnc/control` | `pd`, `template` | `pd` | `template`은 확장용 예제 제어 |
-| `gnc/navigation` | `identity`, `template`, `ekf` | `identity` | identity/template은 truth 전달; **ekf는 미구현 예외** |
+| `gnc/navigation` | `identity`, `synthetic_eskf`, `template`, `ekf` | `identity` | synthetic_eskf는 센서 항법; ekf는 별도 미구현 예외 |
 | `gnc/scheduler` | `altitude`, `guard` | `altitude` | 둘 다 현재 설정에서는 고도 기반 전환 |
 | `gnc/allocation` | `default` | `default` | 세부 필드로 분담 동작 변경 |
 | `run` | `single`, `montecarlo` | `single` | 실행 스크립트와 일치시킬 것 |

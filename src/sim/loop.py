@@ -495,6 +495,8 @@ def run_simulation(
     }
     aux_log = []
     nav_log = {key: [] for key in ("truth", "measurement", "estimate")}
+    inertial_log = {key: [] for key in ("specific_force_body", "omega_inertial_body")}
+    sensor_log = {}
     act_log = {
         key: []
         for key in ("t_start", "t_end", "t_command", "t_held", "commanded", "held", "effective")
@@ -525,8 +527,25 @@ def run_simulation(
             seed = int(nav_rng.bit_generator.random_raw())
             # Keep independent records even if an estimator updates its input arrays in place.
             truth_row = _state_record(state) if record_telemetry else None
-            meas = _stamp_epoch(nav.measure(copy.deepcopy(state), seed), float(state.t))
+            if hasattr(nav, "measure_native"):
+                meas = nav.measure_native(copy.deepcopy(state), seed, copy.deepcopy(aux))
+            else:
+                meas = nav.measure(copy.deepcopy(state), seed)
+            meas = _stamp_epoch(meas, float(state.t))
             measurement_row = _state_record(meas) if record_telemetry else None
+            if record_telemetry and hasattr(meas, "accel_body"):
+                for key in (
+                    "accel_body",
+                    "gyro_body",
+                    "gnss_valid",
+                    "radar_alt_m",
+                    "radar_valid",
+                    "alignment_valid",
+                    "gnss_scheduled",
+                    "radar_scheduled",
+                    "gnss_outlier",
+                ):
+                    sensor_log.setdefault(key, []).append(np.array(getattr(meas, key), copy=True))
             x_hat, nav_mem = nav.estimate(meas, held, nav_mem)
             x_hat = _stamp_epoch(x_hat, float(state.t))
             events["navigation"].append(float(state.t))
@@ -534,6 +553,13 @@ def run_simulation(
                 nav_log["truth"].append(truth_row)
                 nav_log["measurement"].append(measurement_row)
                 nav_log["estimate"].append(_state_record(x_hat))
+                inertial_log["specific_force_body"].append(
+                    (np.asarray(aux["F_body_total"]) + np.asarray(aux["F_pad_body"]))
+                    / float(state.m)
+                )
+                inertial_log["omega_inertial_body"].append(
+                    np.array(aux["omega_inertial_body"], copy=True)
+                )
         if split and tick % schedule.guidance == 0:
             cmd, gnc_mem = controller.guide(x_hat, t, gnc_mem)
             phase = int(cmd.phase)
@@ -708,7 +734,9 @@ def run_simulation(
     }
     if nav_log["truth"]:
         result.navigation = NavigationHistory(
-            **{key: _state_history(rows) for key, rows in nav_log.items()}
+            **{key: _state_history(rows) for key, rows in nav_log.items()},
+            inertial={key: np.asarray(rows) for key, rows in inertial_log.items()},
+            sensors={key: np.asarray(rows) for key, rows in sensor_log.items()} or None,
         )
     if act_log["t_start"]:
         result.actuators = ActuatorHistory(

@@ -13,6 +13,10 @@ Requires Python 3.10+ and a C++ compiler.
 python -m pip install -e ".[dev]"
 ```
 
+This installs the runtime dependencies, including pandas for sensor CSV generation and plotting.
+After updating an existing checkout, rerun this command in the project virtual environment to
+install newly added dependencies.
+
 The optional `[qoco]` extra enables QOCO for LCvx comparisons; SCvx bundles its native solver.
 
 ## Run
@@ -167,12 +171,11 @@ Single runs additionally write:
 | `actuators.npz` | Timestamped `commanded_*`, delayed `held_*`, and plant `effective_*` inputs |
 | `telemetry_schema.json` | Frames, units, sample meanings, and timestamp conventions |
 
-Navigation records use NED position/velocity and scalar-first body-to-NED quaternions. The online
+Navigation records use NED position/velocity and scalar-first body-to-NED quaternions. The current
 navigation seam is synchronous: measurement and estimate epochs match truth, and held estimates
 between updates are not treated as fresh samples. Legacy modules without timestamps are stamped
-by the loop. All records are independent copies. Identity navigation remains the default. The
-explicit `synthetic_eskf` option adds synthetic IMU/GNSS/radar measurements and a 15-state aided
-INS; its direct online telemetry does not include raw sensor channels.
+by the loop. All records are independent copies. Identity navigation has zero error in the
+reference case; `synthetic_eskf` provides the sensor-based INS/filter described below.
 
 Actuator effective values are endpoint inputs after limits/lag, including ideal command tracking;
 engine health multipliers and fixed nozzle cant/bias act downstream. The initial truth sample
@@ -181,41 +184,29 @@ and omit the dense navigation/actuator histories.
 For pulsed RCS, the effective axis channel is the instantaneous endpoint pulse state, not the
 mean duty requested by GNC. Individual nozzle states are available in native diagnostics.
 
-## Navigation status and TODO
+## Navigation status and evaluation
 
-`IdentityNav` remains the default and passes plant truth to GNC. `gnc/navigation=synthetic_eskf`
-selects an assumed IMU/GNSS/radar sensor suite and a strapdown ESKF; `gnc/navigation=ekf` remains
-an unavailable placeholder. Run a fixed-truth comparison with:
+The default `IdentityNav` passes plant truth to GNC. Select the research prototype
+`gnc/navigation=synthetic_eskf` for synthetic IMU/GNSS/radar measurements and a 15-error-state
+ESKF with position, velocity, attitude, and IMU-bias estimation:
 
 ```bash
-python scripts/analyze_navigation.py scenario=project2_landing
+.venv/bin/python scripts/run_single.py scenario=flight_calibrated_landing gnc/navigation=synthetic_eskf
+.venv/bin/python report_assets/generate_navigation.py
 ```
 
-The command records the fixed truth trajectory, sensor packets, INS-only baseline, aided ESKF,
-error histories, RMSE, maximum vector errors, and per-axis RMSE in `navigation_comparison.npz`
-and `navigation_comparison.json`. The representative rates are 200 Hz IMU, 10 Hz GNSS, and
-20 Hz radar altimeter. The configured landing test includes an 8--12 s GNSS outage and a GNSS
-outlier at 4 s; normalized innovation gating rejects gross measurement errors. Four PNGs compare
-the estimated position/flight path with simulated 6-DOF truth, plot state histories, show
-filtered errors against component-wise ±3σ bounds, and show innovations and bias estimates.
-Both estimators receive identical measurements, initial position/velocity/attitude/mass, and
-deterministic seeds. This is a reproducible synthetic demonstration, not calibrated sensor
-performance or flight validation: it assumes known initialization, zero latency, constant mass,
-fixed-origin NED gravity, and velocity-differenced accelerometer truth at navigation rate.
-Accelerometer readings are specific force and exclude gravity. The 3σ/NEES diagnostics are
-reported rather than treated as proof of consistency; temporal correlation and model
-approximations limit their interpretation. In the default landing example, aiding lowers
-position/velocity RMSE but slightly worsens attitude/angular-rate RMSE; NEES and component-wise
-3σ coverage indicate a conservative, not yet calibrated covariance model.
+The report campaign compares identity and ESKF feedback within two landing scenarios and
+evaluates IMU-only/ESKF/GNSS-outage variants on identical truth and sensor samples.
+See [navigation evidence and reproduction](report_assets/README.md#navigation-extension-10-november-2026).
+IMU channels use native non-gravitational force and inertial angular rate. The ESKF
+propagates central gravity, Coriolis and centrifugal acceleration, and Earth-relative attitude.
+Initial alignment has 1 degree per-axis uncertainty; absent initial GNSS uses an explicit
+position/velocity prior. Mass remains an ideal auxiliary measurement. The campaign includes
+30 landing trials and 15 ascent replays (150 s each), startup/in-flight GNSS outages, and
+NEES/NIS diagnostics. These finite trials reveal landing sensitivity and do not establish
+global covariance consistency or operational reliability. The separate `gnc/navigation=ekf` placeholder still raises `NotImplementedError`.
 
-Selecting `gnc/navigation=synthetic_eskf` in `scripts/run_single.py` also automatically generates
-the same-truth comparison outputs in that run's result folder (the JSON/NPZ metrics and four PNG
-plots). This is a reproducible seeded sensor/estimator replay over that run's truth trajectory,
-separate from the online navigation samples used by the controller. The run sets its navigation
-step to the configured IMU period; the default identity-nav run is unchanged.
-
-The ordered backlog for ascent, recovery phases, sensor models, and navigation is maintained in
-[Development TODO](docs/TODO.md).
+See [Development status](docs/TODO.md) for remaining model-fidelity and qualification work.
 
 Project 2 selects **five independently initialized phases**: ascent, entry burn, aerodynamic descent,
 terminal powered descent, and landing. Their [scenario specification](docs/reference/project2_scenario_spec.md)
@@ -238,7 +229,7 @@ The same viewer command opens the most recent run of any of the five phases.
 All five cases enable spherical rotating Earth at an assumed reference latitude of 28.6°;
 the ascent origin is the launch point. Stored `r_ned/v_ned` are Earth-fixed Cartesian axes
 aligned with origin NED, with radial altitude/contact. `w_body` is reference-relative;
-`omega_inertial_body` is the rate for future gyro measurements. Run
+`omega_inertial_body` is the inertial-rate truth used by the synthetic gyro. Run
 `python scripts/check_rotating_earth.py` for full Kepler orbits, inertial energy/momentum,
 torque-free attitude and rotation sensitivity. See [equations and results](docs/verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification).
 `python scripts/check_project2_segments.py` checks independent equations, step refinement and body-table
@@ -254,8 +245,27 @@ to those local artifacts become available after running the corresponding comman
 configurations, tests and manual reports remain in the repository.
 
 The existing update schedule, truth/measurement/estimate records, and error statistics remain
-available as infrastructure for this future work. The reference case continues to use identity
+used by the sensor-based navigation implementation. The reference case continues to use identity
 navigation; its zero estimation error does not validate a sensor-based navigation algorithm.
+
+The final submission document is [`report.tex`](report.tex), compiled to [`report.pdf`](report.pdf).
+`main.tex` is a separate working document; the final report is `report.tex`. The nominal navigation
+configuration uses 100 Hz IMU and a 10 ms navigation period, 10 Hz GNSS, and 20 Hz radial
+height aiding. Runners reject inconsistent rates. No GNSS outage/outlier or innovation
+gate is enabled in nominal settings; explicit stress experiments configure them.
+
+The standalone comparison and its four diagnostic plots use the same physical sensor
+implementation as online navigation:
+
+```bash
+.venv/bin/python scripts/analyze_navigation.py scenario=project2_landing
+.venv/bin/python scripts/analyze_navigation.py scenario=project2_landing gnc/navigation=synthetic_eskf gnc.navigation.gnss_outlier_times=[4.0] gnc.navigation.gnss_gate_threshold=16.812
+```
+
+Scale factors, sensor-bias random walks, and GNSS/radar NIS gates remain optional
+experiments. These options are disabled in the nominal report campaign. Comparison
+metrics/plots in a standalone run are a separate replay using one common sensor sequence,
+not the online estimation errors that influenced its flight trajectory.
 
 ## Layout
 
@@ -277,7 +287,13 @@ models, see [코드 구조와 수학 모델](docs/3_project_guide_ko.md).
 
 ## Verify
 
-Latest verification (2026-11-03, including `project2_landing`): **400 tests**, Ruff,
+Current verification (2026-11-10): **484 tests**, `ruff check src tests scripts`, all
+five representative phase checks, standalone native-sensor comparison, online synthetic
+navigation and report compilation passed. Navigation data/source hashes were regenerated
+for the merged implementation. The nominal seed/ascent results reproduce the report's
+recorded values; finite-seed landing sensitivity and covariance limits remain documented.
+
+Historical physics milestone (2026-11-03, including `project2_landing`): **400 tests**, Ruff,
 all **five phase checks**, and **25 WebGL state/geometry checks** passed. The rotating-Earth
 landing achieved 0.086245 m/s contact speed and 0.019430 m position error. See
 [current results](docs/verification/project2_segments/physics_results.md) and

@@ -1,0 +1,39 @@
+\subsection{Navigation Campaign Reproduction}\label{sec:nav-reproduction}
+
+The navigation results are newly executed runs, separate from the archived physics
+campaign. From the repository root, regenerate the four paired closed-loop cases, the common-truth
+replay, thirty additional landing trials, fifteen ascent replays, and the navigation figures/tables with:
+\begin{lstlisting}
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python report_assets/generate_navigation.py
+.venv/bin/python -m pytest tests/test_synthetic_eskf.py tests/sim/test_timing_contract.py tests/sim/test_multirate.py tests/sim/test_flight_calibration.py -q
+\end{lstlisting}
+The generator writes resolved configurations, seed manifests, full-rate navigation
+histories, physics histories, and contact/error summaries under
+\path{results/report_navigation/}. The navigation histories include native specific force and inertial rate at the navigation period.
+The fixed-truth replay additionally saves the actual
+IMU/GNSS/radar samples, all estimator states, bias estimates, and covariance diagonals.
+\path{report_assets/navigation_metrics.json} records source SHA-256 hashes, the base Git
+revision, numerical package versions, data hashes, and the evaluation conventions. These records identify the evaluated source and environment.
+The figures and generated numerical tables in \path{report_assets/navigation_*} are
+included in the report source tree; the \path{results/} histories can be regenerated with the same command
+or supplied with the results archive to inspect the complete time histories.
+
+For a normal standalone run with replay and sensor post-processing:
+\begin{lstlisting}
+.venv/bin/python scripts/run_single.py scenario=flight_calibrated_landing gnc/navigation=synthetic_eskf hydra.run.dir=results/navigation_landing
+\end{lstlisting}
+Replacing \texttt{synthetic\_eskf} with \texttt{identity} selects exact state feedback.
+The standalone runner's additional sensor CSVs are generated after the flight; the ESKF
+has already used its online sensor model during the closed-loop simulation.
+
+The IMU rate and navigation period are explicit and must agree; the report settings use
+100 Hz and 10 ms. Neither runner changes the period automatically. An independent
+same-truth comparison and diagnostic plots can also be generated with:
+\begin{lstlisting}
+.venv/bin/python scripts/analyze_navigation.py scenario=project2_landing
+\end{lstlisting}
+This optional comparison uses the same physical sensor and rotating-frame propagation.
+Its seeded replay is separate from the online samples that influenced a closed-loop run.
+Scale-factor, bias-random-walk, outlier and gate settings are optional experiments; the
+nominal report configuration keeps them disabled.

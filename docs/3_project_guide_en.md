@@ -27,8 +27,9 @@ pass. The original `+baseline=pdg` remains a separate fixed-Earth regression.
 
 Attached-stack ascent, impulse-free separation and the connected RCS maneuver/boostback
 experiment are implemented and verified; the latter does not achieve its return target.
-Continuous launch-to-touchdown integration is optional and unqualified. Sensors, INS/EKF
-and final public-flight comparison/reporting remain pending. Use the
+Continuous launch-to-touchdown integration is optional and unqualified. The subsequent
+10 November extension adds physical IMU/GNSS/altimeter sampling and a rotating-frame
+ESKF with initialization, seed/outage studies, and covariance diagnostics (Section 8.1). Use the
 [five-phase specification](reference/project2_scenario_spec.md),
 [current results](verification/project2_segments/physics_results.md),
 [rotating-Earth equations](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification),
@@ -38,7 +39,7 @@ the older fixed-Earth cases; historical run counts and results are labeled by th
 
 RLV-Sim is a research simulator for Falcon 9 first-stage reentry, descent, and landing, with interchangeable guidance, navigation, and control algorithms. Python handles configuration, GNC, execution scheduling, and analysis; C++ handles the six-degree-of-freedom physics and numerical integration.
 
-This guide reflects the shared runner, prescribed-input open-loop experiments, physics verification, and synthetic navigation analysis as of 2026-11-10. It covers existing closed-loop GNC and Monte Carlo capabilities, 13 vehicle experiments with independent initial conditions, fin deployment, physical quantities and event logging, analytical references, integration-step comparisons, and an assumed IMU/GNSS/radar ESKF. Equations explain the implementation; omitted terms and nominal approximations are identified where relevant. Source links accompany each section. Enable math and Mermaid support in your Markdown viewer to render `$...$`, `$$...$$`, and diagrams.
+This guide reflects the shared runner, prescribed-input open-loop experiments, and physics verification features as of 2026-10-21. It covers existing closed-loop GNC and Monte Carlo capabilities, 13 vehicle experiments with independent initial conditions, fin deployment, physical quantities and event logging, analytical references, and integration-step comparisons. Sensor-based navigation is provided by the subsequent `synthetic_eskf` extension described in Section 8.1. Equations explain the implementation; omitted terms and nominal approximations are identified where relevant. Source links accompany each section. Enable math and Mermaid support in your Markdown viewer to render `$...$`, `$$...$$`, and diagrams.
 
 ## Contents
 
@@ -75,7 +76,7 @@ The key distinction is between the **6-DOF Plant**, **3-DOF landing trajectory o
 | Environment | Central gravity and full rotating-Earth terms in rotating mode; layered atmosphere, wind/turbulence | Fixed-origin Earth-fixed Cartesian axes aligned with NED; radial altitude/contact. Fixed mode retains flat geometry |
 | Slosh | None, pendulum, spring-mass | Two lateral modes |
 | Faults | Engine shutdown/underperformance, TVC bias, fin lock, RCS nozzle degradation | RCS faults configured separately through `plant.rcs.thrust_scale` |
-| Navigation | `IdentityNav`, navigation template | Truth passthrough; sensors, INS, and EKF not implemented |
+| Navigation | `IdentityNav`, `synthetic_eskf`, navigation template | Truth passthrough or physical IMU/GNSS/radial-height ESKF |
 | Guidance | Retropropulsive reentry, aerodynamic-descent attitude, LCvx/SCvx landing | Powered-landing guidance selected through configuration |
 | Control | Quaternion-error PD | Generates requested body torque |
 | Allocation | Throttle, gimbal, fin, and RCS commands | Nominal-effectiveness allocation with limits |
@@ -354,7 +355,7 @@ guidance = instantiate(cfg.gnc.guidance.law, ctx)
 | `active_engines` | Engine mask for this guidance phase |
 | `phase` | Guidance phase tag |
 
-Navigation construction currently passes only `GncContext(cfg=...)`. Guidance, navigation, and control can be replaced through the `build(ctx)` addressed by `law._target_`; allocation and the reentry/aerodynamic-descent guidance laws are wired directly in [build.py](../src/gnc/build.py).
+Navigation construction passes module settings and declared frame/initial-prior constants in `GncContext`. Guidance, navigation, and control can be replaced through the `build(ctx)` addressed by `law._target_`; allocation and the reentry/aerodynamic-descent guidance laws are wired directly in [build.py](../src/gnc/build.py).
 
 <a id="timing"></a>
 
@@ -753,53 +754,34 @@ This section applies to `scenario.input_mode=closed_loop`. Runs with `prescribed
 
 ### 8.1 Navigation
 
-Sources: [navigation/identity.py](../src/gnc/navigation/identity.py), [navigation/synthetic_eskf.py](../src/gnc/navigation/synthetic_eskf.py), [validation/navigation.py](../src/validation/navigation.py), and [scripts/analyze_navigation.py](../scripts/analyze_navigation.py).
+Sources: [navigation/identity.py](../src/gnc/navigation/identity.py), [navigation/ekf_stub.py](../src/gnc/navigation/ekf_stub.py).
 
 ```python
 measurement = nav.measure(truth, seed)
 x_hat, nav_memory = nav.estimate(measurement, held_actuator, nav_memory)
 ```
 
-`IdentityNav` remains the default: $\widehat x(t_k)=x_{truth}(t_k)$. The explicit
-`gnc/navigation=synthetic_eskf` option models body-frame accelerometer specific force (gravity
-excluded), gyro rate, GNSS NED position/velocity, and local radar altitude. A 15-state error-state
-filter propagates position, velocity, attitude, gyro bias, and accelerometer bias and applies
-GNSS/radar updates. `UnfilteredINS` uses the same IMU samples and initialization without aiding.
-The filter is initialized from the scenario's known initial state; estimated mass remains the
-known initial mass and is not part of the navigation-error score.
+Default navigation is $\widehat x(t_k)=x_{truth}(t_k)$. Directly constructing `IdentityNav` allows perturbations such as $y=x+b+\sigma\epsilon$, $\epsilon\sim\mathcal N(0,I)$ for position and other states. Attitude perturbations multiply by a small-rotation quaternion and normalize. `synthetic_eskf` supplies the sensor-based prediction/update described below.
 
-When selected with `scripts/run_single.py`, the IMU period is applied to the run's navigation
-update grid automatically. After the run, the simulator's recorded truth trajectory is used for
-the same-truth INS/ESKF comparison, saved in the run's result directory as
-`navigation_comparison.json`, `navigation_comparison.npz`, and the four comparison PNGs. The
-comparison is a reproducible seeded sensor/estimator replay over that run's truth trajectory; it is
-separate from the online navigation samples used by the controller. This post-processing is only
-enabled for the explicit `synthetic_eskf` selection; other navigation modules keep their existing
-output behavior.
+The `synthetic_eskf` sensor generator receives native specific force (including pad
+support) and inertial angular rate through `measure_native(truth, seed, diagnostics)`.
+The estimator receives sensor samples and declared reference constants. It includes
+central gravity, Coriolis/centrifugal terms, Earth-rate attitude propagation, radial
+height updates, and the global attitude-error covariance reset. Initial alignment is
+an uncertain one-time observation (1 degree per axis). Missing startup GNSS uses an
+explicit handoff position/velocity prior and covariance; without a prior initialization
+is rejected. Mass remains an ideal auxiliary measurement.
 
-Reproduce the fixed-truth, same-measurement comparison with
-`python scripts/analyze_navigation.py scenario=project2_landing`. The analysis uses 200 Hz IMU,
-10 Hz GNSS, and 20 Hz radar updates, includes a configured GNSS outage/outlier case, and writes
-sensor/estimate/error histories and metrics to `navigation_comparison.npz` and
-`navigation_comparison.json`. It also creates a truth-vs-estimate flight-path overlay,
-navigation-state history, filtered error/±3σ consistency, and innovation/bias plots. The ESKF
-gates GNSS/radar updates using normalized innovation tests and stores the innovation, posterior
-covariance, and bias estimates. Sensor parameters are assumed research values, latency is zero,
-the sensor specific-force truth is approximated by differentiating velocity at IMU ticks (the
-first sample assumes zero translational acceleration), and gravity is a fixed-origin NED
-approximation. Initial state is known, mass is constant, and scale factor/random-walk errors are
-optional configuration extensions. Consistency statistics are diagnostic rather than validation
-proof because samples are correlated and the mechanization is approximate. This is not calibrated
-hardware modeling, rotating-Earth navigation validation, or public-flight validation.
+`report_assets/generate_navigation.py` evaluates ten seeds per landing condition
+(including a startup GNSS outage) and five seeds per condition on a 150-second native
+ascent replay. It records raw sensor channels, NEES/NIS diagnostics, and all outcomes.
+These finite experiments do not qualify full-flight robustness or hardware fidelity.
 
-For the default seeded landing example, the aided solution reduces position RMSE from 3.45 m to
-0.37 m and velocity RMSE from 0.525 m/s to 0.088 m/s, while attitude RMSE increases from
-0.00139 rad to 0.00483 rad and angular-rate RMSE from 0.000773 rad/s to 0.000820 rad/s. The
-outlier at 4 s is rejected; all 41 scheduled GNSS samples during the 8--12 s outage are absent.
-The accepted-measurement mean NIS is 6.27 for six-dimensional GNSS and 1.01 for the scalar radar
-update. Mean nine-state NEES is 3.10 (nominal expectation 9); observed component-wise 3σ coverage
-is 100%. This indicates conservative and not yet calibrated covariance, while the temporal
-correlation means the per-sample NEES bounds are diagnostic rather than an independent-trial test.
+The final report is `report.tex` / `report.pdf`; `main.tex` is a separate working document.
+IMU defaults to 100 Hz, and `nav_dt=0.01` is checked rather than silently overridden.
+GNSS outliers, scale factors, bias random walks and NIS gates are optional explicit
+experiments. `scripts/analyze_navigation.py` retains the same-truth comparison and
+four diagnostic plots, using recorded native IMU truth and uncertain common initialization.
 
 ### 8.2 Flight phases and guidance
 
@@ -1202,6 +1184,8 @@ python scripts/view_replay.py
 If `.venv` does not exist, create it with `python3 -m venv .venv`
  before activation. After activation, `python` below refers to the project environment. Without activation, replace it with `./.venv/bin/python`. `[dev]` includes pytest and ruff; `python -m pip install -e .` is sufficient for ordinary execution. Use `python -m pip install -e ".[dev,qoco]"` for the Python QOCO comparison path in LCvx. QOCO for native SCvx is bundled in the C++ extension.
 
+The installation command also installs `pandas`, which is required for sensor CSV generation and plotting. After updating an existing checkout, rerun the same command to install newly added dependencies.
+
 | Purpose | Command |
 |---|---|
 | Prescribed reentry-burn segment | `python scripts/run_single.py scenario=entry_burn` |
@@ -1286,7 +1270,7 @@ Defaults below are from the root configuration before `+baseline`, `+fidelity`, 
 | `fault` | `none`, `engine_out`, `engine_underperform`, `tvc_bias`, `fin_lock` | `none` | Check engine indices and actuator model together |
 | `gnc/guidance` | `lcvx`, `scvx`, `template` | `lcvx` | `template` is an extension example |
 | `gnc/control` | `pd`, `template` | `pd` | `template` is an extension example |
-| `gnc/navigation` | `identity`, `template`, `synthetic_eskf`, `ekf` | `identity` | `synthetic_eskf` is an assumed IMU/GNSS/radar aided ESKF; `ekf` is unavailable |
+| `gnc/navigation` | `identity`, `template`, `ekf` | `identity` | identity/template pass truth; **ekf raises an unimplemented exception** |
 | `gnc/scheduler` | `altitude`, `guard` | `altitude` | Both currently configure altitude-based transitions |
 | `gnc/allocation` | `default` | `default` | Allocation behavior adjusted through fields |
 | `run` | `single`, `montecarlo` | `single` | Match the execution script |

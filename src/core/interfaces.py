@@ -400,6 +400,8 @@ class NavigationHistory:
     truth: StateHistory
     measurement: StateHistory
     estimate: StateHistory
+    inertial: dict | None = None  # native CG specific force / inertial rate on the nav grid
+    sensors: dict | None = None  # physical sensor channels when provided by navigation
 
 
 @dataclass(frozen=True)

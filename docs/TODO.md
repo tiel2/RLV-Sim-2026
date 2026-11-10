@@ -1,3 +1,18 @@
+# Current navigation update (10 November 2026)
+
+The `synthetic_eskf` extension now uses native force/inertial-rate sensor truth,
+rotating-frame INS, uncertain alignment, explicit missing-GNSS startup priors, and
+attitude-error covariance reset. The report campaign includes multiple-seed landing
+trials, 150-second ascent replays, GNSS outages, and NEES/NIS diagnostics.
+Remaining work includes autonomous cold-start alignment, hardware sensor effects,
+covariance calibration and landing-controller robustness. See
+[the report reproduction guide](../report_assets/README.md).
+
+The milestone checklist below is the historical 7 November plan; its deferred-navigation
+entries describe that baseline, not the current implementation.
+
+---
+
 # RLV-Sim Development TODO
 
 Status as of 2026-11-10. Scope: complete [Project 2](../materials/RSLV_GNC_Project2.pdf) through independently initialized representative flight scenarios and documented sensor/navigation analysis. Project 2 p.5 asks for selected representative phases; a continuous launch-to-touchdown mission is an optional extension.

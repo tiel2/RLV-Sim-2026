@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,7 +12,7 @@ from scipy.stats import chi2
 
 from core.frames import euler_from_quat
 from core.seeding import fold_in, master_key
-from gnc.navigation.synthetic_eskf import SyntheticESKF, UnfilteredINS, qmul, qnorm
+from gnc.navigation.synthetic_eskf import SyntheticESKF, UnfilteredINS, qmul
 
 _COMPARED_STATES = ("r_ned", "v_ned", "q_bn", "w_body")
 
@@ -94,23 +95,32 @@ def compare_navigation(
     truth,
     sensor: SyntheticESKF,
     seed: int,
+    *,
+    inertial=None,
 ) -> tuple[dict[str, np.ndarray], dict]:
     """Run INS-only and aided ESKF against identical sensor packets and truth epochs."""
+    if hasattr(truth, "truth"):
+        inertial = truth.inertial if inertial is None else inertial
+        truth = truth.truth
+    if inertial is None:
+        raise ValueError(
+            "navigation comparison requires native specific-force and inertial-rate histories"
+        )
     times = np.asarray(truth.t, dtype=float)
     if times.ndim != 1 or len(times) < 2 or not np.all(np.isfinite(times)):
         raise ValueError("truth history must contain at least two finite epochs")
     if np.any(np.diff(times) <= 0.0):
         raise ValueError("truth epochs must be strictly increasing")
 
-    initial_state = _state_at(truth, 0)
-    if sensor.initial_position is None:
-        sensor.initial_position = np.asarray(initial_state.r_ned, dtype=float).copy()
-    if sensor.initial_velocity is None:
-        sensor.initial_velocity = np.asarray(initial_state.v_ned, dtype=float).copy()
-    sensor.initial_attitude = qnorm(initial_state.q_bn)
-    if sensor.initial_mass is None:
-        sensor.initial_mass = float(initial_state.m)
-    baseline = UnfilteredINS(initial_state=initial_state)
+    for channel in ("specific_force_body", "omega_inertial_body"):
+        values = np.asarray(inertial[channel], dtype=float)
+        if values.shape != (len(times), 3) or not np.all(np.isfinite(values)):
+            raise ValueError(f"native {channel} must be finite on the full truth grid")
+    if not np.allclose(np.diff(times), sensor.imu_period, rtol=0, atol=1e-8):
+        raise ValueError("truth replay grid must match the configured IMU period")
+    # Each comparison starts a new sensor episode; neither estimator receives initial truth.
+    sensor = copy.deepcopy(sensor)
+    baseline = UnfilteredINS(sensor)
     filter_memory = sensor.initial_memory()
     baseline_memory = baseline.initial_memory()
     observations = []
@@ -119,13 +129,18 @@ def compare_navigation(
     sensor_bias_truth = []
     for index in range(len(times)):
         state = _state_at(truth, index)
-        observation = sensor.measure(state, fold_in(master_key(seed), index))
-        observations.append(observation)
-        sensor_bias_truth.append(
-            (sensor.ba + sensor._walk_ba, sensor.bg + sensor._walk_bg)
+        observation = sensor.measure(
+            state,
+            fold_in(master_key(seed), index),
+            specific_force_body=inertial["specific_force_body"][index],
+            inertial_rate_body=inertial["omega_inertial_body"][index],
         )
-        filtered, filter_memory = sensor.estimate(observation, None, filter_memory)
-        unfiltered, baseline_memory = baseline.estimate(observation, None, baseline_memory)
+        observations.append(observation)
+        sensor_bias_truth.append((sensor.ba + sensor._walk_ba, sensor.bg + sensor._walk_bg))
+        filtered, filter_memory = sensor.estimate(copy.deepcopy(observation), None, filter_memory)
+        unfiltered, baseline_memory = baseline.estimate(
+            copy.deepcopy(observation), None, baseline_memory
+        )
         estimates["filtered"].append(filtered)
         estimates["unfiltered"].append(unfiltered)
         filtered_memory.append(
@@ -152,38 +167,30 @@ def compare_navigation(
             for name in _COMPARED_STATES
         },
         "truth_m": np.asarray(truth.m, dtype=float).copy(),
+        "truth_specific_force_body": np.asarray(inertial["specific_force_body"]).copy(),
+        "truth_omega_inertial_body": np.asarray(inertial["omega_inertial_body"]).copy(),
+        "measurement_alignment_quaternion": np.stack([row.q_bn for row in observations]),
+        "measurement_alignment_valid": np.asarray([row.alignment_valid for row in observations]),
         "truth_accel_bias_mps2": np.stack([row[0] for row in sensor_bias_truth]),
         "truth_gyro_bias_radps": np.stack([row[1] for row in sensor_bias_truth]),
         "measurement_accel_body": np.stack([row.accel_body for row in observations]),
         "measurement_gyro_body": np.stack([row.gyro_body for row in observations]),
         "measurement_gnss_position_ned": np.stack([row.r_ned for row in observations]),
         "measurement_gnss_velocity_ned": np.stack([row.v_ned for row in observations]),
-        "measurement_gnss_scheduled": np.asarray(
-            [row.gnss_scheduled for row in observations]
-        ),
+        "measurement_gnss_scheduled": np.asarray([row.gnss_scheduled for row in observations]),
         "measurement_gnss_valid": np.asarray([row.gnss_valid for row in observations]),
         "measurement_gnss_outlier": np.asarray([row.gnss_outlier for row in observations]),
         "measurement_radar_altitude_m": np.asarray(
             [row.radar_alt_m for row in observations], dtype=float
         ),
-        "measurement_radar_scheduled": np.asarray(
-            [row.radar_scheduled for row in observations]
-        ),
+        "measurement_radar_scheduled": np.asarray([row.radar_scheduled for row in observations]),
         "measurement_radar_valid": np.asarray([row.radar_valid for row in observations]),
     }
     summary = {"n_samples": len(times), "unfiltered": {}, "filtered": {}}
-    arrays["filtered_covariance_diag"] = np.stack(
-        [np.diag(row["P"]) for row in filtered_memory]
-    )
-    arrays["filtered_covariance_9"] = np.stack(
-        [row["P"][:9, :9] for row in filtered_memory]
-    )
-    arrays["filtered_gyro_bias_estimate_radps"] = np.stack(
-        [row["bg"] for row in filtered_memory]
-    )
-    arrays["filtered_accel_bias_estimate_mps2"] = np.stack(
-        [row["ba"] for row in filtered_memory]
-    )
+    arrays["filtered_covariance_diag"] = np.stack([np.diag(row["P"]) for row in filtered_memory])
+    arrays["filtered_covariance_9"] = np.stack([row["P"][:9, :9] for row in filtered_memory])
+    arrays["filtered_gyro_bias_estimate_radps"] = np.stack([row["bg"] for row in filtered_memory])
+    arrays["filtered_accel_bias_estimate_mps2"] = np.stack([row["ba"] for row in filtered_memory])
     arrays["gnss_nis"] = np.asarray([row["gnss_nis"] for row in filtered_memory])
     arrays["gnss_update_accepted"] = np.asarray(
         [row["gnss_update_accepted"] for row in filtered_memory]
@@ -207,9 +214,7 @@ def compare_navigation(
         errors = {
             "position_m": arrays[f"{kind}_r_ned"] - arrays["truth_r_ned"],
             "velocity_mps": arrays[f"{kind}_v_ned"] - arrays["truth_v_ned"],
-            "attitude_rad": _attitude_error(
-                arrays["truth_q_bn"], arrays[f"{kind}_q_bn"]
-            ),
+            "attitude_rad": _attitude_error(arrays["truth_q_bn"], arrays[f"{kind}_q_bn"]),
             "attitude_euler_deg": _attitude_error_euler_deg(
                 arrays["truth_q_bn"], arrays[f"{kind}_q_bn"]
             ),
@@ -222,9 +227,7 @@ def compare_navigation(
         }
         if kind == "unfiltered":
             errors.pop("attitude_vector_rad")
-        summary[kind] = {
-            name: _error_metrics(error) for name, error in errors.items()
-        }
+        summary[kind] = {name: _error_metrics(error) for name, error in errors.items()}
         arrays.update({f"{kind}_error_{name}": error for name, error in errors.items()})
 
     summary["filtered"]["gyro_bias_radps"] = _error_metrics(
@@ -274,13 +277,21 @@ def compare_navigation(
     }
     summary["innovation"] = {
         "gnss_updates": int(np.count_nonzero(np.isfinite(arrays["gnss_nis"]))),
-        "gnss_accepted": int(np.count_nonzero(arrays["gnss_update_accepted"])),
+        "gnss_accepted": int(
+            np.count_nonzero(arrays["gnss_update_accepted"] & np.isfinite(arrays["gnss_nis"]))
+        ),
         "gnss_rejected": int(
             np.count_nonzero(np.isfinite(arrays["gnss_nis"]) & ~arrays["gnss_update_accepted"])
         ),
         "gnss_mean_accepted_nis": (
-            float(np.mean(arrays["gnss_nis"][arrays["gnss_update_accepted"]]))
-            if np.any(arrays["gnss_update_accepted"])
+            float(
+                np.mean(
+                    arrays["gnss_nis"][
+                        arrays["gnss_update_accepted"] & np.isfinite(arrays["gnss_nis"])
+                    ]
+                )
+            )
+            if np.any(arrays["gnss_update_accepted"] & np.isfinite(arrays["gnss_nis"]))
             else None
         ),
         "gnss_mean_nis_all": (
@@ -289,13 +300,21 @@ def compare_navigation(
             else None
         ),
         "radar_updates": int(np.count_nonzero(np.isfinite(arrays["radar_nis"]))),
-        "radar_accepted": int(np.count_nonzero(arrays["radar_update_accepted"])),
+        "radar_accepted": int(
+            np.count_nonzero(arrays["radar_update_accepted"] & np.isfinite(arrays["radar_nis"]))
+        ),
         "radar_rejected": int(
             np.count_nonzero(np.isfinite(arrays["radar_nis"]) & ~arrays["radar_update_accepted"])
         ),
         "radar_mean_accepted_nis": (
-            float(np.mean(arrays["radar_nis"][arrays["radar_update_accepted"]]))
-            if np.any(arrays["radar_update_accepted"])
+            float(
+                np.mean(
+                    arrays["radar_nis"][
+                        arrays["radar_update_accepted"] & np.isfinite(arrays["radar_nis"])
+                    ]
+                )
+            )
+            if np.any(arrays["radar_update_accepted"] & np.isfinite(arrays["radar_nis"]))
             else None
         ),
         "radar_mean_nis_all": (
@@ -311,9 +330,7 @@ def compare_navigation(
     gnss_missing = gnss_scheduled & ~arrays["measurement_gnss_valid"]
     summary["sensors"] = {
         "gnss_samples": int(np.count_nonzero(arrays["measurement_gnss_valid"])),
-        "gnss_scheduled_samples": int(
-            np.count_nonzero(arrays["measurement_gnss_scheduled"])
-        ),
+        "gnss_scheduled_samples": int(np.count_nonzero(arrays["measurement_gnss_scheduled"])),
         "gnss_dropouts": int(np.count_nonzero(gnss_missing & ~outage_samples)),
         "gnss_outage_scheduled_samples": int(np.count_nonzero(outage_samples))
         if outage_enabled
@@ -323,9 +340,7 @@ def compare_navigation(
         else 0,
         "gnss_outliers": int(np.count_nonzero(arrays["measurement_gnss_outlier"])),
         "radar_samples": int(np.count_nonzero(arrays["measurement_radar_valid"])),
-        "radar_scheduled_samples": int(
-            np.count_nonzero(arrays["measurement_radar_scheduled"])
-        ),
+        "radar_scheduled_samples": int(np.count_nonzero(arrays["measurement_radar_scheduled"])),
         "imu_samples": len(times),
         "latency_s": 0.0,
         "imu_rate_hz": sensor.imu_rate_hz,
@@ -333,13 +348,21 @@ def compare_navigation(
         "radar_rate_hz": 1.0 / sensor.rperiod,
         "gnss_outage_s": [sensor.outage0, sensor.outage1],
     }
+    first_estimate = estimates["filtered"][0]
     summary["initialization"] = {
-        "position_ned_m": np.asarray(initial_state.r_ned, dtype=float).tolist(),
-        "velocity_ned_mps": np.asarray(initial_state.v_ned, dtype=float).tolist(),
-        "attitude_quaternion_bn": qnorm(initial_state.q_bn).tolist(),
-        "mass_kg": float(initial_state.m),
+        "position_ned_m": first_estimate.r_ned.tolist(),
+        "velocity_ned_mps": first_estimate.v_ned.tolist(),
+        "attitude_quaternion_bn": first_estimate.q_bn.tolist(),
+        "mass_kg": float(first_estimate.m),
         "shared_by_both_estimators": True,
+        "alignment_sigma_deg": float(np.rad2deg(sensor.alignment_sigma)),
+        "position_velocity_source": "first GNSS or explicit nominal handoff prior",
+        "mass_source": "ideal auxiliary measurement at each sample; not estimated",
     }
+    for kind in ("truth", "unfiltered", "filtered"):
+        arrays[f"{kind}_height_m"] = np.array(
+            [sensor.frame.height_gradient(r)[0] for r in arrays[f"{kind}_r_ned"]]
+        )
     return arrays, summary
 
 
@@ -367,14 +390,12 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
         trajectories[kind] = {
             "north": position[:, 0],
             "east": position[:, 1],
-            "altitude": -position[:, 2],
+            "altitude": arrays[f"{kind}_height_m"],
             "downrange": np.linalg.norm(position[:, :2] - position[0, :2], axis=1),
         }
     for kind, (label, color, line_style, width) in styles.items():
         path = trajectories[kind]
-        axes[0, 0].plot(
-            path["east"], path["north"], line_style, color=color, lw=width, label=label
-        )
+        axes[0, 0].plot(path["east"], path["north"], line_style, color=color, lw=width, label=label)
         axes[0, 1].plot(
             path["downrange"],
             path["altitude"],
@@ -389,7 +410,7 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
     axes[0, 0].set(xlabel="East position (m)", ylabel="North position (m)", title="Horizontal path")
     axes[0, 1].set(
         xlabel="Downrange from initial position (m)",
-        ylabel="Altitude above local origin (m)",
+        ylabel="Height above modeled surface (m)",
         title="Ideal flight path and estimated paths",
     )
     axes[1, 0].set(xlabel="Time (s)", ylabel="Altitude (m)", title="Altitude history")
@@ -405,7 +426,7 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
     fig, axes = plt.subplots(4, 1, figsize=(13, 12), sharex=True, constrained_layout=True)
     for kind, (label, color, line_style, width) in styles.items():
         position = arrays[f"{kind}_r_ned"]
-        plotted = (position[:, 0], position[:, 1], -position[:, 2])
+        plotted = (position[:, 0], position[:, 1], arrays[f"{kind}_height_m"])
         for axis, values, component in zip(axes[0:1], (position,), (0,), strict=True):
             axis.plot(t, values[:, component], line_style, color=color, lw=width, label=label)
         for axis, values, component in zip(
@@ -443,9 +464,7 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
                     alpha=0.75,
                 )
         attitude = (
-            np.zeros((len(t), 3))
-            if kind == "truth"
-            else arrays[f"{kind}_error_attitude_euler_deg"]
+            np.zeros((len(t), 3)) if kind == "truth" else arrays[f"{kind}_error_attitude_euler_deg"]
         )
         rate = np.rad2deg(arrays[f"{kind}_w_body"])
         if kind == "truth":
@@ -495,9 +514,7 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
         ),
     )
     axis_colors = ("tab:blue", "tab:orange", "tab:green")
-    for axis, (error_key, covariance_slice, labels, ylabel) in zip(
-        axes, error_groups, strict=True
-    ):
+    for axis, (error_key, covariance_slice, labels, ylabel) in zip(axes, error_groups, strict=True):
         errors = arrays[error_key]
         sigma = np.sqrt(arrays["filtered_covariance_diag"][:, covariance_slice])
         if "attitude" in error_key:
@@ -560,17 +577,11 @@ def plot_navigation_comparison(arrays: dict, summary: dict, out_dir) -> dict[str
     axes[0, 1].axhline(3.0, color="red", ls="--")
     axes[0, 1].axhline(-3.0, color="red", ls="--")
     axes[0, 1].set(title="Radar normalized innovations", ylabel="Innovation / σ")
-    axes[1, 0].plot(
-        t, np.rad2deg(arrays["filtered_gyro_bias_estimate_radps"]), lw=0.9
-    )
-    axes[1, 0].plot(
-        t, np.rad2deg(arrays["truth_gyro_bias_radps"]), "--", lw=0.8, alpha=0.8
-    )
+    axes[1, 0].plot(t, np.rad2deg(arrays["filtered_gyro_bias_estimate_radps"]), lw=0.9)
+    axes[1, 0].plot(t, np.rad2deg(arrays["truth_gyro_bias_radps"]), "--", lw=0.8, alpha=0.8)
     axes[1, 0].set(title="Estimated gyro bias", ylabel="deg/s", xlabel="Time (s)")
     axes[1, 1].plot(t, arrays["filtered_accel_bias_estimate_mps2"], lw=0.9)
-    axes[1, 1].plot(
-        t, arrays["truth_accel_bias_mps2"], "--", lw=0.8, alpha=0.8
-    )
+    axes[1, 1].plot(t, arrays["truth_accel_bias_mps2"], "--", lw=0.8, alpha=0.8)
     axes[1, 1].set(title="Estimated accelerometer bias", ylabel="m/s²", xlabel="Time (s)")
     for axis in axes.flat:
         axis.grid(True, alpha=0.25)
@@ -611,11 +622,11 @@ def write_navigation_comparison(
         ),
         "sensor_configuration": sensor_configuration,
         "frame_and_units": {
-            "position_velocity": "fixed-origin NED, m and m/s",
+            "position_velocity": "fixed-origin NED-oriented Cartesian axes, m and m/s",
             "attitude": "scalar-first body-to-NED quaternion",
             "angular_rate": "body/reference rad/s",
             "accelerometer": "body-frame specific force, m/s^2, gravity excluded",
-            "radar_altitude": "positive altitude above the flat NED origin, m",
+            "radar_altitude": "radial height on rotating Earth; flat height in fixed mode [m]",
             "latency": "zero seconds for this selected synchronous sensor model",
             "sensor_rates": {
                 "imu_hz": sensor.imu_rate_hz,
@@ -625,13 +636,11 @@ def write_navigation_comparison(
         },
         "limitations": [
             "Synthetic sensor parameters are assumptions, not calibrated hardware specifications.",
-            "The first IMU sample assumes zero translational acceleration; later samples "
-            "differentiate velocity at navigation sample times.",
-            "The local gravity mechanization is a fixed-origin NED approximation.",
-            "Both estimators use the same exact initial position, velocity, attitude, and mass.",
-            "Mass is held at its known initial value; mass is not a scored navigation state.",
-            "Covariance consistency is approximate because samples are temporally correlated "
-            "and the local NED/filter model is not a rotating-Earth mechanization.",
+            "CG-mounted IMU uses native force and inertial rate sampled at nav epochs.",
+            "Both estimators share uncertain alignment and GNSS/declared-prior initialization.",
+            "Mass is an ideal time-varying auxiliary measurement, not a scored state.",
+            "Coning/sculling, lever arms, latency, and saturation are omitted.",
+            "Nine-state marginal NEES and coverage are diagnostics, not consistency certification.",
         ],
         "metrics": metrics,
         "plots": plots,

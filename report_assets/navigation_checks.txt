@@ -1,0 +1,32 @@
+Project 2 merged implementation checks: 10 November 2026
+
+Final document: report.tex -> report.pdf.
+main.tex is a separate working document; final-report compilation applies to report.tex.
+
+.venv/bin/python -m pytest tests/ -q
+484 passed in 94.32s
+
+.venv/bin/ruff check src tests scripts report_assets/generate_navigation.py report_assets/navigation_robustness.py
+All checks passed.
+
+.venv/bin/python scripts/check_project2_segments.py --output results/merge_validation/physics
+All five representative phase checks passed.
+
+.venv/bin/python scripts/analyze_navigation.py scenario=project2_landing hydra.run.dir=results/merge_validation/analyze
+Native same-truth INS/ESKF comparison completed; 1747 epochs at 100 Hz.
+
+.venv/bin/python scripts/run_single.py scenario=project2_landing gnc/navigation=synthetic_eskf hydra.run.dir=results/merge_validation/online
+Online ESKF, telemetry, shared-sample replay and plots completed.
+Soft contact: speed 1.380865 m/s; success=true (seed 0).
+
+.venv/bin/python report_assets/generate_navigation.py
+Four paired runs, fixed-truth replay, 30 landing seed trials, and 15 native
+150-second ascent replays completed. Seed/ascent metrics reproduce the
+previous physical-sensor campaign exactly. Current source hashes verified.
+
+Tectonic: report.tex compiled without unresolved references.
+Git: no unmerged paths or conflict markers remain. Original stash preserved.
+
+Implementation checks are distinct from empirical qualification:
+Project 2 seed success 5/10, calibrated 10/10, startup-outage Project 2 4/10.
+Full-state covariance consistency is not established by the NEES diagnostics.

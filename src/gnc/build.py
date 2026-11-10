@@ -363,11 +363,33 @@ def build_gnc(cfg, params) -> GNCStack:
 
 def build_nav(cfg, initial_state=None, nav_dt=None):
     """Build the navigation module from gnc/navigation config (law._target_ -> build(ctx))."""
+    # initial_state is accepted for runner compatibility; initialization never reads its truth.
+    earth, gravity = cfg.environment.earth, cfg.environment.gravity
+    rotating = str(earth.model) == "rotating"
+    omega = np.zeros(3)
+    if rotating:
+        latitude = np.deg2rad(float(earth.latitude_deg))
+        omega = float(earth.rotation_rate_rad_s) * np.array(
+            [np.cos(latitude), 0, -np.sin(latitude)]
+        )
+    reference = {
+        "frame": dict(
+            rotating=rotating,
+            omega=tuple(omega),
+            radius=float(gravity.radius),
+            mu=float(gravity.mu),
+            inverse_square=str(gravity.model) == "inverse_square",
+            uniform_g=float(cfg.environment.atmosphere.g0),
+        ),
+        "position": list(cfg.scenario.ic.r_ned),
+        "velocity": list(cfg.scenario.ic.v_ned),
+    }
+    configured_period = cfg.scenario.horizon.get("nav_dt") if nav_dt is None else nav_dt
     return instantiate(
         cfg.gnc.navigation.law,
         GncContext(
             cfg=cfg.gnc.navigation,
-            initial_state=initial_state,
-            nav_dt=nav_dt,
+            navigation_reference=reference,
+            nav_dt=None if configured_period is None else float(configured_period),
         ),
     )

@@ -99,6 +99,24 @@ def write_telemetry(result, out_dir) -> dict[str, Path]:
                 {f"{kind}_{field.name}": getattr(history, field.name) for field in fields(history)}
             )
         errors = navigation_errors(result.navigation)
+        if result.navigation.inertial is not None:
+            arrays.update(
+                {f"truth_{key}": value for key, value in result.navigation.inertial.items()}
+            )
+        if result.navigation.sensors is not None:
+            arrays.update(
+                {f"sensor_{key}": value for key, value in result.navigation.sensors.items()}
+            )
+            schema["navigation_sensor_measurement"] = (
+                "accel_body: specific force [m/s^2]; gyro_body and measurement_w_body: "
+                "inertial body rate [rad/s]; estimate_w_body: body/reference rate. "
+                "measurement_q_bn is an uncertain startup alignment, NaN afterward. "
+                "GNSS fields are NaN when invalid; radar_alt_m uses the declared surface."
+            )
+        schema["navigation_inertial"] = (
+            "Native nav-epoch CG specific force (F_body_total+F_pad_body)/mass [m/s^2]; "
+            "omega_inertial_body [rad/s]. Sensor generation only, not estimator feedback."
+        )
         arrays.update({f"error_{key}": value for key, value in errors.items()})
         path = out / "navigation.npz"
         np.savez_compressed(path, **arrays)

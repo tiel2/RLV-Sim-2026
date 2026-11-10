@@ -1,7 +1,7 @@
-
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")  # Save PNGs without opening plot windows
 
 import matplotlib.pyplot as plt
@@ -68,18 +68,10 @@ def plot_sensor_folder(data_folder, output_folder):
     # IMU measurement errors
     fig, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
     for axis in "xyz":
-        accel_error = (
-            imu[f"accel_{axis}_mps2"]
-            - imu[f"truth_accel_{axis}_mps2"]
-        )
-        gyro_error = (
-            imu[f"gyro_{axis}_radps"]
-            - imu[f"truth_gyro_{axis}_radps"]
-        )
+        accel_error = imu[f"accel_{axis}_mps2"] - imu[f"truth_accel_{axis}_mps2"]
+        gyro_error = imu[f"gyro_{axis}_radps"] - imu[f"truth_gyro_{axis}_radps"]
         axes[0].plot(imu["t"], accel_error, label=axis.upper())
-        axes[1].plot(
-            imu["t"], np.rad2deg(gyro_error), label=axis.upper()
-        )
+        axes[1].plot(imu["t"], np.rad2deg(gyro_error), label=axis.upper())
     axes[0].set_ylabel("Accelerometer error [m/s²]")
     axes[1].set_ylabel("Gyroscope error [deg/s]")
     for ax in axes:
@@ -95,11 +87,13 @@ def plot_sensor_folder(data_folder, output_folder):
 
     for axis in "NED":
         axes[0].plot(
-            gnss["t"], gnss[f"pos_{axis}_m"],
+            gnss["t"],
+            gnss[f"pos_{axis}_m"],
             label=f"Position {axis}",
         )
         axes[1].plot(
-            gnss["t"], gnss[f"vel_{axis}_mps"],
+            gnss["t"],
+            gnss[f"vel_{axis}_mps"],
             label=f"Velocity {axis}",
         )
 
@@ -116,12 +110,15 @@ def plot_sensor_folder(data_folder, output_folder):
     radar = pd.read_csv(data_folder / "radar_altimeter.csv")
     fig, ax = plt.subplots(figsize=(11, 5))
     ax.plot(
-        radar["t"], radar["truth_altitude_m"],
+        radar["t"],
+        radar["truth_altitude_m"],
         label="Truth",
     )
     ax.scatter(
-        radar["t"], radar["range_m"],
-        s=8, label="Radar",
+        radar["t"],
+        radar["range_m"],
+        s=8,
+        label="Radar",
     )
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Altitude [m]")

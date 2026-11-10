@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import hydra
 import numpy as np
@@ -20,8 +19,7 @@ from omegaconf import OmegaConf
 from plot_sensors import plot_sensor_folder
 
 from core.seeding import write_manifest
-from gnc.context import GncContext
-from gnc.navigation.synthetic_eskf import build as build_sensor_suite
+from gnc.build import build_nav
 from sim.replay import build_replay_doc, write_replay
 from sim.run import run_configured
 from sim.telemetry import write_physics, write_telemetry
@@ -30,11 +28,7 @@ from validation.navigation import write_navigation_comparison
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg):
-    synthetic_navigation = (
-        cfg.gnc.navigation.law._target_ == "gnc.navigation.synthetic_eskf.build"
-    )
-    if synthetic_navigation:
-        cfg.scenario.horizon.nav_dt = 1.0 / float(cfg.gnc.navigation.imu_rate_hz)
+    synthetic_navigation = cfg.gnc.navigation.law._target_ == "gnc.navigation.synthetic_eskf.build"
 
     out_dir = Path.cwd()  # hydra.run.dir = results/<script>/<date>/<time>
     resolved = OmegaConf.to_yaml(cfg, resolve=True)
@@ -49,25 +43,13 @@ def main(cfg):
     if synthetic_navigation:
         if result.navigation is None:
             raise RuntimeError("synthetic navigation run did not record navigation history")
-        truth = result.navigation.truth
-        initial_state = SimpleNamespace(
-            **{
-                name: np.array(getattr(truth, name)[0], copy=True)
-                for name in ("r_ned", "v_ned", "q_bn", "w_body", "m", "t")
-            }
-        )
-        sensor = build_sensor_suite(
-            GncContext(cfg=cfg.gnc.navigation, initial_state=initial_state)
-        )
         comparison = write_navigation_comparison(
-            truth,
-            sensor,
+            result.navigation,
+            build_nav(cfg),
             int(cfg.seed),
             out_dir,
             scenario=str(cfg.scenario.name),
-            sensor_configuration=OmegaConf.to_container(
-                cfg.gnc.navigation, resolve=True
-            ),
+            sensor_configuration=OmegaConf.to_container(cfg.gnc.navigation, resolve=True),
         )
         print(
             "navigation comparison:",
