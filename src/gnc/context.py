@@ -13,6 +13,8 @@ Fields:
     params      : PlantParams (numeric vehicle/environment leaves). None for navigation.
     active_engines : (N,) 0/1 array of engines this guidance phase fires. None outside guidance.
     phase       : int Phase tag this guidance instance runs in. -1 outside guidance.
+    initial_state : PlantState used for estimator initialization; None outside navigation.
+    nav_dt : navigation sampling period in seconds; None outside navigation.
 """
 
 from __future__ import annotations
@@ -28,3 +30,5 @@ class GncContext:
     params: Any = None
     active_engines: Any = None
     phase: int = -1
+    initial_state: Any = None
+    nav_dt: float | None = None

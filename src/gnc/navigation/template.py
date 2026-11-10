@@ -3,7 +3,7 @@
 Implements the Nav contract (see the gnc/navigation package docstring); the matching config group
 ``configs/gnc/navigation/template.yaml`` points ``law._target_`` at ``build(ctx)`` below.
 This trivial version passes truth through (like identity nav).
-TODO (deferred): sensor measurement models and INS/filter propagation and updates.
+Use ``synthetic_eskf`` for an implemented, assumed sensor/INS/filter example.
 
     python scripts/run_single.py gnc/navigation=template
 """

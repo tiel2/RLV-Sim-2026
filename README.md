@@ -149,11 +149,12 @@ Single runs additionally write:
 | `actuators.npz` | Timestamped `commanded_*`, delayed `held_*`, and plant `effective_*` inputs |
 | `telemetry_schema.json` | Frames, units, sample meanings, and timestamp conventions |
 
-Navigation records use NED position/velocity and scalar-first body-to-NED quaternions. The current
+Navigation records use NED position/velocity and scalar-first body-to-NED quaternions. The online
 navigation seam is synchronous: measurement and estimate epochs match truth, and held estimates
 between updates are not treated as fresh samples. Legacy modules without timestamps are stamped
-by the loop. All records are independent copies. Identity navigation has zero error in the
-reference case; a sensor-based INS/filter remains future work.
+by the loop. All records are independent copies. Identity navigation remains the default. The
+explicit `synthetic_eskf` option adds synthetic IMU/GNSS/radar measurements and a 15-state aided
+INS; its direct online telemetry does not include raw sensor channels.
 
 Actuator effective values are endpoint inputs after limits/lag, including ideal command tracking;
 engine health multipliers and fixed nozzle cant/bias act downstream. The initial truth sample
@@ -164,10 +165,36 @@ mean duty requested by GNC. Individual nozzle states are available in native dia
 
 ## Navigation status and TODO
 
-Sensor-based navigation is deferred. The working baseline is `IdentityNav`, which passes plant
-truth to GNC as the estimated state. Its optional state-level noise/bias helpers are synthetic
-perturbations, not IMU/GNSS/altimeter models. The navigation template also passes truth through;
-selecting `gnc/navigation=ekf` raises `NotImplementedError`.
+`IdentityNav` remains the default and passes plant truth to GNC. `gnc/navigation=synthetic_eskf`
+selects an assumed IMU/GNSS/radar sensor suite and a strapdown ESKF; `gnc/navigation=ekf` remains
+an unavailable placeholder. Run a fixed-truth comparison with:
+
+```bash
+python scripts/analyze_navigation.py scenario=project2_landing
+```
+
+The command records the fixed truth trajectory, sensor packets, INS-only baseline, aided ESKF,
+error histories, RMSE, maximum vector errors, and per-axis RMSE in `navigation_comparison.npz`
+and `navigation_comparison.json`. The representative rates are 200 Hz IMU, 10 Hz GNSS, and
+20 Hz radar altimeter. The configured landing test includes an 8--12 s GNSS outage and a GNSS
+outlier at 4 s; normalized innovation gating rejects gross measurement errors. Four PNGs compare
+the estimated position/flight path with simulated 6-DOF truth, plot state histories, show
+filtered errors against component-wise ±3σ bounds, and show innovations and bias estimates.
+Both estimators receive identical measurements, initial position/velocity/attitude/mass, and
+deterministic seeds. This is a reproducible synthetic demonstration, not calibrated sensor
+performance or flight validation: it assumes known initialization, zero latency, constant mass,
+fixed-origin NED gravity, and velocity-differenced accelerometer truth at navigation rate.
+Accelerometer readings are specific force and exclude gravity. The 3σ/NEES diagnostics are
+reported rather than treated as proof of consistency; temporal correlation and model
+approximations limit their interpretation. In the default landing example, aiding lowers
+position/velocity RMSE but slightly worsens attitude/angular-rate RMSE; NEES and component-wise
+3σ coverage indicate a conservative, not yet calibrated covariance model.
+
+Selecting `gnc/navigation=synthetic_eskf` in `scripts/run_single.py` also automatically generates
+the same-truth comparison outputs in that run's result folder (the JSON/NPZ metrics and four PNG
+plots). This is a reproducible seeded sensor/estimator replay over that run's truth trajectory,
+separate from the online navigation samples used by the controller. The run sets its navigation
+step to the configured IMU period; the default identity-nav run is unchanged.
 
 The ordered backlog for ascent, recovery phases, sensor models, and navigation is maintained in
 [Development TODO](docs/TODO.md).

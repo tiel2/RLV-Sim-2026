@@ -1,12 +1,12 @@
 # RLV-Sim Development TODO
 
-Status as of 2026-11-07. Scope: complete [Project 2](../materials/RSLV_GNC_Project2.pdf) through independently initialized representative flight scenarios, followed by sensor/navigation development. Project 2 p.5 asks for selected representative phases; a continuous launch-to-touchdown mission is an optional extension.
+Status as of 2026-11-10. Scope: complete [Project 2](../materials/RSLV_GNC_Project2.pdf) through independently initialized representative flight scenarios and documented sensor/navigation analysis. Project 2 p.5 asks for selected representative phases; a continuous launch-to-touchdown mission is an optional extension.
 
-**Current status:** The five-phase public-flight comparison and conditional model checks are documented in the [report](verification/public_flight_comparison_report_ko.md). Further trajectory fitting and sensor/navigation development are deferred.
+**Current status:** The five-phase public-flight comparison and conditional model checks are documented in the [report](verification/public_flight_comparison_report_ko.md). Sensor-based INS/ESKF and matched navigation-error analysis are implemented as a synthetic research model; their hardware fidelity and report integration remain open.
 
-**Sequence:** Select representative physics experiments → Define engineering initial/boundary conditions and prescribed inputs → Verify dynamics and numerical agreement → Inspect physical histories and rendering → Document assumptions and useful variants → Later implement sensors/navigation and error analysis → Complete the report, including a scoped public-flight-data comparison when its conventions and input correspondence are understood.
+**Sequence:** Select representative physics experiments → Define engineering initial/boundary conditions and prescribed inputs → Verify dynamics and numerical agreement → Inspect physical histories and rendering → Document assumptions and useful variants → Implement and compare sensor-derived navigation → Complete the report, including a scoped public-flight-data comparison when its conventions and input correspondence are understood.
 
-**Physics milestone baseline (2026-11-03):** Demonstrate five `project2_*` phases on rotating Earth: four prescribed physics experiments plus `scenario=project2_landing` with closed-loop LCvx/PD control. Inspect trajectories, loads, attitude/rates, propellant and actuator response; require soft touchdown for landing. See [current results](verification/project2_segments/physics_results.md). CRS-11 comparison is opt-in background and RMSE reduction is not a current acceptance criterion. Terminal powered descent uses a 20 s burn and 2 s shutdown observation; that experiment does not require touchdown. Landing uses ideal actuation, truth navigation, rotation-aware nominal planning gravity and separate lateral/vertical tracking gains. Additional variants should exercise useful physics within model limits. Sensor/navigation remains later work by user choice and is required for final Project 2 completion. Continuous full-flight recovery remains optional.
+**Physics milestone baseline (2026-11-03):** Demonstrate five `project2_*` phases on rotating Earth: four prescribed physics experiments plus `scenario=project2_landing` with closed-loop LCvx/PD control. Inspect trajectories, loads, attitude/rates, propellant and actuator response; require soft touchdown for landing. See [current results](verification/project2_segments/physics_results.md). CRS-11 comparison is opt-in background and RMSE reduction is not a physics acceptance criterion. Terminal powered descent uses a 20 s burn and 2 s shutdown observation; that experiment does not require touchdown. Landing uses ideal actuation, truth navigation, rotation-aware nominal planning gravity and separate lateral/vertical tracking gains. Additional variants should exercise useful physics within model limits. Synthetic sensor/navigation analysis is implemented as a separate research workflow and remains required for final Project 2 reporting; it does not constitute calibrated flight sensors or a rotating-Earth navigation solution. Continuous full-flight recovery remains optional.
 
 ## Completed Work
 
@@ -23,7 +23,7 @@ Status as of 2026-11-07. Scope: complete [Project 2](../materials/RSLV_GNC_Proje
 - [x] Enable spherical rotating Earth in the four prescribed Project 2 experiments at an assumed reference latitude of 28.6°; use central gravity, radial altitude/contact and consistent inertial/reference angular rates. Verify full Kepler orbits, inertial energy/angular momentum, asymmetric torque-free rotation, pad/contact behavior and full-phase inertial-frame reference agreement. Landing is extended below. See [report Section 11](verification/physics_implementation_report_en.md#11-spherical-rotating-earth-verification).
 - [x] Provide `scenario=project2_landing` as the fifth rotating-Earth phase, derived from PDG with ideal actuation and truth navigation. Include surface centrifugal acceleration in nominal planning gravity and separate lateral/vertical tracking gains. Verify soft touchdown from 300 m, a small lateral-IC perturbation, the five-case checker and replay. Preserve `+baseline=pdg` as the separate fixed-Earth reference.
 
-Flight scenarios cover post-flip reentry, descent, and landing, plus attached-stack ascent → MECO → short coast and ascent → separation → booster-coast and ascent → attitude maneuver → boostback experiments. Preserve these connected experiments as verification/regression cases; connecting all of them is not a Project 2 completion criterion. Navigation provides truth pass-through and synthetic state perturbations; physical sensor models, INS, and EKF remain deferred.
+Flight scenarios cover post-flip reentry, descent, and landing, plus attached-stack ascent → MECO → short coast and ascent → separation → booster-coast and ascent → attitude maneuver → boostback experiments. Preserve these connected experiments as verification/regression cases; connecting all of them is not a Project 2 completion criterion. Identity navigation remains the default; synthetic IMU/GNSS/radar navigation and the aided ESKF are available as an explicit research configuration.
 
 **Status convention:** Existing capabilities are listed separately from pending scenario qualification and optional integration. An unchecked task does not mean its underlying physics or controller is unimplemented. Independent initialization is explicit and allowed; state continuity is required within each scenario and across any events it actually includes. Existing segment implementations do not establish flight-data validation or a validated full-flight scenario.
 
@@ -142,33 +142,37 @@ The existing ascent/separation/maneuver/boostback connections are completed capa
 
 Existing `project2_*` physics experiments keep their separate acceptance criteria. Public-flight comparison is opt-in and does not change ordinary runs.
 
-## 7. Deferred: Sensor Models and Navigation
+## 7. Sensor Models and Navigation
 
-Implementation is deferred until the independent vehicle-scenario milestone by user choice. It remains required for final Project 2 completion; truth pass-through is not sensor-based navigation.
+- [x] Define position, velocity, attitude, and angular-rate estimates and select a synthetic IMU, GNSS, and radar-altimeter suite.
+- [x] Define specific-force/gyro and aiding measurement records, NED/body frames, sample timestamps, availability flags, and estimator contracts.
+- [x] Implement specific-force, gyro, GNSS position/velocity, and local radar-altitude equations.
+- [x] Model deterministic white noise, constant bias, optional bias random walk and scale factor, the representative 200 Hz IMU / 10 Hz GNSS / 20 Hz radar rates, a zero-latency synchronous interface, GNSS dropouts/outliers, and a scheduled outage.
+- [x] Implement known-initial-state alignment, strapdown propagation, and a 15-state GNSS/radar-aided ESKF.
+- [x] Gate GNSS/radar innovations using configured chi-square thresholds and save innovations, acceptance flags, bias estimates, and posterior covariance.
+- [x] Add `python scripts/analyze_navigation.py` to generate an identity-navigation fixed truth history on the 200 Hz IMU grid and evaluate the sensor/INS chain separately from flight-model feedback.
+- [x] Generate truth-vs-INS-vs-ESKF flight-path/state plots, navigation errors with component-wise ±3σ bounds, and normalized innovation/bias plots.
 
-- [ ] Define position, velocity, attitude, and angular-rate estimation requirements and select the sensors.
-- [ ] Define sensor measurement types, coordinate frames, timestamps, availability, and estimator input/output contracts.
-- [ ] Implement the selected IMU, GNSS, altimeter, or other measurement equations. Accelerometers must measure specific force, excluding gravity.
-- [ ] Model noise, bias, sampling periods, latency, and measurement dropouts.
-- [ ] Implement initialization, alignment, INS propagation, and an aiding filter.
-- [ ] Evaluate navigation on a fixed truth trajectory to separate flight-model errors from estimation errors.
+The implementation is a research example, not a sensor specification. Accelerometer truth is approximated by differentiating velocity at navigation ticks (the first sample assumes zero translational acceleration); the mechanization uses a fixed-origin NED gravity approximation; initial position, velocity, attitude, and mass are known; mass is held constant; and sensor latency is fixed at zero. Truth sets the declared initial conditions and is used by sensor generation/error scoring, but is not consumed as a state update. Generated assumptions and limitations are saved with the comparison.
 
-**Completion criterion:** The estimator derives states from sensor measurements and initialization information, with truth used for error evaluation.
+The default seeded landing comparison reduces position/velocity RMSE with aiding, but attitude/angular-rate RMSE increase. The mean NEES and 100% component-wise 3σ coverage show a conservative, uncalibrated covariance model; these diagnostics are recorded as results, not claimed as filter consistency.
 
-## 8. Deferred: Unfiltered and Filtered Errors
+**Completion criterion:** The estimator derives position, velocity, attitude, and angular rate from IMU/aiding measurements and explicit initialization; truth is consumed only by sensor generation and error scoring.
 
-- [ ] Define an unfiltered baseline appropriate to the sensor configuration.
-- [ ] Compare unfiltered and filtered results using identical truth, measurements, initial conditions, and noise seeds.
-- [ ] Evaluate position, velocity, attitude, and angular-rate RMSE, maximum errors, and error histories.
-- [ ] Assess estimation performance and limitations under bias and measurement dropouts.
+## 8. Unfiltered and Filtered Errors
 
-**Completion criterion:** Filter improvements and residual errors are supported by quantitative comparisons under identical conditions.
+- [x] Define the unfiltered INS-only strapdown solution as the baseline for the same IMU/GNSS/radar sensor suite.
+- [x] Compare the INS-only and aided ESKF using one generated measurement sequence, identical initial state, and deterministic sensor/noise seeds.
+- [x] Evaluate position, velocity, attitude, and angular-rate RMSE, maximum vector errors, per-axis RMSE, and timestamped error histories.
+- [x] Exercise constant biases, optional scale-factor/random-walk errors, seeded noise, a GNSS outlier and scheduled outage, and radar availability; report RMSE, maximum errors, normalized innovations, NEES, and 3σ coverage.
+
+**Completion criterion:** Truth/estimate histories, flight-path plots, covariance bounds, and quantitative errors are reproducible from `scripts/analyze_navigation.py`; metrics are synthetic-model results, not flight validation.
 
 ## 9. Complete the Report and Reproducible Runs
 
 - [x] Document current ascent configuration, dynamics verification, environment, replay, assumptions, and deferred flight-data use in the project guide; preserve these historical verification records.
 - [x] Document selected independent scenarios, initial conditions, reference windows, reproducible runs and comparison results. Keep remaining vehicle-fidelity/domain work and final navigation requirements explicit.
-- [ ] Describe the sensor and navigation architecture and error-processing methods.
+- [ ] Incorporate the synthetic sensor/navigation architecture and error-analysis results into the final verification report.
 - [ ] Reuse the existing physical implementation verification report and incorporate extension verification, flight-data validation, and navigation-error analysis.
 - [ ] Assess the principal modeling and navigation errors that could affect subsequent GNC design.
 - [x] Provide reproducible configurations, commands, verdicts and essential figures for all five selected phases in the [specification](reference/project2_scenario_spec.md) and [results](verification/project2_segments/physics_results.md). Sensor/navigation reproducibility remains part of the later deliverable.

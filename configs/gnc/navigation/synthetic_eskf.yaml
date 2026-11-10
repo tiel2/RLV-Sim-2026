@@ -1,17 +1,33 @@
 # Research-demo sensor and navigation parameters (assumed, not flight specifications).
+# Representative lecture rates; IMU rate must match scenario.horizon.nav_dt.
+imu_rate_hz: 200.0
 imu_accel_sigma: 0.08           # m/s^2 per nav sample
 imu_gyro_sigma_deg: 0.025      # deg/s per nav sample
 accel_bias: [0.025, -0.02, 0.035]  # m/s^2 fixed injected truth bias
 gyro_bias_deg: [0.005, -0.006, 0.004] # deg/s fixed injected bias
+accel_scale_factor: [0.0, 0.0, 0.0] # diagonal fractional scale error
+gyro_scale_factor: [0.0, 0.0, 0.0] # diagonal fractional scale error
+accel_bias_random_walk: 0.0     # (m/s^2)/sqrt(s), optional
+gyro_bias_random_walk_deg: 0.0 # (deg/s)/sqrt(s), optional
 gnss_pos_sigma: 2.5             # m, per axis
 gnss_vel_sigma: 0.15            # m/s, per axis
 gnss_dropout: 0.03             # Bernoulli loss per scheduled measurement
 gnss_period: 0.1               # seconds, 10 Hz
+gnss_outlier_times: [4.0]       # seconds; deterministic gross error injected at scheduled GNSS epoch
+gnss_outlier_position_m: [100.0, -100.0, 50.0]
+gnss_outlier_velocity_mps: [10.0, -10.0, 5.0]
+gnss_gate_threshold: 16.812    # chi-square 99% gate, 6 measurement dimensions
 radar_sigma: 0.5                # m
 radar_period: 0.05             # seconds, 20 Hz
-radar_range: 1500.0            # m above flat terrain
-gnss_outage_start: -1.0         # set both e.g. 65 and 75 for outage test
-gnss_outage_end: -1.0
+radar_range: 1500.0            # m above the local flat NED origin
+radar_gate_threshold: 6.635    # chi-square 99% gate, 1 measurement dimension
+gnss_outage_start: 8.0          # seconds; representative outage for the landing analysis
+gnss_outage_end: 12.0
+initial_position_sigma_m: 5.0
+initial_velocity_sigma_mps: 2.0
+initial_attitude_sigma_deg: 1.0
+initial_gyro_bias_sigma_deg: 0.05
+initial_accel_bias_sigma_mps2: 0.1
 seed_offset: 0
 law:
   _target_: gnc.navigation.synthetic_eskf.build

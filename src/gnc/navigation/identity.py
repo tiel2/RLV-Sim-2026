@@ -1,7 +1,7 @@
 """Truth pass-through baseline with optional synthetic state noise and bias.
 
-TODO: physical sensor models and INS/filter implementation are deferred; these
-state-level perturbations do not model IMU, GNSS, or altimeter measurements.
+The state-level perturbations do not model IMU, GNSS, or altimeter measurements;
+use ``synthetic_eskf`` for the explicit sensor-based navigation example.
 """
 
 from __future__ import annotations

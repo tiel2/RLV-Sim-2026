@@ -10,22 +10,32 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import hydra
 import numpy as np
 from _plotting import plot_episode, plot_mission, plot_physics, plot_plan_tracking
+from generate_sensors import generate
 from omegaconf import OmegaConf
+from plot_sensors import plot_sensor_folder
 
 from core.seeding import write_manifest
+from gnc.context import GncContext
+from gnc.navigation.synthetic_eskf import build as build_sensor_suite
 from sim.replay import build_replay_doc, write_replay
 from sim.run import run_configured
 from sim.telemetry import write_physics, write_telemetry
-from generate_sensors import generate
-from plot_sensors import plot_sensor_folder
+from validation.navigation import write_navigation_comparison
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg):
+    synthetic_navigation = (
+        cfg.gnc.navigation.law._target_ == "gnc.navigation.synthetic_eskf.build"
+    )
+    if synthetic_navigation:
+        cfg.scenario.horizon.nav_dt = 1.0 / float(cfg.gnc.navigation.imu_rate_hz)
+
     out_dir = Path.cwd()  # hydra.run.dir = results/<script>/<date>/<time>
     resolved = OmegaConf.to_yaml(cfg, resolve=True)
     (out_dir / "resolved_config.yaml").write_text(resolved)
@@ -35,6 +45,36 @@ def main(cfg):
 
     for kind, path in write_telemetry(result, out_dir).items():
         print(f"{kind}: {path}")
+
+    if synthetic_navigation:
+        if result.navigation is None:
+            raise RuntimeError("synthetic navigation run did not record navigation history")
+        truth = result.navigation.truth
+        initial_state = SimpleNamespace(
+            **{
+                name: np.array(getattr(truth, name)[0], copy=True)
+                for name in ("r_ned", "v_ned", "q_bn", "w_body", "m", "t")
+            }
+        )
+        sensor = build_sensor_suite(
+            GncContext(cfg=cfg.gnc.navigation, initial_state=initial_state)
+        )
+        comparison = write_navigation_comparison(
+            truth,
+            sensor,
+            int(cfg.seed),
+            out_dir,
+            scenario=str(cfg.scenario.name),
+            sensor_configuration=OmegaConf.to_container(
+                cfg.gnc.navigation, resolve=True
+            ),
+        )
+        print(
+            "navigation comparison:",
+            json.dumps(comparison["metrics"], indent=2, allow_nan=False),
+        )
+        for path in comparison["plots"].values():
+            print(f"navigation plot: {path}")
 
     physics = write_physics(result, out_dir)
 

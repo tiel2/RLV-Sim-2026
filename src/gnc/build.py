@@ -361,6 +361,13 @@ def build_gnc(cfg, params) -> GNCStack:
     return GNCStack(guidance, controller, nominal)
 
 
-def build_nav(cfg):
+def build_nav(cfg, initial_state=None, nav_dt=None):
     """Build the navigation module from gnc/navigation config (law._target_ -> build(ctx))."""
-    return instantiate(cfg.gnc.navigation.law, GncContext(cfg=cfg.gnc.navigation))
+    return instantiate(
+        cfg.gnc.navigation.law,
+        GncContext(
+            cfg=cfg.gnc.navigation,
+            initial_state=initial_state,
+            nav_dt=nav_dt,
+        ),
+    )

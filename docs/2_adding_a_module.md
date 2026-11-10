@@ -4,9 +4,9 @@ Guidance, navigation, and control use the same extension path: copy a runnable m
 rename them, implement the contract, and select the new Hydra group. `gnc/build.py` normally needs
 no edit.
 
-Sensor-based navigation is currently deferred as TODO. Identity navigation and the navigation
-template pass truth through; physical sensors, INS, and filter work are listed in README.
-The contracts below describe the extension interface, not an implemented sensor-based estimator.
+`IdentityNav` and the navigation template pass truth through. The explicit `synthetic_eskf`
+selection provides synthetic IMU/GNSS/radar sensors and an aided INS/ESKF; see the navigation
+section of the project guide and `docs/TODO.md` for its assumptions and remaining validation scope.
 
 | Seam | Module | Config | Selection |
 |---|---|---|---|
@@ -19,8 +19,14 @@ The templates are executable before modification:
 ```bash
 python scripts/run_single.py gnc/guidance=template scenario=pdg
 python scripts/run_single.py gnc/navigation=template
+python scripts/run_single.py gnc/navigation=synthetic_eskf scenario=project2_landing
 python scripts/run_single.py gnc/control=template
 ```
+
+When `run_single.py` selects `synthetic_eskf`, it sets `scenario.horizon.nav_dt` to the configured
+IMU period (`1 / imu_rate_hz`), then automatically writes the same-truth INS/ESKF comparison to
+that run's result directory: `navigation_comparison.json`, `navigation_comparison.npz`, and four
+PNG plots. The standalone fixed-truth navigation analysis sets its sample grid automatically too.
 
 ## Construction
 

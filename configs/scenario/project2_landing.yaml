@@ -40,6 +40,8 @@ scenario:
   name: project2_landing
   description: Independent closed-loop landing on a rotating spherical Earth, with ideal actuation.
   input_mode: closed_loop
+  horizon:
+    nav_dt: 0.01
   ic:
     rcs_fuel: 200.0
     launch_pad: false

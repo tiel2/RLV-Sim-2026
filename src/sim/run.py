@@ -57,7 +57,7 @@ def run_configured(cfg, *, progress=False, record_telemetry=True):
             bundle,
             state,
             build_gnc(cfg, bundle.params),
-            build_nav(cfg),
+            build_nav(cfg, state, float(h.nav_dt)),
             ctrl_dt=float(h.ctrl_dt),
             nav_dt=h.nav_dt,
             guidance_dt=h.guidance_dt,

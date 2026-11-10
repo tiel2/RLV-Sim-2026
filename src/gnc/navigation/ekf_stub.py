@@ -1,4 +1,4 @@
-"""TODO: aided INS/EKF implementation; this selection remains explicitly unavailable."""
+"""Legacy EKF config placeholder; use synthetic_eskf for the research ESKF implementation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from core.interfaces import Measurement
 
 class EKFNav:
     def __init__(self, *args, **kwargs):
-        raise NotImplementedError("EKF navigation is not implemented; select identity navigation")
+        raise NotImplementedError(
+            "The generic EKF selection is unavailable; select synthetic_eskf or identity"
+        )
 
     def measure(self, state, key) -> Measurement:  # pragma: no cover
         raise NotImplementedError
