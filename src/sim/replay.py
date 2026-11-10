@@ -155,6 +155,18 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
     mach = _aux_series(result, "mach")
     altitude = _aux_series(result, "altitude")
 
+    missing_engine_forces = sum(
+        "engine_force_body" not in result.aux["per_tick"][i] for i in idx
+    )
+    if missing_engine_forces:
+        import warnings
+
+        warnings.warn(
+            f"Replay: engine_force_body missing in {missing_engine_forces} frames; "
+            "using zero force vectors for those frames (visualization only).",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     frames = []
     for i in idx:
         frames.append(
@@ -176,8 +188,12 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
                 "phase": int(result.phase[i]),
                 "configuration": int(result.aux["per_tick"][i].get("configuration", 0)),
                 "fin_deployment": float(result.aux["per_tick"][i].get("fin_deployment", 1.0)),
+                # Older / scenario-specific plant snapshots may omit engine forces.
+                # Keep replay export functional without inventing physical thrust.
                 "engine_force_body": np.asarray(
-                    result.aux["per_tick"][i]["engine_force_body"]
+                    result.aux["per_tick"][i].get(
+                        "engine_force_body", np.zeros((int(bundle.meta["n_engines"]), 3))
+                    )
                 ).tolist(),
                 "launch_pending": bool(result.aux["per_tick"][i].get("launch_pending", False)),
                 "rcs_on": np.asarray(result.aux["per_tick"][i].get("rcs_thruster_on", [])).tolist(),
@@ -226,7 +242,9 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
             gim=effective["tvc"],
             fin=effective["fin"],
             thrust=aux["thrust_mag"],
-            engine_force_body=aux["engine_force_body"],
+            engine_force_body=aux.get(
+                "engine_force_body", np.zeros((int(bundle.meta["n_engines"]), 3)).tolist()
+            ),
             fin_deployment=aux["fin_deployment"],
             rcs_on=aux.get("rcs_thruster_on", pre["rcs_on"]),
             rcs_fuel=before["rcs_fuel"],
@@ -291,6 +309,7 @@ def build_replay_doc(result, bundle, cfg, max_frames: int = 1500) -> dict:
             .get("logging", float(np.median(np.diff(result.t))) if n > 1 else 0.0)
             * stride,
             "n_frames": len(frames),
+            "missing_engine_force_samples": missing_engine_forces,
             "time_origin_s": float(result.t[0]),
             "flight_reference": (
                 {

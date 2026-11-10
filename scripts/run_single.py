@@ -20,6 +20,8 @@ from core.seeding import write_manifest
 from sim.replay import build_replay_doc, write_replay
 from sim.run import run_configured
 from sim.telemetry import write_physics, write_telemetry
+from generate_sensors import generate
+from plot_sensors import plot_sensor_folder
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
@@ -149,6 +151,32 @@ def main(cfg):
         )
         if path is not None:
             print(f"plot: {path}")
+    # ---------------------------------------------------------
+    # Automatic synthetic sensor data generation
+    # ---------------------------------------------------------
+
+    print("Generating synthetic sensor data...")
+
+    generate(
+        path=out_dir / "trajectory.csv",
+        out=out_dir,
+        seed=42,
+        gps_dropout=0.03,
+    )
+
+    # ---------------------------------------------------------
+    # Automatic sensor plots
+    # ---------------------------------------------------------
+
+    if cfg.run.save_plots:
+        print("Generating sensor plots...")
+
+        plot_sensor_folder(
+            data_folder=out_dir,
+            output_folder=out_dir / "plots",
+        )
+
+    print("Sensor post-processing complete.")
     print(f"output: {out_dir}")
     if report["status"] == "failed":
         raise SystemExit(2)
