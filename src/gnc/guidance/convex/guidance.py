@@ -48,6 +48,7 @@ class LcvxGuidance:
         tf_freeze_s: float = 0.0,
         reanchor_min_alt_m: float = 0.0,
         replan: bool = False,
+        touchdown_time_s: float | None = None,
     ):
         # Fixed node spacing (AP-2007 Algorithm 1): tf = N*dt with an integer-N line search at
         # ignition, and every anchored re-solve keeps the same dt. None selects fixed-N free-time
@@ -87,6 +88,12 @@ class LcvxGuidance:
         # plan-exhaustion fly-out path never engages.
         self.reanchor_min_alt = float(reanchor_min_alt_m)
         self.replan = bool(replan)
+        if touchdown_time_s is not None and (
+            not np.isfinite(touchdown_time_s) or touchdown_time_s <= 0
+        ):
+            raise ValueError("touchdown_time_s must be positive and finite")
+        # Optional boundary epoch in simulation seconds; feedback still uses live state.
+        self.touchdown_time = None if touchdown_time_s is None else float(touchdown_time_s)
         self.phase = int(phase)
         self.N = int(N)
         self.target = tuple(float(x) for x in target)
@@ -420,7 +427,7 @@ class LcvxGuidance:
             raise ValueError("nonfinite drag-template coefficient")
         return d_seq
 
-    def _drag_continuation(self, r0, v0, m0, seed, logged, kind):
+    def _drag_continuation(self, r0, v0, m0, seed, logged, kind, fixed_tf=None):
         """Advance from a drag-free seed to the FULL drag coefficient.
 
         Each successful SOCP becomes the next reference. On an infeasible step,
@@ -442,8 +449,12 @@ class LcvxGuidance:
             target_fraction = min(1.0, fraction + step)
             candidate = logged(
                 kind,
-                lambda source=current, f=target_fraction: self._plan(
-                    r0, v0, m0, drag_ref=(source, 0.0), drag_fraction=f
+                lambda source=current, f=target_fraction: (
+                    self._plan(r0, v0, m0, drag_ref=(source, 0.0), drag_fraction=f)
+                    if fixed_tf is None
+                    else self._fixed_plan(
+                        r0, v0, m0, fixed_tf, drag_ref=(source, 0.0), drag_fraction=f
+                    )
                 ),
                 target_fraction,
             )
@@ -488,7 +499,9 @@ class LcvxGuidance:
             **self._terminal_kw(terminal_slack),
         )
 
-    def _fixed_plan(self, r0, v0, m0, tf, rho_cap=None, terminal_slack=False, drag_ref=None):
+    def _fixed_plan(
+        self, r0, v0, m0, tf, rho_cap=None, terminal_slack=False, drag_ref=None, drag_fraction=1.0
+    ):
         if self.dt is not None:
             # Snap to the fixed node grid: commit and every anchored re-solve share the SAME dt,
             # so the countdown never re-grids (dt = tf_go/N variation is a tracking-drift source).
@@ -501,7 +514,9 @@ class LcvxGuidance:
         drag_seq = None
         if drag_ref is not None:
             src_plan, offset = drag_ref
-            drag_seq = self._drag_template(src_plan, offset, float(tf), n_nodes)
+            drag_seq = self._drag_template(
+                src_plan, offset, float(tf), n_nodes, drag_fraction=drag_fraction
+            )
         t0 = time.perf_counter()
         s = self._solve_fixed(
             r0,
@@ -731,16 +746,24 @@ class LcvxGuidance:
             return result
 
         if not mem["ignited"]:
-            # Free-tf search == hoverslam ignition test.
+            fixed_tf = None if self.touchdown_time is None else self.touchdown_time - float(t)
+            if fixed_tf is not None and fixed_tf <= 0:
+                return self._coast(mem)
             new = logged(
-                "ignite_search",
-                lambda: self._plan(r0, v0, m0, grid_fallback=self.grid_fallback),
+                "ignite_search" if fixed_tf is None else "ignite_fixed_time",
+                lambda: (
+                    self._plan(r0, v0, m0, grid_fallback=self.grid_fallback)
+                    if fixed_tf is None
+                    else self._fixed_plan(r0, v0, m0, fixed_tf)
+                ),
             )
             if new is not None and self._has_drag_template():
                 # Gradually increase drag and update the trajectory reference
                 # after each feasible SOCP-2 free-time solve; reject partial
                 # continuation if the full configured drag remains infeasible.
-                socp2 = self._drag_continuation(r0, v0, m0, new, logged, "ignite_drag_refine")
+                socp2 = self._drag_continuation(
+                    r0, v0, m0, new, logged, "ignite_drag_refine", fixed_tf=fixed_tf
+                )
                 if socp2 is not None:
                     new = socp2
                 else:
@@ -784,7 +807,11 @@ class LcvxGuidance:
                     )
                     if new is not None:
                         mem["terminal_slack_uses"] = int(mem["terminal_slack_uses"]) + 1
-                if new is None and (-float(r0[2])) > self.reanchor_min_alt:
+                if (
+                    new is None
+                    and self.touchdown_time is None
+                    and (-float(r0[2])) > self.reanchor_min_alt
+                ):
                     # The anchored countdown slipped out of the feasible-tf window because
                     # unmodeled drag or actuator lag changed the terminal deficit. Re-anchor with
                     # a new free-time plan, event-triggered by solver infeasibility and counted.

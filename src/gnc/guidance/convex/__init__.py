@@ -72,6 +72,7 @@ def build_lcvx(ctx):
         _convex_nominal(ctx),
         ctx.active_engines,
         ctx.phase,
+        touchdown_time_s=gd.get("convex_touchdown_time_s"),
         **_grid_kw(gd),
         **_convex_kw(gd),
     )

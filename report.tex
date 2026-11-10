@@ -1,0 +1,532 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=0.88in,headheight=14pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,tabularx,array,longtable}
+\usepackage{graphicx}
+\usepackage[section]{placeins}
+\usepackage[table]{xcolor}
+\usepackage{siunitx}
+\usepackage{listings,fancyhdr}
+\usepackage{xurl}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!55!black,
+  pdftitle={Reusable Launch Vehicle Simulator: Project 2},pdfauthor={Team 4}}
+\sisetup{group-separator={,},group-minimum-digits=4,group-digits=integer}
+\setlength{\emergencystretch}{2em}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.18}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\navtodo}[1]{\par\medskip\noindent
+  \colorbox{yellow!25}{\textbf{TODO --- Navigation research in progress.}}\par
+  \noindent #1\par\medskip}
+\newcommand{\reportfigure}[3]{%
+  \begin{figure}[!htbp]\centering
+  \includegraphics[width=\textwidth,height=0.73\textheight,keepaspectratio]{report_assets/#1.pdf}
+  \caption{#2}\label{#3}\end{figure}\FloatBarrier}
+\makeatletter
+\newcommand{\compactcontents}{%
+  \begingroup\small
+  \renewcommand{\l@section}[2]{\addvspace{2pt}%
+    \@dottedtocline{1}{0pt}{1.5em}{\bfseries ##1}{\bfseries ##2}}%
+  \tableofcontents\endgroup}
+\makeatother
+\lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,columns=fullflexible,
+  frame=single,rulecolor=\color{black!20},keepspaces=true,showstringspaces=false}
+\pagestyle{fancy}\fancyhf{}
+\lhead{RLV Simulator --- Project 2}\rhead{\thepage}
+\setcounter{tocdepth}{2}
+
+\begin{document}
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+\centering
+\vspace*{1.5in}
+{\LARGE\bfseries Reusable Launch Vehicle Simulator\par}
+\vspace{0.2in}
+{\Large Project 2 Report\par}
+\vspace{0.5in}
+{\large Guidance, Navigation, and Control System\par
+for Reusable Launch Vehicles\par}
+\vspace{0.15in}
+{\large M2795.007800\par}
+\vfill
+{\large\textbf{Team 4}\par}
+\vspace{0.15in}
+{\large Anand \quad Jonas \quad Seongjae\par}
+\vspace{0.35in}
+{\large 10 November 2026\par}
+\vfill
+\end{titlepage}
+
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+A modular six-degree-of-freedom simulation environment is developed for representative ascent and recovery phases of a Falcon~9 approximation. The model couples rigid-body motion, propellant-dependent mass properties, propulsion, aerodynamic loads, actuator response, and a rotating spherical Earth. Four prescribed-input experiments isolate ascent, entry burn, aerodynamic descent, and terminal powered descent; a fifth experiment evaluates closed-loop landing. Archived independent-reference comparisons give maximum position and velocity discrepancies of \SI{3.08e-6}{\metre} and \SI{4.23e-7}{\metre\per\second}. The landing case reaches contact at \SI{17.468}{\second} with approximately \SI{0.086}{\metre\per\second} speed and \SI{0.019}{\metre} position error under ideal actuation and truth-based state feedback. Comparison with CRS-11 webcast observations reveals substantial ascent mismatch, including an altitude RMSE of \SI{10.72}{\kilo\metre}; agreement with the implemented equations therefore does not establish flight fidelity. Sensor models and state estimation remain under development, with their design and performance sections retained as TODOs.
+\clearpage
+\compactcontents
+\clearpage
+\pagenumbering{arabic}
+
+\section{Introduction}
+\subsection{Project Objectives}
+Project~2 requires a physics-based vehicle simulator and a navigation system for reusable launch vehicles. The simulator must predict how forces, moments, and propellant consumption change the vehicle state, and provide a basis for subsequent guidance and control design. Representative flight phases and public flight observations are used to assess the resulting motion. The navigation component must ultimately estimate position, velocity, attitude, and other required states from sensor measurements.
+
+\subsection{Development Scope and Contributions}
+The work presented here comprises the RLV-Sim vehicle model, its modular simulation interfaces, and five independently initialized flight experiments. The ascent model includes an attached upper assembly; recovery cases represent the booster alone. A prescribed-input mode separates the response of the physical model from feedback design. A closed-loop mode connects the same plant interface to a powered-descent planner, attitude controller, and actuator allocator.
+
+The report evaluates the uncalibrated \code{project2\_*} scenario set. It documents the equations, experimental conditions, implementation checks, and agreement with CRS-11 altitude and speed observations. These independent cases do not constitute a continuous reconstructed mission. The numerical results use the archived verification campaign identified by the 3~November~2026 run IDs in Appendix~\ref{app:reproduction}; its stored trajectories have been reprocessed for the figures and flight-comparison statistics in this report. Later calibration experiments are separate from this baseline.
+
+\section{Simulation Architecture}\label{sec:architecture}
+\subsection{System Components and Data Flow}
+The implementation separates state definitions, plant construction, GNC components, and simulation execution. Table~\ref{tab:architecture} summarizes the responsibilities. Python resolves configurations and schedules module updates; a native C++ session advances the vehicle and actuator states.
+\begin{table}[!htbp]
+\centering\caption{Simulation components and exchanged information.}\label{tab:architecture}
+\begin{tabularx}{\textwidth}{lYY}\toprule
+Component & Responsibility & Principal information\\\midrule
+Core & State definitions and frame conventions & Position, velocity, quaternion, angular rate, mass, timestamps\\
+Plant & Forces, moments, mass properties, numerical propagation & Actuator inputs to vehicle truth and load diagnostics\\
+GNC & Navigation, guidance, attitude control, allocation & State estimate to thrust and actuator commands\\
+Simulation & Scheduling, logging, termination, evaluation & Time histories, contact metrics, resolved configuration\\\bottomrule
+\end{tabularx}
+\end{table}
+
+For closed-loop operation, plant truth enters the navigation interface, which supplies an estimated state to guidance and control. Guidance requests a thrust vector; the attitude controller computes a body torque; the allocator converts these requests into throttle, gimbal, fin, and optional RCS commands. The plant holds each actuator command until the next scheduled update. In the current landing experiment, the navigation interface passes truth directly to the feedback laws. The four prescribed-input cases instead apply a time-indexed command schedule without constructing GNC modules.
+
+\subsection{Simulation Modes and Execution Timing}
+The plant uses fixed-step fourth-order Runge--Kutta integration with quaternion normalization after each step. Navigation, guidance, control, and logging periods are integer multiples of the plant step. Timestamped outputs distinguish sampled states from interpolated surface-contact quantities. Separate native sessions and deterministic seeds allow repeatable episodes; each run stores its resolved configuration alongside the numerical histories. The periods used in this study are listed in Section~\ref{sec:settings}.
+
+\subsection{Guidance and Control Used for the Landing Case}
+The landing experiment uses an LCvx powered-descent planner, a per-axis PD attitude controller, and control allocation. Its 20-node convex planning problem imposes a \ang{15} thrust-pointing cone, a \ang{20} glideslope constraint, and hard terminal position and velocity conditions. The plan uses a local translational approximation and nominal gravity that includes the surface centrifugal contribution. A committed plan is tracked without repeated trajectory optimization. The plant continues to propagate the coupled rotating-Earth equations.
+
+The outer tracking gains are $K_r=\operatorname{diag}(0.1,0.1,1.0)~\si{\per\second\squared}$ and $K_v=\operatorname{diag}(0.6,0.6,4.0)~\si{\per\second}$. Lower lateral gains account for the attitude response required to redirect thrust. These controllers provide a closed-loop test case; guidance optimization and controller design are not the principal subjects of this report.
+
+\subsection{Visualization and Replay}\label{sec:replay}
+The three-dimensional replay viewer reads the exported trajectory, attitude, configuration, and actuator histories. It displays vehicle motion together with flight telemetry, engine activity, gimbal and fin indicators, and RCS status. Timeline seeking, playback-speed controls, and selectable camera views support inspection of transitions and actuator response. Figure~\ref{fig:replay-landing} shows the interface during a landing demonstration; Appendix~\ref{app:replay} presents the other four flight phases.
+
+The screenshots illustrate the interface using separate demonstration runs. Their displayed states and durations differ from the archived campaign analyzed in Section~\ref{sec:results}. The ocean and drone-ship scene supplies visual context, while the plant's radial-altitude calculation determines contact.
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{images/simulator_landing.png}
+\caption{Replay interface during final approach. The central view shows vehicle attitude and deployed landing legs; the left and right panels display flight and actuator states, and the lower timeline provides replay controls. Vehicle model: Forest Katsch; drone ship: Yakudami (Sketchfab, CC BY 4.0).}
+\label{fig:replay-landing}
+\end{figure}
+\FloatBarrier
+
+\section{Vehicle and Environment Models}\label{sec:models}
+\subsection{Reference Frames and State Definition}
+The reference frame $N$ consists of Earth-fixed Cartesian axes aligned with North--East--Down at a selected spherical-surface origin. The axes remain fixed to Earth as the vehicle moves. The body frame $B$ has $+x$ toward the nose, $+y$ to the right, and $+z$ downward when level. Its geometric origin is at the nose, so engine and tank axial positions are negative. The scalar-first Hamilton quaternion $q_{BN}$ defines the rotation matrix $C_{BN}$ from body to reference components.
+
+The rigid-body and propellant states are
+\begin{equation}
+\bm{x}=\left[\bm r^T,\bm v^T,q_{BN}^T,\bm\omega^T,m,m_g\right]^T,
+\end{equation}
+where $\bm r$ and $\bm v$ are Earth-relative position displacement and velocity, $\bm\omega$ is body angular velocity relative to the Earth-fixed axes, $m$ is total mass, and $m_g$ is RCS gas mass. Actuator internal states are propagated separately. For Earth radius $R_E$ and assumed origin latitude $\phi$,
+\begin{equation}
+\bm R_f=\bm r+[0,0,-R_E]^T,\qquad
+h=\|\bm R_f\|-R_E,\qquad
+\bm\Omega=\Omega_E[\cos\phi,0,-\sin\phi]^T.
+\end{equation}
+All three vectors are expressed in the fixed reference axes. Local downward direction is $\bm d_N=-\bm R_f/\|\bm R_f\|$. Radial altitude and vertical velocity are therefore distinct from $-r_D$ and $v_D$ far from the origin. Flight-path angle is defined by $\gamma=\sin^{-1}(-\bm v\cdot\bm d_N/\|\bm v\|)$, with positive values during climb. It is undefined at rest. Plots use body-axis tilt relative to radial upward direction to avoid the Euler-angle singularity at a vertical initial attitude.
+
+\subsection{Translational and Rotational Equations of Motion}
+For non-gravitational resultant body force $\bm F_b$, the free-flight equations are
+\begin{align}
+\dot{\bm r}&=\bm v,\\
+\dot{\bm v}&=\frac{C_{BN}\bm F_b}{m}
+-\frac{\mu\bm R_f}{\|\bm R_f\|^3}
+-2\bm\Omega\times\bm v
+-\bm\Omega\times(\bm\Omega\times\bm R_f).\label{eq:translation}
+\end{align}
+The terms represent applied force, central gravity, Coriolis acceleration, and centrifugal acceleration. A pad-reaction model holds the ascent vehicle before release. Surface contact is detected from radial altitude.
+
+Rotational momentum balance uses the inertial angular velocity expressed in body axes,
+\begin{equation}
+\bm\omega_i=\bm\omega+C_{BN}^{T}\bm\Omega.
+\end{equation}
+With inertia tensor $I$ and resultant moment $\bm M_{CG}$ about the instantaneous CG, the implemented equations for the selected no-slosh cases are
+\begin{align}
+\dot q_{BN}&=\tfrac12 q_{BN}\otimes[0,\bm\omega]^T,\\
+\dot{\bm\omega}&=I^{-1}\!\left[\bm M_{CG}
+-\bm\omega_i\times(I\bm\omega_i)-\dot I\bm\omega_i\right]
++\bm\omega\times(C_{BN}^{T}\bm\Omega).\label{eq:rotation}
+\end{align}
+The moment includes engine, aerodynamic, grid-fin, and RCS contributions, together with the implemented exhaust angular-momentum flux. The latter is modeled as
+\begin{equation}
+\bm M_{jet}=-\beta_p(x_e-x_{CG})^2[0,\omega_{i,y},\omega_{i,z}]^T,
+\end{equation}
+where $\beta_p\geq0$ is main-propellant consumption rate. Using $\bm\omega_i$ in the angular momentum balance and $\bm\omega$ in quaternion propagation preserves the distinction between inertial and Earth-relative rates.
+
+\subsection{Vehicle Configuration and Mass Properties}
+Total mass is the sum of dry structure, any attached upper assembly, main propellant, and RCS gas. The main propellant occupies two cylindrical LOX/RP-1 tanks with fixed oxidizer-to-fuel mass ratio. Fill height determines each liquid component's CG and inertia. The combined properties follow
+\begin{align}
+\bm r_{CG}&=\frac{\sum_j m_j\bm r_j}{\sum_jm_j},\\
+I&=\sum_j\left[I_{j,c}+m_j\left((\bm d_j^T\bm d_j)\mathbb I-\bm d_j\bm d_j^T\right)\right],
+\quad \bm d_j=\bm r_j-\bm r_{CG},\\
+\dot m&=-\beta_p-\beta_g,\qquad \dot m_g=-\beta_g.
+\end{align}
+Here $I_{j,c}$ is the component inertia about its own CG and $\beta_g$ is gas consumption rate. The inertia-rate contribution in Eq.~\eqref{eq:rotation} is evaluated as mass properties change.
+
+The ascent configuration has an effective length of \SI{70}{\metre} and a \SI{120000}{\kilogram} attached upper assembly. Recovery configurations have a \SI{42}{\metre} body and no attached upper assembly. No separation event connects these experiments. The landing regression uses a distinct single-engine vehicle parameter set, summarized in Table~\ref{tab:hardware}; consequently its fuel margin cannot be appended to the recovery experiments as a continuous mission budget.
+
+\subsection{Propulsion and Actuator Models}
+For engine $i$, effective throttle $u_i$, vacuum thrust $T_{vac,i}$, ambient pressure $p_a$, and nozzle exit area $A_{e,i}$,
+\begin{equation}
+T_i=\max(u_iT_{vac,i}-p_aA_{e,i},0),\qquad
+\beta_p=\sum_i\frac{u_iT_{vac,i}}{I_{sp,i}g_0}.
+\end{equation}
+Pressure reduces net thrust while mass flow is determined from the vacuum quantities. A gimballed engine produces $\bm F_i=T_i\hat{\bm d}_i$ and $\bm M_i=(\bm r_i-\bm r_{CG})\times\bm F_i$. Fuel availability limits both consumption and delivered impulse; depleted main propellant does not remove the separate RCS reserve.
+
+The realistic actuator model uses a rate-limited throttle lag and a damped angular servo:
+\begin{align}
+\dot u&=r_u\tanh\!\left(\frac{u_c-u}{\tau r_u}\right),\\
+\dot\delta&=v_\delta,\qquad
+\dot v_\delta=2\zeta\omega_n\left[r_\delta\tanh\!\left(
+\frac{\omega_n(\delta_c-\delta)}{2\zeta r_\delta}\right)-v_\delta\right].
+\end{align}
+Commands are clipped to throttle and deflection bounds; the minimum commanded nonzero throttle is 0.4. The prescribed-input runs use this actuator model, whereas landing uses ideal tracking of clipped commands. RCS capability includes 12 cold-gas nozzles, pulse-width modulation, and gas bookkeeping. RCS commands are zero in the reported experiments, so these phase results do not exercise RCS control authority.
+
+\subsection{Aerodynamic and Grid-Fin Models}
+The atmosphere co-rotates with Earth. For Earth-relative wind $\bm w_N$,
+\begin{equation}
+\bm v_a=C_{BN}^{T}(\bm v-\bm w_N),\quad V=\|\bm v_a\|,\quad
+\bar q=\tfrac12\rho V^2,\quad M=V/a.
+\end{equation}
+The body model evaluates drag and lift coefficients from an analytically generated table, then assembles
+\begin{align}
+\bm F_a&=\bar qS(-C_D\hat{\bm v}_a+C_L\hat{\bm e}_L),\\
+\bm M_a&=(x_{CP}-x_{CG})\bm e_x\times\bm F_a
+-\frac{\bar qSL^2}{4V}[0,\omega_y,\omega_z]^T.
+\end{align}
+The lift direction $\hat{\bm e}_L$ is perpendicular to the flow, and zero-speed loads are set to zero. The table parameterization prescribes base drag, transonic and hypersonic changes, incidence dependence, and center-of-pressure movement. It is an engineering model, not a measured Falcon~9 aerodynamic database.
+
+Ascent uses a nose-first table spanning Mach 0--12 and incidence \ang{0}--\ang{180}; recovery and landing use a base-first table spanning Mach 0--8 and incidence \ang{0}--\ang{90}. The reported angle of attack is relative to the selected aerodynamic forward axis ($+x$ in ascent and $-x$ in recovery), rather than always relative to the nose. This explains why a retrograde recovery attitude can have a small aerodynamic incidence.
+
+For fin $j$, local flow includes body rotation, $\bm v_j=\bm v_a+\bm\omega\times(\bm r_j-\bm r_{CG})$. Lift and drag depend on fin incidence and local dynamic pressure; the fin moment is the mounting-arm cross product with its force. Each of four fins has nominal area \SI{2}{\square\metre}, with a smooth stall model based on a \ang{25} incidence scale. Deployment multiplies the aerodynamic loads by an exposure factor. Deployment motion, hinge impulse, stowed-fin drag, and structural flexibility are omitted.
+
+\subsection{Gravity and Atmospheric Models}
+All five cases use central gravity with $\mu=\SI{3.986004418e14}{\metre\cubed\per\second\squared}$, $R_E=\SI{6371000}{\metre}$, and $\Omega_E=\SI{7.292115e-5}{\radian\per\second}$. The reference latitude is assumed to be \ang{28.6} at each independently chosen origin. This is a spherical geocentric latitude, not a reconstructed geographic path.
+
+The \code{ussa\_poly} atmosphere computes pressure and temperature from layered relations based on the U.S. Standard Atmosphere, 1976~\cite{ussa}. For geopotential altitude $h_g$, each layer has temperature $T=T_b+\lambda(h_g-h_b)$ and hydrostatic pressure relation $dp/dh_g=-g_0p/(R_aT)$. Density and sound speed follow $\rho=p/(R_aT)$ and $a=\sqrt{\gamma_aR_aT}$. The selected cases have no wind, temperature offset, or density dispersion. The ascent extends above the implementation's layer-boundary verification range of approximately \SI{84.85}{\kilo\metre}; its high-altitude continuation is an additional approximation, especially for the reported Mach number. This implementation limit is distinct from the wider altitude coverage of the published standard.
+
+\subsection{Model Parameters and Their Sources}\label{sec:parameters}
+Table~\ref{tab:hardware} lists the principal configured values. All vehicle-specific values in this table are modeling assumptions. Their numerical precision specifies the computation and does not indicate measurement accuracy.
+\begin{table}[!htbp]
+\centering\small
+\caption{Principal hardware assumptions in the archived resolved configurations.}\label{tab:hardware}
+\begin{tabularx}{\textwidth}{Yrrr}\toprule
+Parameter & Ascent & Recovery cases & Landing\\\midrule
+Dry structure [kg] & 25,000 & 25,000 & 25,600\\
+Attached upper assembly [kg] & 120,000 & 0 & 0\\
+Body length [m] & 70 & 42 & 42\\
+Reference area [m$^2$] & 10.52 & 10.52 & 10.52\\
+Vacuum thrust per engine [kN] & 914 & 914 & 981\\
+Specific impulse [s] & 311 & 311 & 311\\
+Nozzle exit area [m$^2$] & 0.68 & 0.68 & 0.90\\
+Tank radius, LOX/RP-1 [m] & 1.8/1.8 & 1.8/1.8 & 1.7/1.7\\
+Tank length, LOX/RP-1 [m] & 25/14 & 25/14 & 13/9\\
+Liquid density, LOX/RP-1 [kg/m$^3$] & 1230/810 & 1230/810 & 1141/810\\
+Initial RCS gas [kg] & 200 & 200 & 200\\\bottomrule
+\end{tabularx}
+\end{table}
+
+The evidence categories are distinguished as follows. \emph{Published information} includes the course requirements and the public provenance of the CRS-11 data. \emph{Estimated quantities} include webcast-derived altitude/speed scales and any velocity components inferred during scenario preparation. \emph{Assumptions} include the remaining initial states, vehicle geometry and mass properties, propulsion values, aerodynamic coefficients, and prescribed commands. The versioned source and resolved configuration identify what was implemented; they are not independent evidence that a vehicle parameter is physically correct. The raw flight observations and their derived channels are distinguished in Section~\ref{sec:flightdata}.
+
+\section{Navigation System}\label{sec:navigation}
+\navtodo{Physical sensor models and state estimation are under development. The present simulations use truth feedback or prescribed inputs. The subsections below reserve the design content for the completed navigation study.}
+\subsection{Navigation Architecture and Estimated States}
+\textbf{TODO:} Define the estimated state, sensor-to-estimator interfaces, coordinate conventions, initialization, and update schedule. The existing interface already records timestamped truth, measurements, estimates, and errors separately.
+\subsection{Sensor Measurement Models}
+\textbf{TODO:} Document the selected sensors, measurement equations, noise and bias parameters, sampling rates, and availability assumptions. State-level perturbations in the current identity module are not physical sensor models.
+\subsection{State-Estimation Algorithm}
+\textbf{TODO:} Present the selected estimator's propagation and measurement-update equations, tuning, and initialization. The current EKF selection is a stub and does not provide estimation results.
+
+\section{Simulation Cases and Experimental Setup}\label{sec:experiments}
+\subsection{Case Selection and Evaluation Objectives}
+The five cases cover different dominant mechanisms. Ascent tests thrust, pitch excitation, aerodynamic loading, and a large change in mass. Entry burn tests three-engine deceleration and shutdown. Aerodynamic descent isolates unpowered atmospheric loads. Terminal powered descent tests single-engine braking and shutdown while still airborne. Landing evaluates feedback-driven contact. Each case starts from its own initial condition; states and propellant are not transferred between cases.
+
+\subsection{Initial Conditions and Prescribed Inputs}
+Table~\ref{tab:initial} gives the initial states; all cases begin with zero body angular rate, zero roll, and \SI{200}{\kilogram} RCS gas. Horizontal position is zero at the chosen origin. The recovery heading is synthetic. The initial recovery attitude aligns the thrust axis against the initial velocity, but attitude subsequently evolves under the full rotational equations.
+\begin{table}[!htbp]
+\centering\small
+\caption{Initial conditions. Velocity components use the fixed NED axes; angles use intrinsic ZYX Euler initialization.}\label{tab:initial}
+\begin{tabularx}{\textwidth}{Yrrrrr}\toprule
+Case & $h$ [m] & $(v_N,v_E,v_D)$ [m/s] & $m$ [kg] & Pitch [$^\circ$] & Yaw [$^\circ$]\\\midrule
+Ascent & 0 & $(0,0,0)$ & 545,200 & 90.000 & 45\\
+Entry burn & 47,500 & $(406.914,0,1192.778)$ & 40,000 & 71.163 & 180\\
+Aero descent & 35,000 & $(480.561,0,823.992)$ & 34,000 & 59.749 & 180\\
+Powered descent & 4,700 & $(142.691,0,286.067)$ & 32,000 & 63.490 & 180\\
+Landing & 300 & $(0,0,25)$ & 29,500 & 90.000 & 0\\\bottomrule
+\end{tabularx}
+\end{table}
+
+In ascent, nine engines start at full throttle with the vehicle on the pad. A \SI{0.002}{\radian} pitch-gimbal command acts from 10 to \SI{12}{\second}. Throttle is reduced to 0.8 from 50 to \SI{74}{\second}, restored to 1, and commanded off at \SI{145}{\second}. Propagation continues to \SI{150}{\second}. Fins remain stowed. The schedule is prescribed rather than derived from a flight-guidance law.
+
+Entry burn activates engines 0, 1, and 5 at throttle 0.50, commands cutoff at \SI{12}{\second}, and ends at \SI{14}{\second}. Aerodynamic descent keeps the engines off for \SI{45}{\second}. Powered descent uses the center engine at throttle 0.55 for \SI{20}{\second}, followed by \SI{2}{\second} shutdown observation. These three cases start with zero actual throttle and expose neutral fins throughout; gimbal, fin-deflection, and RCS commands remain zero.
+
+\subsection{Closed-Loop Landing Configuration}
+Landing begins at \SI{300}{\metre} with \SI{25}{\metre\per\second} downward speed and \SI{3700}{\kilogram} main propellant. The target is the surface origin. The single-engine model in Table~\ref{tab:hardware}, ideal actuation, and truth feedback isolate nominal closed-loop behavior. RCS allocation and initial-state dispersions are disabled. The episode ends at surface contact or a \SI{40}{\second} horizon.
+
+\subsection{Numerical Settings and Evaluation Criteria}\label{sec:settings}
+The nominal plant step is \SI{1}{\milli\second}. Prescribed commands update every \SI{20}{\milli\second}; logging uses \SI{200}{\milli\second} in ascent and \SI{20}{\milli\second} in the other prescribed cases. Landing uses navigation, control, guidance, and logging periods of 10, 20, 1000, and \SI{100}{\milli\second}, respectively, with zero command-delay ticks. A guidance update does not imply a new trajectory optimization when replanning is disabled.
+
+For prescribed experiments, evaluation includes finite states, mass and gas bookkeeping, quaternion norm, shutdown behavior, aerodynamic-table coverage, independent-reference error, and step-size agreement. The landing configuration bounds position error by \SI{10}{\metre}, total speed by \SI{5}{\metre\per\second}, and tilt by \ang{15}. Success additionally requires the runner's tighter soft-contact classification: downward speed at most \SI{2}{\metre\per\second}, lateral speed at most \SI{1}{\metre\per\second}, tilt at most \ang{5}, and angular-rate magnitude at most \SI{0.1}{\radian\per\second}, with positive remaining propellant. These are configured experimental criteria; they are not flight qualification limits. Comparison with public observations uses continuous residuals rather than a pass/fail threshold.
+
+\section{Model and Numerical Verification}\label{sec:verification}
+\subsection{Verification Methods and Reference Solutions}
+The verification campaign combines component checks with independently integrated full-phase equations. For the four prescribed cases, a configuration-based DOP853 implementation calculates forces, mass properties, and motion without calling the production force or frame routines. Reference attitude is propagated as a rotation matrix. Rotating-Earth reference trajectories are integrated in inertial coordinates and transformed back to the stored frame, reducing the risk of reproducing the same rotating-frame implementation error.
+
+The maximum sampled vector error is $e_{x,\max}=\max_k\|\bm x_{sim}(t_k)-\bm x_{ref}(t_k)\|_2$. Attitude error is the principal relative rotation angle. Table~\ref{tab:verification} reports the archived full-phase discrepancies. Separate canonical tests in the implementation record cover free fall, vacuum burn, torque-free rotation, propulsion, fin loads, and atmospheric layer boundaries. Their parameters need not equal those of the five phase experiments.
+\begin{table}[!htbp]
+\centering\small
+\caption{Maximum native/reference differences for the selected archived phase runs.}\label{tab:verification}
+\begin{tabular}{lrrrr}\toprule
+Case & Position [m] & Velocity [m/s] & Attitude [rad] & Mass [kg]\\\midrule
+Ascent & $3.08\times10^{-6}$ & $4.23\times10^{-7}$ & $1.51\times10^{-10}$ & $2.27\times10^{-5}$\\
+Entry burn & $1.91\times10^{-6}$ & $2.19\times10^{-7}$ & $1.46\times10^{-11}$ & $2.52\times10^{-7}$\\
+Aero descent & $2.41\times10^{-6}$ & $3.58\times10^{-7}$ & $2.44\times10^{-11}$ & 0\\
+Powered descent & $3.17\times10^{-7}$ & $2.81\times10^{-8}$ & $2.06\times10^{-11}$ & $3.31\times10^{-7}$\\\midrule
+Acceptance limit & $10^{-2}$ & $10^{-3}$ & $10^{-6}$ & $10^{-3}$\\\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Integration Accuracy and Step-Size Convergence}
+Native runs at 2, 1, and \SI{0.5}{\milli\second} were compared at shared output times. Across the four prescribed cases and both adjacent step pairs, the largest position and velocity differences were \SI{2.08e-6}{\metre} and \SI{2.90e-7}{\metre\per\second}. The corresponding acceptance limits were \SI{0.1}{\metre} and \SI{0.01}{\metre\per\second}. The largest adjacent-step mass difference was \SI{4.17e-6}{\kilogram}, below the \SI{0.01}{\kilogram} limit.
+
+These differences establish numerical agreement at the tested resolutions, but not a measured fourth-order convergence rate. For example, the ascent position difference increases between the finer pair. Very small errors, event handling, reference accuracy, and floating-point effects can obscure the asymptotic integration order. Reference tolerances were also tightened separately; in the selected entry-burn record, the resulting mass difference is \SI{3.04e-5}{\kilogram}.
+
+\subsection{Physical Consistency and Subsystem Checks}
+The archived phase records show zero mass-bookkeeping error, nonnegative propellant, no spurious mass increase, and quaternion-norm errors below $3\times10^{-16}$. Main-engine force is zero at the end of each prescribed experiment. RCS gas remains constant because no RCS activity is commanded. Maximum angles of attack in ascent, entry burn, aerodynamic descent, and powered descent are \ang{0.968}, \ang{0.808}, \ang{0.766}, and \ang{0.726}, respectively. Ascent reaches Mach 8.625 and therefore requires its Mach-12 table rather than the recovery table.
+
+The separate rotating-Earth verification includes full-orbit and asymmetric torque-free problems. At a \SI{0.5}{\second} step, the recorded maximum orbital position error against a Kepler solution is \SI{1.08e-6}{\metre}; conservation checks cover inertial energy and angular momentum. These tests evaluate the central-gravity and frame implementation under smooth test conditions.
+
+\subsection{Verification Results and Unresolved Issues}
+All five selected archived verification records are marked passed. The landing record checks contact, the configured success criteria, and physical bookkeeping; it does not use the prescribed-input DOP853 comparison. Thus the landing success and the independent-equation errors in Table~\ref{tab:verification} are different forms of evidence.
+
+Verification is tied to the campaign and resolved configurations, rather than to every later source revision. A separate 9~November execution note, retained in \path{main.tex}, reports an entry-burn reference mass-refinement difference of \SI{1.04194e-4}{\kilogram} against a \SI{1e-4}{\kilogram} threshold, and a QOCO test failure involving \code{solver\_status}. These observations are not resolved by selecting the earlier passing campaign. Their source/environment differences require investigation before qualifying a newer executable. No new full test-suite result is asserted here. Appendix~\ref{app:reproduction} identifies the exact data used for the tables and figures.
+
+\section{Simulation Results and Flight-Data Comparison}\label{sec:results}
+Table~\ref{tab:results} summarizes the five cases. The prescribed cases report their final native sample; landing reports quantities interpolated to radial surface contact. Figures in this section are regenerated from the archived state and diagnostic histories.
+\begin{table}[!htbp]
+\centering\small
+\caption{Final states and remaining main propellant.}\label{tab:results}
+\begin{tabularx}{\textwidth}{Yrrrr}\toprule
+Case & Time [s] & Altitude [km] & Speed [m/s] & Propellant [kg]\\\midrule
+Ascent & 150 & 101.056 & 2171.271 & 20,654.7\\
+Entry burn & 14 & 33.000 & 944.131 & 9576.2\\
+Aero descent & 45 & 3.758 & 310.462 & 8800.0\\
+Powered descent & 22 & 1.528 & 80.630 & 3557.7\\
+Landing (contact) & 17.468 & 0 & 0.086 & 1378.8\\\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Powered Ascent}
+The ascent reaches \SI{101.056}{\kilo\metre} after \SI{150}{\second}, while main propellant decreases from 400,000 to approximately \SI{20655}{\kilogram}. Figure~\ref{fig:ascent} shows the imposed throttle reduction and subsequent return to full thrust. Net thrust also changes with ambient pressure. The large mass decrease increases the acceleration available from a given thrust, contributing to the steeper late-time speed rise.
+
+Dynamic pressure peaks at \SI{31.01}{\kilo\pascal} near \SI{50.6}{\second}, shortly after the throttle-reduction command. The peak reflects the competing effects of increasing speed and decreasing atmospheric density, with actuator lag affecting the immediate thrust response. After cutoff at \SI{145}{\second}, propellant consumption stops as thrust decays; altitude continues to rise while speed decreases. At that command epoch, altitude and speed are \SI{91.620}{\kilo\metre} and \SI{2190.20}{\metre\per\second}.
+
+The maximum aerodynamic incidence remains below \ang{1}; the body therefore remains approximately aligned with the velocity even as the path bends away from vertical. This is a response to the chosen pitch excitation and subsequent dynamics, not evidence that an operational pitch program has been recovered. Body-axis tilt and angular-rate histories are provided in Appendix~\ref{app:supplement}.
+\reportfigure{ascent}{Powered ascent. The thrust reduction at 50--74 s, cutoff at 145 s, dynamic-pressure maximum, and declining propellant mass are shown on the same elapsed-time basis. Horizontal distance is measured from this experiment's origin.}{fig:ascent}
+
+\subsection{Entry Burn and Aerodynamic Descent}
+Entry burn reduces speed from \SI{1260.3}{\metre\per\second} to \SI{944.1}{\metre\per\second} over \SI{14}{\second}, consuming approximately \SI{5224}{\kilogram} of main propellant. Figure~\ref{fig:entry} shows thrust build-up from an initially unthrottled engine state and shutdown after the \SI{12}{\second} cutoff command. Despite decreasing speed, dynamic pressure reaches \SI{5.16}{\kilo\pascal} at the end of the interval: descent into denser air offsets the reduction in $V^2$.
+\reportfigure{entry_burn}{Entry burn. Three engines brake the descending vehicle; the final two seconds expose the shutdown transient. Dynamic pressure increases as the vehicle enters denser atmosphere.}{fig:entry}
+
+In aerodynamic descent, speed falls from \SI{953.9}{\metre\per\second} to \SI{310.5}{\metre\per\second} without thrust or propellant consumption. Body and neutral-fin aerodynamic loads supply the deceleration. The dynamic-pressure maximum is \SI{84.33}{\kilo\pascal} at \SI{29.18}{\second}; after this point, the speed reduction dominates the continuing density increase. This peak is a load prediction under the assumed coefficients and initial state, not a demonstrated structural margin.
+
+The flight-path angle changes from approximately $-\ang{59.75}$ to $-\ang{73.80}$, while maximum incidence is \ang{0.766}. The vehicle ends at \SI{3.758}{\kilo\metre}, still descending. Neutral fin commands do not imply zero fin loads because both translational and rotational local flow enter the fin model.
+\reportfigure{aero_descent}{Aerodynamic descent with engines off and exposed neutral fins. Constant propellant mass separates aerodynamic braking from powered deceleration; the load maximum occurs before the final low-speed portion.}{fig:aero}
+
+\subsection{Terminal Powered Descent and Landing}
+The prescribed powered-descent case reduces speed from \SI{319.7}{\metre\per\second} to \SI{80.6}{\metre\per\second}, leaving \SI{3557.7}{\kilogram} main propellant. Dynamic pressure is greatest initially, at \SI{38.86}{\kilo\pascal}, and decreases during braking. At \SI{22}{\second}, altitude is still \SI{1.528}{\kilo\metre}; the final radial downward speed is approximately \SI{80.41}{\metre\per\second}. This case demonstrates braking and shutdown response without imposing a touchdown boundary condition.
+\reportfigure{powered_descent}{Prescribed terminal powered descent. The center engine is commanded off at 20 s; the run ends while the vehicle remains airborne.}{fig:powered}
+
+The separate landing case starts at \SI{300}{\metre} and reaches contact at \SI{17.468}{\second}. Interpolated contact speed is \SI{0.086}{\metre\per\second}, position error is \SI{0.019}{\metre}, and tilt is \ang{0.055}. Approximately \SI{2321}{\kilogram} main propellant is consumed, leaving \SI{1378.8}{\kilogram}. The case satisfies its configured contact criteria.
+
+The maximum dynamic pressure is only \SI{0.372}{\kilo\pascal}, making this chiefly a thrust-and-feedback experiment. Near contact, angle of attack increases as total speed becomes very small; this does not imply a comparable growth in aerodynamic force because dynamic pressure approaches zero. The terminal native sample occurs slightly below the surface, so its \SI{0.08456}{\metre\per\second} speed is distinct from the interpolated contact result. Contact detection does not model landing-leg impact dynamics.
+\reportfigure{landing}{Closed-loop landing under ideal actuation and truth feedback. The time history ends at the first below-surface native sample; the reported touchdown metrics are interpolated to zero radial altitude.}{fig:landing}
+
+\subsection{Comparison with CRS-11 Flight Data}\label{sec:comparison}
+\subsubsection{Data Sources and Processing}\label{sec:flightdata}
+The reference is the CRS-11 stage-1 raw data in the public \emph{Telemetry-Data} repository, pinned to commit \code{b245d3b81aa36b7941ec10f3f4b508999d106a6d}~\cite{telemetry}. The local manifest, \path{data/reference/crs11/manifest.json}, records source URLs, byte counts, and SHA-256 hashes. The approximately \SI{0.033}{\second} samples contain numbers extracted from the webcast time, altitude, and speed displays. They are not raw onboard sensor measurements. Altitude is converted from kilometres to metres; the stored velocity is in metres per second.
+
+The reference dataset distinguishes raw displayed observables from analysed channels, including derived vertical velocity, downrange, and dynamic pressure~\cite{telemetry}. Only raw altitude and total speed are compared here. Display quantization, extraction errors, unknown processing delay, and uncertain altitude and speed reference conventions limit interpretation. The extraction cadence does not establish an independent sensor sampling rate or measurement accuracy.
+
+\subsubsection{Comparison Conditions and Error Metrics}
+Simulation elapsed time is mapped to mission time with fixed starts of 0, 372, 384, and \SI{429}{\second} for ascent, entry burn, aerodynamic descent, and powered descent. Requested reference windows end at 145, 384, 429, and \SI{462}{\second}. The powered-descent run covers only the first \SI{22}{\second} of its window. The independently initialized landing regression has no assigned flight-data comparison.
+
+The comparison assumes equal altitude datums and Earth-relative speed, with zero altitude offset. Simulated observables are linearly interpolated at overlapping reference timestamps, and the exact initial simulation epoch is excluded. No extrapolation is used. For residual $e_k=y_{sim,k}-y_{obs,k}$, the time-weighted bias and RMSE are
+\begin{align}
+b&=\frac{1}{D}\sum_{k\in\mathcal K}\frac{e_k+e_{k+1}}{2}\Delta t_k,\\
+\operatorname{RMSE}&=\left[\frac{1}{D}\sum_{k\in\mathcal K}
+\frac{e_k^2+e_{k+1}^2}{2}\Delta t_k\right]^{1/2},
+\quad D=\sum_{k\in\mathcal K}\Delta t_k.
+\end{align}
+Only intervals $0<\Delta t_k\leq\SI{1.1}{\second}$ belong to $\mathcal K$, preventing missing coverage from receiving interpolation weight. The duration in Table~\ref{tab:comparison} is this covered duration, which can be shorter than the timestamp span.
+
+\subsubsection{Comparison Results and Error Analysis}
+\begin{table}[!htbp]
+\centering\small
+\caption{Time-weighted comparison with CRS-11 raw altitude and speed. Positive bias means the simulation overpredicts the observable.}\label{tab:comparison}
+\begin{tabularx}{\textwidth}{Yrrrrr}\toprule
+Case & Coverage & Altitude bias & Altitude RMSE & Speed bias & Speed RMSE\\
+ & [s] & [m] & [m] & [m/s] & [m/s]\\\midrule
+Ascent & 143.643 & 7365.0 & 10721.6 & 160.8 & 203.0\\
+Entry burn & 11.979 & $-103.3$ & 135.1 & $-11.4$ & 22.1\\
+Aero descent & 44.979 & 250.1 & 650.0 & 43.3 & 59.9\\
+Powered descent & 21.955 & 503.0 & 617.8 & $-53.6$ & 56.1\\\bottomrule
+\end{tabularx}
+\end{table}
+
+Figure~\ref{fig:flight} shows that ascent increasingly overpredicts both altitude and speed. At the same mission epoch, \SI{145}{\second}, simulated altitude is \SI{91.620}{\kilo\metre}, compared with \SI{62.400}{\kilo\metre} obtained by interpolating the raw observations; simulated and observed speeds are \SI{2190.20}{\metre\per\second} and \SI{1684.44}{\metre\per\second}. The same-time discrepancies are therefore approximately \SI{29.22}{\kilo\metre} and \SI{505.76}{\metre\per\second}. Comparing the later \SI{150}{\second} simulation endpoint with MECO would confound this difference with additional coast time.
+
+The systematic ascent mismatch indicates that the prescribed thrust history, mass budget, trajectory orientation, and assumed aerodynamic/environment models do not jointly reproduce the observed flight. Their separate contributions are not identified by this comparison. The increasing residual is much larger than the numerical integration discrepancies, so reducing the timestep alone will not address it. A controlled parameter study and better-constrained input history are needed before selecting a correction.
+
+Entry burn has the smallest altitude RMSE, but its initial scale and burn window are selected from the flight context. Agreement over this short interval therefore provides limited evidence about prediction outside that window. In aerodynamic descent, a positive speed bias of \SI{43.3}{\metre\per\second} indicates underpredicted deceleration on average. Possible contributors include aerodynamic coefficients, initial velocity direction, and mass; a nearly matched terminal speed does not eliminate the intermediate mismatch. In powered descent, positive altitude bias together with negative speed bias is consistent with excessive braking and/or a different descent geometry. These are candidate explanations rather than established parameter diagnoses.
+
+The comparison tests agreement in two observables. It neither identifies a unique six-degree-of-freedom trajectory nor measures navigation error. No model parameters were fitted in this baseline comparison. Residual histories are included in Appendix~\ref{app:supplement}.
+\reportfigure{flight_comparison}{Simulated and webcast-derived altitude and speed on a common mission-time axis. Each row is an independently initialized experiment. Point markers preserve visible gaps in the observational record.}{fig:flight}
+
+\subsection{Navigation Performance}
+\navtodo{Evaluate the completed estimator against simulation truth using position, velocity, attitude, and relevant bias errors. Report the measurement assumptions, transient behavior, and uncertainty consistency where applicable. No navigation-performance result is available for the present truth-feedback baseline.}
+
+\section{Discussion and Limitations}\label{sec:discussion}
+\subsection{Interpretation and Applicability of the Results}
+The verification results support the implementation of the declared equations within the tested regimes. The phase experiments reproduce expected mechanisms: propellant depletion and acceleration during ascent, powered deceleration during entry and terminal descent, and drag-driven deceleration with constant mass during aerodynamic descent. The landing experiment additionally demonstrates nominal feedback control under its selected initial condition and ideal actuator assumptions.
+
+Flight agreement is substantially weaker than numerical agreement. In particular, the ascent residual prevents treating the baseline as a quantitatively validated CRS-11 predictor. Recovery intervals begin from separately prescribed states, so their errors do not include the accumulated uncertainty of earlier phases. The assumed latitude, heading, and horizontal origins also preclude a geographic landing-site reconstruction. No landing robustness probability follows from a single nominal successful case.
+
+\subsection{Model Uncertainties and GNC Design Risks}
+The most consequential errors depend on flight phase. During low-altitude braking, effective thrust and actuator delay affect stopping distance and available fuel margin. Using ideal actuation can hide insufficient time to build thrust or redirect the vehicle. Aerodynamic forces and moments dominate atmospheric descent; uncertainty in coefficients, wind, and CG can shift both the terminal state and available control authority. During final approach, state-estimation errors can cause the controller to satisfy constraints for the wrong state.
+\begin{table}[!htbp]
+\centering\small
+\caption{Priority uncertainties for subsequent GNC design.}\label{tab:risks}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.19\textwidth}YY}\toprule
+Uncertainty & Consequence & Next evaluation\\\midrule
+Navigation bias, delay, dropout & Incorrect burn timing, attitude commands, or perceived touchdown state & Sensor-based closed-loop trials with estimation error and consistency statistics\\
+Thrust and actuator response & Late braking, saturation, excessive fuel use & Thrust-bias and response-delay sweeps with realistic actuation\\
+Aerodynamic loads and wind & Entry load error and displaced landing initial state & Coefficient/wind dispersions across the tested Mach and pressure range\\
+Mass, CG, inertia & Incorrect acceleration and control-moment prediction & Coupled mass-property perturbations and allocation checks\\
+Frame or altitude mismatch & Persistent sensor, guidance, or contact error & Explicit inertial/Earth-relative transformations and common altitude datum\\\bottomrule
+\end{tabularx}
+\end{table}
+
+Among the omissions, navigation uncertainty and realistic thrust response are particularly important for the nominal landing result because they are absent from the successful case. For atmospheric descent, the large modeled pressure peak makes aerodynamic and structural assumptions a separate priority. These priorities follow the mechanisms exercised here; their relative quantitative severity has not yet been ranked by a common sensitivity study.
+
+\subsection{Remaining Work}
+The next study completes the sensor and estimator design and evaluates its closed-loop consequences. The physical-model program should then address the flight-data mismatch with constrained input/parameter studies, repeat landing with realistic actuation, and propagate dispersions across connected phases. Aerodynamic data quality, upper-atmosphere continuation, Earth oblateness, and landing-impact dynamics define additional fidelity limits. Reproducing the selected verification checks with a pinned current software environment is required before transferring their status to later code revisions.
+
+\section{Conclusions}
+The simulator couples translational and rotational motion, variable mass properties, propulsion, aerodynamics, and rotating-Earth effects in a common execution framework. Four prescribed-input experiments and one closed-loop landing case demonstrate distinct ascent and recovery mechanisms. The selected archived reference comparisons agree within the stated numerical tolerances, and the nominal landing reaches contact with approximately \SI{0.086}{\metre\per\second} speed under ideal actuation.
+
+Public-flight comparison exposes limitations that numerical verification cannot resolve. The ascent altitude RMSE of \SI{10.72}{\kilo\metre} and the recovery residuals require investigation of physical parameters and input histories before using the baseline for quantitative flight prediction. Sensor-based navigation remains in progress. The current results establish a reproducible model-development baseline; extending it to GNC design requires the uncertainty and feedback evaluations identified in Section~\ref{sec:discussion}.
+
+\clearpage
+\begin{thebibliography}{9}
+\raggedright
+\addcontentsline{toc}{section}{References}
+\bibitem{ussa} NOAA, NASA, and USAF, \emph{U.S. Standard Atmosphere, 1976}, NOAA-S/T-76-1562, NASA-TM-X-74335, October 1976. \url{https://ntrs.nasa.gov/citations/19770009539}.
+\bibitem{telemetry} shahar603, \emph{Telemetry-Data: SpaceX CRS-11, stage-1 raw data}, commit \code{b245d3b81aa36b7941ec10f3f4b508999d106a6d}, local snapshot retrieved 2 November 2026. \url{https://github.com/shahar603/Telemetry-Data/tree/b245d3b81aa36b7941ec10f3f4b508999d106a6d/SpaceX%20CRS-11/JSON}.
+\end{thebibliography}
+
+\appendix
+\clearpage
+\section{Reproduction Guide}\label{app:reproduction}
+\subsection{Evidence Selection and File Integrity}
+All main result figures use \path{results/verification/project2_segments/physics/<case>/physics.npz}. The accompanying \path{resolved_config.yaml}, \path{verification.json}, and, for prescribed cases, \path{convergence.json} define the campaign and checks. Table~\ref{tab:runs} identifies the selected runs; the date is taken from the recorded run IDs. Contact metrics also use \path{results/project2_physics/landing/kpi.json}, whose speed, position-error, and tilt fields were cross-checked against the landing verification record.
+\begin{table}[!htbp]
+\centering\small\caption{Archived run identifiers used in this report.}\label{tab:runs}
+\begin{tabular}{ll}\toprule Case & Run ID\\\midrule
+Ascent & \code{single\_20261103\_232516}\\
+Entry burn & \code{single\_20261103\_232531}\\
+Aero descent & \code{single\_20261103\_232535}\\
+Powered descent & \code{single\_20261103\_232543}\\
+Landing & \code{single\_20261103\_232548}\\\bottomrule
+\end{tabular}
+\end{table}
+
+The plotting script \path{report_assets/generate_figures.py} reads these histories without executing the plant or altering the stored results. It recomputes comparison statistics from the pinned raw observations and records SHA-256 hashes of input data, configurations, verification records, and processing sources in \path{report_assets/metrics.json}. This separates the archived simulation campaign from report-time post-processing. The latter was performed on 10 November 2026. The saved run configurations govern the numerical claims; changing the current source or configuration can change newly generated runs.
+
+\subsection{Environment and Run Commands}
+The project requires Python 3.10 or later and a C++ compiler. From the repository root, create an environment and install the editable package:
+\begin{lstlisting}
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
+\end{lstlisting}
+The optional QOCO backend is installed with \code{.[dev,qoco]}; CLARABEL is included in the base dependencies. Record the installed package versions and source revision for new verification runs. A current-source run can be generated with:
+\begin{lstlisting}
+.venv/bin/python scripts/run_single.py scenario=project2_ascent hydra.run.dir=results/report_rerun/ascent
+.venv/bin/python scripts/run_single.py scenario=project2_entry_burn hydra.run.dir=results/report_rerun/entry_burn
+.venv/bin/python scripts/run_single.py scenario=project2_aero_descent hydra.run.dir=results/report_rerun/aero_descent
+.venv/bin/python scripts/run_single.py scenario=project2_powered_descent hydra.run.dir=results/report_rerun/powered_descent
+.venv/bin/python scripts/run_single.py scenario=project2_landing hydra.run.dir=results/report_rerun/landing
+\end{lstlisting}
+The checkers provide independent-reference, refinement, and rotating-Earth checks. Use separate output locations for a new campaign so that the selected records remain identifiable:
+\begin{lstlisting}
+.venv/bin/python scripts/check_project2_segments.py --output results/report_rerun/verification
+.venv/bin/python scripts/check_rotating_earth.py --output results/report_rerun/rotating_earth
+.venv/bin/python -m pytest tests/ -q
+.venv/bin/ruff check src tests scripts
+\end{lstlisting}
+To regenerate the report's figures and comparison metrics from the selected archive and compile the document:
+\begin{lstlisting}
+.venv/bin/python report_assets/generate_figures.py
+latexmk -pdf report.tex
+\end{lstlisting}
+Alternatively, \code{tectonic report.tex} produces the PDF with automatic bibliography and cross-reference passes. The archived result folders must be retained to regenerate the figures; the already generated figure PDFs suffice to compile this document.
+
+\section{Detailed Scenario Parameters}\label{app:parameters}
+\begin{table}[!htbp]
+\centering\small
+\caption{Mass budgets at initialization. Dry structure excludes both propellant systems.}\label{tab:massbudget}
+\begin{tabularx}{\textwidth}{Yrrrr}\toprule
+Case & Structure [kg] & Attached [kg] & Main propellant [kg] & RCS [kg]\\\midrule
+Ascent & 25,000 & 120,000 & 400,000 & 200\\
+Entry burn & 25,000 & 0 & 14,800 & 200\\
+Aero descent & 25,000 & 0 & 8800 & 200\\
+Powered descent & 25,000 & 0 & 6800 & 200\\
+Landing & 25,600 & 0 & 3700 & 200\\\bottomrule
+\end{tabularx}
+\end{table}
+
+The common oxidizer-to-fuel mass ratio is 2.56. Tank bottom positions measured from the respective body nose are $[-54,-68]$ m in ascent, $[-26,-40]$ m in the three recovery cases, and $[-22,-33]$ m in landing. Dry axial CG positions are $-58$, $-30$, and $-30$ m, respectively. The attached ascent component has axial CG $-14$ m and diagonal central inertia $[194400,7940000,7940000]~\si{\kilogram\metre\squared}$. The configured dry-structure inertia is $[43000,3700000,3700000]~\si{\kilogram\metre\squared}$. Tank inertia and parallel-axis terms are added during propagation.
+
+Realistic throttle uses $\tau=\SI{0.25}{\second}$ and $r_u=\SI{1}{\per\second}$. TVC parameters are $\omega_n=\SI{37.7}{\radian\per\second}$, $\zeta=0.707$, and $r_\delta=\SI{0.35}{\radian\per\second}$; corresponding fin parameters are 18.8, 0.7, and 0.52 in the same units. TVC and fin command bounds are $\pm\SI{0.14}{\radian}$ and $\pm\SI{0.35}{\radian}$. These are command bounds; the damped servo model does not impose a rigid mechanical stop.
+
+The analytic table uses base/transonic/hypersonic drag coefficients of $0.25/0.30/0.10$ in ascent and $1.0/0.9/0.8$ in recovery and landing. The incidence drag coefficient is 2.0 and normal-force slope parameter is 2.5. These values define the assumed parameterization, and should not be interpreted as measured coefficients. Complete scalar and array settings remain in the hashed resolved configurations.
+
+\section{Supplementary Simulation and Verification Results}\label{app:supplement}
+The following figures provide the attitude/rate, mass-property, and residual histories used to support the main interpretation. Body-axis tilt is the angle between $C_{BN}\bm e_x$ and radial upward direction. Body rates are Earth-relative and resolved in body axes. Flight-path angle is positive upward; the undefined zero-speed initial ascent value is left unplotted. Very-low-speed direction angles near landing should be interpreted together with the small dynamic pressure.
+\reportfigure{attitude_rates}{Body-axis tilt, flight-path angle, and body angular rates for all five independently initialized cases. Quaternion-derived tilt avoids the singular Euler representation at vertical attitude.}{fig:attitude}
+\reportfigure{mass_properties}{CG and diagonal inertia histories for ascent and entry burn. The ascent includes the attached upper assembly and uses a different nose origin; its absolute CG coordinates are not directly comparable with the recovery coordinates.}{fig:massprops}
+\reportfigure{flight_residuals}{Simulation-minus-observation residuals at overlapping reference timestamps. The increasing ascent residual and intermediate aerodynamic-descent mismatch remain visible even when terminal values alone appear similar.}{fig:residuals}
+
+\clearpage
+\section{Simulator Replay Screenshots}\label{app:replay}
+Figures~\ref{fig:replay-ascent-entry} and~\ref{fig:replay-descent} complement the landing view in Section~\ref{sec:replay}. They show the attached ascent configuration, engine activity during recovery burns, and exposed grid fins during descent. Where present, the amber dashed overlay combines webcast altitude with simulated horizontal positions; it is not a measured three-dimensional flight path. The screenshots retain the demonstration-run values described in Section~\ref{sec:replay}.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{images/simulator_ascent.png}
+\par\smallskip{\small (a) Powered ascent}\par\medskip
+\includegraphics[width=\textwidth]{images/simulator_entry_burn.png}
+\par\smallskip{\small (b) Entry burn}\par
+\caption{Replay views of ascent and entry burn. The attached ascent stack has nine active engines and stowed fins; the recovery view shows three active engines and deployed fins. The timeline and telemetry panels allow the displayed geometry to be inspected alongside the recorded states. Recovery vehicle model: Forest Katsch (Sketchfab, CC BY 4.0).}
+\label{fig:replay-ascent-entry}
+\end{figure}
+\FloatBarrier
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{images/simulator_aero_descent.png}
+\par\smallskip{\small (a) Aerodynamic descent}\par\medskip
+\includegraphics[width=\textwidth]{images/simulator_powered_descent.png}
+\par\smallskip{\small (b) Powered descent}\par
+\caption{Replay views of unpowered and powered descent. The engine-status display distinguishes the engine-off atmospheric segment from center-engine braking, while the three-dimensional view shows vehicle orientation and grid-fin deployment. Vehicle model: Forest Katsch (Sketchfab, CC BY 4.0).}
+\label{fig:replay-descent}
+\end{figure}
+\end{document}

@@ -29,6 +29,7 @@ class _RefinementStub(LcvxGuidance):
         self.reanchor_min_alt = 0.0
         self.tf_freeze = 0.0
         self.replan = False
+        self.touchdown_time = None
         self.drag_template = drag_template
         self.plan_calls = 0
 

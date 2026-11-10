@@ -101,3 +101,30 @@ def test_drag_fallback_scans_narrow_feasible_window(monkeypatch):
     assert abs(result["tf"] - 15.0) < 0.2
     assert result["grid_fallback_used"]
     assert len(attempts) >= 41
+
+
+def test_fixed_time_drag_continuation_keeps_the_terminal_clock():
+    guidance = make_bare_guidance()
+    calls = []
+
+    def fixed_plan(self, r0, v0, m0, tf, *, drag_ref, drag_fraction):
+        calls.append((tf, drag_fraction, drag_ref[0]["id"]))
+        return {"id": len(calls)}
+
+    def unexpected_free_search(*args, **kwargs):
+        raise AssertionError("drag refinement changed the specified terminal time")
+
+    guidance._fixed_plan = types.MethodType(fixed_plan, guidance)
+    guidance._plan = unexpected_free_search
+    result = guidance._drag_continuation(
+        None,
+        None,
+        None,
+        {"id": 0},
+        lambda kind, func, fraction=None: func(),
+        "ignite_drag_refine",
+        fixed_tf=12.145,
+    )
+    assert result is not None
+    assert [tf for tf, _, _ in calls] == [12.145] * 4
+    assert [fraction for _, fraction, _ in calls] == [0.25, 0.5, 0.75, 1.0]

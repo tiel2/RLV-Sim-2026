@@ -1,0 +1,208 @@
+{
+  "basis": "2026-11-03 archived campaign; figures reprocessed without plant execution",
+  "reference_commit": "b245d3b81aa36b7941ec10f3f4b508999d106a6d",
+  "sources": {
+    "data/reference/crs11/stage1_raw.json": "deaebfe4ecb311c2f589bcee7c87ace3b91de935b5dc73cd0d59bc85cba54011",
+    "data/reference/crs11/analysed.json": "771e667b92c06aeef59ac5bd1b4d1aa425e33ec6f2a13a0649ccae3619a27a2a",
+    "data/reference/crs11/events.json": "be6e0bd92911be2a8b2d91cfed029b45047bc6136f3c7f9dba54b5893e1ac210",
+    "data/reference/crs11/stages.json": "acc63913173323d6e1639b1b241b78e769de17387e6cdb1fce0e6a7f14a3530d",
+    "data/reference/crs11/upstream_launches.json": "23cf566d436052a6298621db57d325ae59bfb6036b27a273c1b3f19c235bd2b4",
+    "data/reference/crs11/upstream_README.md": "90ae92696f61602e7027408bb0bde627d3af227b04f0903565573da43e0f3e70",
+    "data/reference/crs11/LICENSE": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+    "results/verification/project2_segments/physics/summary.json": "a533d2b3e2afbb21278ad156cbdfb918c61c7b007475119f9e603ef697feee82",
+    "report_assets/generate_figures.py": "661ef98f4483ca8d2fed1f86d3b1efeb8d2383c0844ed1f99be4ef571d0cb4da",
+    "src/validation/flight_reference.py": "2abbefbbc10c3db2258759f448a97101b65bdcf8a6346ec5f0ff2c274c4cc802",
+    "src/validation/segment_spec.py": "17dd62d89879423fefab5c5e6f377e175dcfeb93019dcf8c091dac5549a6969d",
+    "results/verification/project2_segments/physics/ascent/physics.npz": "4a14fc682d46fdc48449d6fae110ad5c5af8ec8506d086cc0e3480d6bf67b123",
+    "results/verification/project2_segments/physics/ascent/resolved_config.yaml": "523a0e85bd8a1dbc4bbeea2f51876b03c15ff3b32648534453dff75dc82b7d96",
+    "results/verification/project2_segments/physics/ascent/verification.json": "36db113a29b2814af03321f7fe6d87c72faa3e58a87c77c6aa70c868fcfa6334",
+    "results/verification/project2_segments/physics/ascent/convergence.json": "48f4e3826a48388555fba64aaa794b5534055b80dd223c2358e8ad5c5d7c0414",
+    "results/verification/project2_segments/physics/entry_burn/physics.npz": "a0711dc00045e5fad23c26440e93c499577058be644f8be532904f0ffea7a676",
+    "results/verification/project2_segments/physics/entry_burn/resolved_config.yaml": "4af69fd36a4058a99d3aa97928e37a7c9b2c86822bd69644f4bca34f84a9f4ad",
+    "results/verification/project2_segments/physics/entry_burn/verification.json": "78b10579ec16f3281b6cccab76bd2de2d759f228102bf04e4fa09c4aac612323",
+    "results/verification/project2_segments/physics/entry_burn/convergence.json": "0d640556318fe40e6541e5fe1c0e109434f13f1a2256d20591973edb54f8557a",
+    "results/verification/project2_segments/physics/aero_descent/physics.npz": "b1321ec68b5fe5f1f39fec30eba65b3e9cce41a96881976d82a54fe984606d9c",
+    "results/verification/project2_segments/physics/aero_descent/resolved_config.yaml": "9808c83e1a295d355aa346828e26fccb2952b037085405862ffb0d198f6475ba",
+    "results/verification/project2_segments/physics/aero_descent/verification.json": "5ed494a53ed1e9daa42ce6c5dcbf7bf8ed7293062915235ac43766fd1fa99767",
+    "results/verification/project2_segments/physics/aero_descent/convergence.json": "71b636a6154d40b33ed5862def255a7cc708ec6327976565bbf774a1056dd965",
+    "results/verification/project2_segments/physics/powered_descent/physics.npz": "c876129ae952fb840496c72592b968e025c95082924c81a8b02e818e69f7c8fe",
+    "results/verification/project2_segments/physics/powered_descent/resolved_config.yaml": "4911c0fa971c378ad1c430327f98695c8b36f8a7984c10c6a4ecba084f5f7ec4",
+    "results/verification/project2_segments/physics/powered_descent/verification.json": "b7f1ad48a87912344549cd25e1f87f0272855da741afd843554aa6e0fb6c6a74",
+    "results/verification/project2_segments/physics/powered_descent/convergence.json": "26afd75d7e0ff0da7bc0746a07258b2d1e05c9aa1ba65b7a43aceab1f20b889d",
+    "results/verification/project2_segments/physics/landing/physics.npz": "2692c246551880478c8735687c4a3336c6928da787ac6edd66623130fcc78748",
+    "results/verification/project2_segments/physics/landing/resolved_config.yaml": "79fd99058d5733044ca793bdac8cfcd079684d270815efd3d05ce79962af5380",
+    "results/verification/project2_segments/physics/landing/verification.json": "b073158a348315c5837de4a02d8114699654de29b96e372f285ae22b99de38fd",
+    "results/project2_physics/landing/kpi.json": "0f4925efcd1c1854187ab1e4408cb345858463671fb2c941162d086568f7942c"
+  },
+  "cases": {
+    "ascent": {
+      "run_id": "single_20261103_232516",
+      "verification_status": "passed",
+      "final_altitude_m": 101055.77880720494,
+      "final_speed_mps": 2171.271312687364,
+      "final_main_propellant_kg": 20654.720263618074,
+      "max_q_kpa": 31.00978130813433,
+      "max_q_time_s": 50.6,
+      "max_alpha_deg": 0.968209401029977,
+      "initial_mass_kg": 545200.0,
+      "final_mass_kg": 165854.72026361807,
+      "flight_comparison": {
+        "altitude_m": {
+          "samples": 4247,
+          "covered_duration_s": 143.64300000000003,
+          "bias": 7364.972563381096,
+          "rmse": 10721.562554952723,
+          "max_abs": 29214.4618343264
+        },
+        "speed_mps": {
+          "samples": 4247,
+          "covered_duration_s": 143.64300000000003,
+          "bias": 160.7772624293539,
+          "rmse": 203.029400858697,
+          "max_abs": 504.8553318988911
+        },
+        "time_offset_s": -0.0,
+        "observed_range_s": [
+          0.033,
+          144.978
+        ]
+      },
+      "meco_145s": {
+        "altitude_m": 91620.23011621203,
+        "speed_mps": 2190.199788981521,
+        "observed_altitude_m": 62400.0,
+        "observed_speed_mps": 1684.444
+      }
+    },
+    "entry_burn": {
+      "run_id": "single_20261103_232531",
+      "verification_status": "passed",
+      "final_altitude_m": 32999.56927706842,
+      "final_speed_mps": 944.1314780226546,
+      "final_main_propellant_kg": 9576.24746070656,
+      "max_q_kpa": 5.158368642006362,
+      "max_q_time_s": 14.0,
+      "max_alpha_deg": 0.8081731086852987,
+      "initial_mass_kg": 40000.0,
+      "final_mass_kg": 34776.24746070656,
+      "flight_comparison": {
+        "altitude_m": {
+          "samples": 318,
+          "covered_duration_s": 11.978999999999985,
+          "bias": -103.26265703487641,
+          "rmse": 135.05164041062167,
+          "max_abs": 399.55602015987824
+        },
+        "speed_mps": {
+          "samples": 318,
+          "covered_duration_s": 11.978999999999985,
+          "bias": -11.4142473922949,
+          "rmse": 22.149155832725942,
+          "max_abs": 41.4662386117011
+        },
+        "time_offset_s": -372.0,
+        "observed_range_s": [
+          372.004,
+          383.983
+        ]
+      }
+    },
+    "aero_descent": {
+      "run_id": "single_20261103_232535",
+      "verification_status": "passed",
+      "final_altitude_m": 3758.043723272501,
+      "final_speed_mps": 310.46242776167566,
+      "final_main_propellant_kg": 8800.0,
+      "max_q_kpa": 84.32605578192006,
+      "max_q_time_s": 29.18,
+      "max_alpha_deg": 0.7658760899973303,
+      "initial_mass_kg": 34000.0,
+      "final_mass_kg": 34000.0,
+      "flight_comparison": {
+        "altitude_m": {
+          "samples": 1327,
+          "covered_duration_s": 44.978999999999985,
+          "bias": 250.09795106625143,
+          "rmse": 650.0042301384449,
+          "max_abs": 1030.317023154506
+        },
+        "speed_mps": {
+          "samples": 1327,
+          "covered_duration_s": 44.978999999999985,
+          "bias": 43.290441894770346,
+          "rmse": 59.87079317685102,
+          "max_abs": 108.59334271156541
+        },
+        "time_offset_s": -384.0,
+        "observed_range_s": [
+          384.016,
+          428.995
+        ]
+      }
+    },
+    "powered_descent": {
+      "run_id": "single_20261103_232543",
+      "verification_status": "passed",
+      "final_altitude_m": 1527.7370181675026,
+      "final_speed_mps": 80.63039024820044,
+      "final_main_propellant_kg": 3557.695035133369,
+      "max_q_kpa": 38.86451090721745,
+      "max_q_time_s": 0.0,
+      "max_alpha_deg": 0.7264599014691236,
+      "initial_mass_kg": 32000.0,
+      "final_mass_kg": 28757.69503513337,
+      "flight_comparison": {
+        "altitude_m": {
+          "samples": 640,
+          "covered_duration_s": 21.954999999999984,
+          "bias": 502.96842238295574,
+          "rmse": 617.7903119910342,
+          "max_abs": 1088.1963491061538
+        },
+        "speed_mps": {
+          "samples": 640,
+          "covered_duration_s": 21.954999999999984,
+          "bias": -53.58766722226201,
+          "rmse": 56.14077576812785,
+          "max_abs": 71.66585170180272
+        },
+        "time_offset_s": -429.0,
+        "observed_range_s": [
+          429.028,
+          450.983
+        ]
+      }
+    },
+    "landing": {
+      "run_id": "single_20261103_232548",
+      "verification_status": "passed",
+      "final_altitude_m": -6.508322384577514e-05,
+      "final_speed_mps": 0.08456044692739978,
+      "final_main_propellant_kg": 1378.7783833823778,
+      "max_q_kpa": 0.37190853481935193,
+      "max_q_time_s": 0.0,
+      "max_alpha_deg": 25.43978253041026,
+      "initial_mass_kg": 29500.0,
+      "final_mass_kg": 27178.778383382378,
+      "contact_kpi": {
+        "termination_reason": 1,
+        "landing_class": "soft",
+        "touchdown_index": 175,
+        "landing_position_error_m": 0.0194297475947691,
+        "landing_speed_mps": 0.08624524925296802,
+        "landing_speed_vertical_mps": 0.07825785060539,
+        "landing_tilt_deg": 0.05531699750855425,
+        "fuel_margin_kg": 1378.8231924522674,
+        "success": true,
+        "violations": {
+          "position": false,
+          "speed": false,
+          "tilt": false,
+          "rate": false,
+          "fuel": false
+        }
+      },
+      "contact_time_s": 17.467751801796393
+    }
+  }
+}

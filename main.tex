@@ -102,7 +102,6 @@ This report evaluates the supplied RLV-Sim code archive as the team's Project~2 
 Table~\ref{tab:traceability} traces the requested Project~2 deliverables to the supplied implementation and to the reporting treatment in this document. The final column distinguishes completed capability from material that requires team action.
 
 \begin{longtable}{p{0.23\textwidth}p{0.37\textwidth}p{0.28\textwidth}}
-\caption{Traceability to the Project~2 briefing and the supplied RLV-Sim archive.}\label{tab:traceability}\\
 \toprule
 \rowcolor{navy}\color{white}\textbf{Project requirement} & \color{white}\textbf{Evidence in supplied material} & \color{white}\textbf{Report treatment / status}\\
 \midrule
@@ -124,6 +123,7 @@ Simulation results and validation & Five scenarios, segment checker, supplied ve
 \rowcolor{lightblue}
 Assumptions and sources & YAML configuration, scenario specification, verification documents, webcast reconstruction & Reported in Section~\ref{sec:assumptions} and References\\
 \bottomrule
+\caption{Traceability to the Project~2 briefing and the supplied RLV-Sim archive.}\label{tab:traceability}
 \end{longtable}
 
 \section{Simulation Architecture and Implementation}\label{sec:architecture}
@@ -132,7 +132,6 @@ The software is organized around four layers. The \sourcecode{core} package defi
 
 \begin{table}[H]
 \centering
-\caption{Software decomposition used by the supplied simulator.}\label{tab:architecture}
 \begin{tabularx}{\textwidth}{p{0.12\textwidth}YY}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Layer} & \color{white}\textbf{Main responsibility} & \color{white}\textbf{Representative evidence}\\
@@ -145,6 +144,7 @@ The software is organized around four layers. The \sourcecode{core} package defi
 \sourcecode{sim} & Multirate execution, telemetry, KPIs, replay, Monte Carlo & \sourcecode{run.py}, \sourcecode{loop.py}, \sourcecode{telemetry.py}\\
 \bottomrule
 \end{tabularx}
+\caption{Software decomposition used by the supplied simulator.}\label{tab:architecture}
 \end{table}
 
 The closed-loop signal flow is
@@ -233,14 +233,14 @@ Innovation handling & Normalized innovation diagnostics and chi-square gating & 
 Navigation error statistics & RMSE, NEES, 3$\sigma$ coverage, bias, and innovation metrics & Truth-based diagnostics; covariance is conservative and uncalibrated\\
 \bottomrule
 \end{tabularx}
+\caption{Accurate description of navigation scope in the supplied code.}\label{tab:navigation}
 \end{table}
 
 \section{Representative Flight Phases and Scenarios}\label{sec:scenarios}
 
 The Project~2 configuration defines five representative phases. The first four are separately initialized prescribed-input physics experiments. They were selected to show important flight regimes without implying that an assumed mass, attitude, input, and horizontal origin reconstruct the CRS-11 flight. The fifth case is an independently initialized closed-loop landing regression. All five select rotating Earth at the assumed latitude; they are not chained through mass, state, or event continuity~\cite{scenario_spec}.
 
-\begin{longtable}{p{0.19\textwidth}p{0.21\textwidth}p{0.39\textwidth}p{0.13\textwidth}}
-\caption{Five Project~2 cases from the scenario specification.}\label{tab:scenarios}\\
+\begin{longtable}{@{}p{0.21\textwidth}p{0.21\textwidth}p{0.36\textwidth}p{0.13\textwidth}@{}}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Scenario} & \color{white}\textbf{Initial condition} & \color{white}\textbf{Input / run condition} & \color{white}\textbf{End condition}\\
 \midrule
@@ -249,14 +249,15 @@ The Project~2 configuration defines five representative phases. The first four a
 \rowcolor{navy}\color{white}\textbf{Scenario} & \color{white}\textbf{Initial condition} & \color{white}\textbf{Input / run condition} & \color{white}\textbf{End condition}\\
 \midrule
 \endhead
-\sourcecode{project2\_ascent} & \SI{0}{\metre}; \SI{0}{\metre\per\second}; \SI{545200}{\kilogram} & Nine engines; pitch kick at 10--12 s; throttle 0.8 at 50--74 s; cutoff at 145 s & 150 s, including 5 s coast\\
+\sourcecode{project2\_\allowbreak ascent} & \SI{0}{\metre}; \SI{0}{\metre\per\second}; \SI{545200}{\kilogram} & Nine engines; pitch kick at 10--12 s; throttle 0.8 at 50--74 s; cutoff at 145 s & 150 s, including 5 s coast\\
 \rowcolor{lightblue}
-\sourcecode{project2\_entry\_burn} & \SI{47.5}{\kilo\metre}; \SI{1260.3}{\metre\per\second}; \SI{40000}{\kilogram} & Engines 0, 1, 5 at 0.50 throttle; cutoff at 12 s & 14 s\\
-\sourcecode{project2\_aero\_descent} & \SI{35.0}{\kilo\metre}; \SI{953.9}{\metre\per\second}; \SI{34000}{\kilogram} & Main engines off; neutral grid fins exposed & 45 s\\
+\sourcecode{project2\_\allowbreak entry\_\allowbreak burn} & \SI{47.5}{\kilo\metre}; \SI{1260.3}{\metre\per\second}; \SI{40000}{\kilogram} & Engines 0, 1, 5 at 0.50 throttle; cutoff at 12 s & 14 s\\
+\sourcecode{project2\_\allowbreak aero\_\allowbreak descent} & \SI{35.0}{\kilo\metre}; \SI{953.9}{\metre\per\second}; \SI{34000}{\kilogram} & Main engines off; neutral grid fins exposed & 45 s\\
 \rowcolor{lightblue}
-\sourcecode{project2\_powered\_descent} & \SI{4.7}{\kilo\metre}; \SI{319.7}{\metre\per\second}; \SI{32000}{\kilogram} & Center engine 0.55 throttle; cutoff at 20 s & 22 s\\
-\sourcecode{project2\_landing} & \SI{300}{\metre}; \SI{25}{\metre\per\second} downward; \SI{29500}{\kilogram} & Single engine; ideal actuation; LCvx guidance and PD control & Touchdown or 40 s\\
+\sourcecode{project2\_\allowbreak powered\_\allowbreak descent} & \SI{4.7}{\kilo\metre}; \SI{319.7}{\metre\per\second}; \SI{32000}{\kilogram} & Center engine 0.55 throttle; cutoff at 20 s & 22 s\\
+\sourcecode{project2\_\allowbreak landing} & \SI{300}{\metre}; \SI{25}{\metre\per\second} downward; \SI{29500}{\kilogram} & Single engine; ideal actuation; LCvx guidance and PD control & Touchdown or 40 s\\
 \bottomrule
+\caption{Five Project~2 cases from the scenario specification.}\label{tab:scenarios}
 \end{longtable}
 
 The prescribed cases use actual 6-DOF propagation after initialization; their attitude, angular rate, forces, mass properties, and aerodynamic response are not frozen. However, no GNC or navigation module determines their trajectory. The terminal powered-descent run is deliberately a \SI{20}{\second} deceleration plus \SI{2}{\second} shutdown-observation experiment. It is not intended to reach the ground, whereas \sourcecode{project2\_landing} is the dedicated soft-touchdown demonstration.
@@ -267,7 +268,6 @@ Table~\ref{tab:results} reports values reproduced by executing the five Project~
 
 \begin{table}[H]
 \centering
-\caption{Project~2 results reproduced from the supplied archive. Landing values use interpolated contact KPIs.}\label{tab:results}
 \small
 \begin{tabularx}{\textwidth}{p{0.17\textwidth}p{0.10\textwidth}Yp{0.15\textwidth}Y}
 \toprule
@@ -282,6 +282,7 @@ Powered descent & 22 & \SI{1.528}{\kilo\metre} / \SI{80.630}{\metre\per\second} 
 Landing & 17.468 & \SI{0}{\metre} / \SI{0.086245}{\metre\per\second} & 1378.823 & Soft touchdown; \sourcecode{success=true}\\
 \bottomrule
 \end{tabularx}
+\caption{Project~2 results reproduced from the supplied archive. Landing values use interpolated contact KPIs.}\label{tab:results}
 \end{table}
 
 \subsection{Numerical and Physical Acceptance Evidence}
@@ -332,8 +333,8 @@ The archive's opt-in comparator was executed against the supplied reconstruction
 
 \begin{table}[H]
 \centering
-\caption{Observable comparison to the CRS-11 reconstruction from the executed opt-in comparator. These are not navigation errors or physics-acceptance metrics.}\label{tab:flight-rmse}
-\begin{tabular}{lrrrrr}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.18\textwidth}*{5}{>{\centering\arraybackslash}X}@{}}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Case} & \color{white}\textbf{Overlap [s]} & \color{white}\textbf{Altitude bias [m]} & \color{white}\textbf{Altitude RMSE [m]} & \color{white}\textbf{Speed bias [m/s]} & \color{white}\textbf{Speed RMSE [m/s]}\\
 \midrule
@@ -344,13 +345,13 @@ Aerodynamic descent & 44.979 & 250.098 & 650.004 & 43.290 & 59.871\\
 \rowcolor{lightblue}
 Powered descent & 21.955 & 502.968 & 617.790 & -53.588 & 56.141\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+\caption{Observable comparison to the CRS-11 reconstruction from the executed opt-in comparator. These are not navigation errors or physics-acceptance metrics.}\label{tab:flight-rmse}
 \end{table}
 
 \begin{table}[H]
 \centering
 \small
-\caption{CRS-11 reconstructed event states supplied by the team.}\label{tab:crs-events}
 \begin{tabularx}{\textwidth}{Yrrrr}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Event} & \color{white}\textbf{T+ [s]} & \color{white}\textbf{Altitude [km]} & \color{white}\textbf{Speed [m/s]} & \color{white}\textbf{Downrange [km]}\\
@@ -370,12 +371,12 @@ Landing burn ignition & 429 & 4.74 & 320 & -5.37\\
 Landing burn cutoff & 462 & $\approx 0$ & 4.3 & -6.53\\
 \bottomrule
 \end{tabularx}
+\caption{CRS-11 reconstructed event states supplied by the team.}\label{tab:crs-events}
 \end{table}
 
 \begin{table}[H]
 \centering
 \small
-\caption{CRS-11 reconstructed velocity components. Signs are reproduced as provided; the exact coordinate convention remains uncertain.}\label{tab:crs-components}
 \begin{tabularx}{\textwidth}{Yrr}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Event} & \color{white}\textbf{Vertical velocity [m/s]} & \color{white}\textbf{Horizontal velocity [m/s]}\\
@@ -395,6 +396,7 @@ Landing burn ignition & -319 & -32\\
 Landing burn cutoff & -4.3 & 0\\
 \bottomrule
 \end{tabularx}
+\caption{CRS-11 reconstructed velocity components. Signs are reproduced as provided; the exact coordinate convention remains uncertain.}\label{tab:crs-components}
 \end{table}
 
 The Project~2 ascent case should not be judged by direct agreement with the MECO row: it uses assumed throttle, gimbal, atmospheric, mass, and reference-site conditions and ends at \SI{101.056}{\kilo\metre} and \SI{2171.271}{\metre\per\second} after \SI{150}{\second}, whereas the webcast reconstruction gives approximately \SI{62.36}{\kilo\metre} and \SI{1684}{\metre\per\second} at MECO. That difference is expected in an independent physics experiment. By contrast, the aerodynamic-descent case begins at the reconstructed entry-burn-cutoff scale and ends after \SI{45}{\second} at \SI{3.758}{\kilo\metre} and \SI{310.462}{\metre\per\second}, close in scale to the reconstructed landing-burn-ignition values of \SI{4.74}{\kilo\metre} and \SI{320}{\metre\per\second}. This is an engineering consistency observation, not a calibration result.
@@ -407,7 +409,6 @@ The Project~2 briefing requires a clear separation of known, estimated, and assu
 
 \begin{table}[H]
 \centering
-\caption{Assumption and evidence ledger.}\label{tab:assumptions}
 \begin{tabularx}{\textwidth}{p{0.19\textwidth}YY}
 \toprule
 \rowcolor{navy}\color{white}\textbf{Category} & \color{white}\textbf{Examples in the present work} & \color{white}\textbf{Consequence for interpretation}\\
@@ -420,12 +421,12 @@ Engineering assumptions & Masses, tank geometry, \SI{914}{\kilo\newton} engine m
 Not modeled / incomplete & Calibrated sensors, rotating-Earth INS mechanization, online filter calibration, realistic-actuator landing qualification, leg impact, J2/oblateness, validated flight aerodynamics & Cannot support a claim of operational GNC readiness\\
 \bottomrule
 \end{tabularx}
+\caption{Assumption and evidence ledger.}\label{tab:assumptions}
 \end{table}
 
 \subsection{Most Dangerous Errors for Future Guidance and Control}
 
 \begin{longtable}{p{0.22\textwidth}p{0.42\textwidth}p{0.24\textwidth}}
-\caption{Risk assessment answering the Project~2 final evaluation question.}\label{tab:risks}\\
 \toprule
 \rowcolor{navy}\color{white}\textbf{Potential error} & \color{white}\textbf{Why it is dangerous} & \color{white}\textbf{Recommended mitigation}\\
 \midrule
@@ -444,6 +445,7 @@ Reference-frame or Earth-model inconsistency & Mixing Earth-relative and inertia
 \rowcolor{lightblue}
 Overinterpreted webcast comparison & A small plot mismatch could reflect ambiguous data extraction instead of model error; fitting it can conceal structural errors. & Separate physics verification from observable comparison and report data limitations.\\
 \bottomrule
+\caption{Risk assessment answering the Project~2 final evaluation question.}\label{tab:risks}
 \end{longtable}
 
 \section{Reproducibility and Run Commands}\label{sec:reproducibility}
@@ -563,6 +565,7 @@ Automated checks & Entry-burn refinement exceedance and local QOCO/full-suite co
 External validation & Calibrated sensor data, Monte Carlo dispersions, and higher-quality flight-reference data are not included. & Future work\\
 \bottomrule
 \end{tabularx}
+\caption{Submission checklist.}\label{tab:checklist}
 \end{table}
 
 \clearpage
